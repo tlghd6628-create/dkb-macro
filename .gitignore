@@ -1,0 +1,11 @@
+# Default deny: only explicitly reviewed source and collaboration documents.
+/*
+!/.gitignore
+!/README.md
+!/COLLABORATION.md
+!/owner_*.py
+!/test_*.py
+!/bootstrap.py
+
+# Private runtime state, keys, diagnostics, original binaries and snapshots
+# remain excluded by the default rule above.
