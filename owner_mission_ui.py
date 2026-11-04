@@ -197,7 +197,7 @@ class MissionUI(SkillUI):
    raise MissionRowUnreadable(str(exc)) from exc
  def _selected(self,mode,y,book,power):
   self.click(280,y,quest_screen)
-  title,y=read_selected_title(self,y)
+  title,y=read_selected_title(self,y,detail_first=mode=='main_quest')
   frame=self.frame()
   # Selected leaf, not a group header or an unrelated completed quest.
   if selected_center(frame)!=y:raise MissionRowUnreadable('선택 임무 강조 행 위치 재확인 필요')

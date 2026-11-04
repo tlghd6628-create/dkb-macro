@@ -4,10 +4,10 @@ Goals, intents and the timetable are keyed by the configured profile; the live
 game only yields a hash of the name glyphs. Without this binding, logging in
 as another character would silently use the configured character's records.
 
-The glyphs move with the level digit's width, so each profile keeps one hash per
-one-digit level and one for levels of 10 or more. A first reading in a new band
-is accepted only as a forward level crossing from a one-digit level. Removing
-the file rebinds on the next reading.
+The glyphs move with the level digits' width, so each profile keeps one hash per
+level. A first reading at a new level is accepted only as a forward crossing, so
+a different character at a higher unseen level is not caught here. Removing the
+file rebinds on the next reading.
 """
 from pathlib import Path
 import json,logging,os,tempfile,threading
@@ -43,8 +43,8 @@ def resolve(root,profile,glyph_hash,level):
     """Return (stable character key, status). Only MISMATCH blocks growth."""
     if not isinstance(profile,str) or not profile or not isinstance(glyph_hash,str) or type(level) is not int:
         return glyph_hash,UNAVAILABLE
-    # The fixed name crop shifts with the level digit's width, so each one-digit level gets its own hash.
-    band='high' if level>=10 else 'low%d'%level
+    # The fixed name crop shifts with the level digits' width, so each level gets its own hash.
+    band='lv%d'%level
     path=_path(root)
     with _LOCK:
         try:document=_read(path)
@@ -54,10 +54,11 @@ def resolve(root,profile,glyph_hash,level):
         row=document['profiles'].get(profile)
         if not isinstance(row,dict):
             document['profiles'][profile]={'character':glyph_hash,band:glyph_hash,'level':level};status=BOUND
-        elif row.get(band)==glyph_hash:
+        elif row.get(band)==glyph_hash or row.get('high' if level>=10 else 'low')==glyph_hash:
+            # 'high' and 'low' are records from before per-level hashes.
             if row.get('level')==level:return row['character'],MATCHED
             row['level']=level;status=MATCHED
-        elif band not in row and type(row.get('level')) is int and row['level']<level and row['level']<10:
+        elif band not in row and type(row.get('level')) is int and row['level']<level:
             row[band]=glyph_hash;row['level']=level;status=CROSSED
         else:return glyph_hash,MISMATCH
         try:_write(path,document)
