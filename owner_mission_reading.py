@@ -44,6 +44,9 @@ def read_selected_title(ui,y):
    categories=[re.findall(r'\[[^\]]+\]',re.sub(r'\s+','',s)) for s in (candidate,corroboration)]
    numbers=[re.findall(r'\d+',s) for s in (candidate,corroboration)]
    if categories[0] and categories[0]==categories[1] and numbers[0] and numbers[1] and numbers[0][-1]==numbers[1][-1] and agree_titles(candidate,corroboration,.60):left,right,weak=candidate,corroboration,True
+   # The small row font drops the chapter digit: '[장] 과량의 부름' beside '[1장] 괴량의 부름'.
+   # Only that digit may differ, so the detail heading supplies the identity.
+   elif categories[0] and categories[1] and re.sub(r'\d','',categories[0][0])==re.sub(r'\d','',categories[1][0]) and re.findall(r'\d+',re.sub(r'\[[^\]]+\]','',candidate))==re.findall(r'\d+',re.sub(r'\[[^\]]+\]','',corroboration)) and agree_titles(candidate,corroboration,.60):left,right,weak=corroboration,corroboration,True
  ui._owner_last_mission_read={'clicked_y':y,'selected_y':center,'row':left_rows,'detail':right_rows}
  # Paired, actual highlighted row is the primary identity. This also avoids
  # truncating a long name in the much narrower detail header.
