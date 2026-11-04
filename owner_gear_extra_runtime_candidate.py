@@ -54,8 +54,8 @@ def ensure_enhance_tab(service,context,*,identity_check=None):
         context.wait(.08)
 
 
-# The first box stops short of the sparkling next-stage diamond.
-_STATIC_BOXES=((312,120,412,149),(330,384,462,409),(385,438,445,460),(460,438,496,460))
+# The stage row without what animates: the >>> arrows at x381-385 and the next-stage diamond.
+_STATIC_BOXES=((312,120,380,149),(387,120,412,149),(330,384,462,409),(385,438,445,460),(460,438,496,460))
 def same_static(first,second):
     """Only labelled foreground, never the animated transparent background."""
     if getattr(first,'shape',None)!=(479,897,3) or getattr(second,'shape',None)!=(479,897,3):return False
@@ -64,6 +64,15 @@ def same_static(first,second):
         return (patch.min(axis=2)>155)|((hsv[:,:,0]>12)&(hsv[:,:,0]<40)&(hsv[:,:,1]>100)&(hsv[:,:,2]>150))
     if int(ink(first,_STATIC_BOXES[0]).sum())<3:return False
     return all(np.array_equal(ink(first,box),ink(second,box)) for box in _STATIC_BOXES)
+
+
+def same_static_box(first,second,box):
+    """One box of same_static, to name what moved in a hold."""
+    l,t,r,b=box
+    def ink(frame):
+        patch=frame[t:b,l:r];hsv=cv2.cvtColor(patch,cv2.COLOR_RGB2HSV)
+        return (patch.min(axis=2)>155)|((hsv[:,:,0]>12)&(hsv[:,:,0]<40)&(hsv[:,:,1]>100)&(hsv[:,:,2]>150))
+    return np.array_equal(ink(first),ink(second))
 
 
 def _reference(source):
@@ -235,7 +244,11 @@ class ExtraObserver:
         for _ in range(2):
             self._guard();f=self.service.capture().copy();tick=self.clock()
             if not self._fresh_view(f,states[-1],frames[-1]):
-                self.last_reason='각성·돌파 최종 화면 변경';return {'screen_proof':False}
+                moved=[i for i,box in enumerate(_STATIC_BOXES) if not same_static_box(f,frames[-1],box)]
+                self.last_reason='각성·돌파 최종 화면 변경 · 영역=%s · 탭=%s · 같은 장비=%s'%(moved,tab_selected(f,self.kind),self._same_item(f))
+                from owner_gear_hold_capture_candidate import enqueue
+                enqueue(self.service.adapter.project.root,'extra-final',self.last_reason,(frames[-1],f))
+                return {'screen_proof':False}
             fresh.append(f);ticks.append(tick);self.context.wait(.08)
         if not 0<ticks[1]-ticks[0]<=1.5 or not 0<=self.clock()-ticks[0]<=1.5:return {'screen_proof':False}
         state=states[-1];obs=[]
