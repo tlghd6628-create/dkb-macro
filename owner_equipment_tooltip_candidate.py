@@ -627,8 +627,13 @@ class Port:
   def bare(frame):
    return (self.identity_guard() is True and inventory_parts(frame)==(True,True) and equipment_tab_selected(frame)
      and all(_score(frame[116:135,l:r],badge())<.90 for l,r in ((345,365),(420,445),(500,520))))
-  before,_=self._frame();self.context.wait(.12);other,_=self._frame()
-  if not bare(before) or not bare(other) or not same_equipment_inventory(self.service.detector,before,other):raise Hold('장비 목록 스크롤 전 화면 확인 필요')
+  # A tooltip that just closed and the moving upgrade arrow can differ between two frames.
+  end=time.monotonic()+3
+  while True:
+   before,_=self._frame();self.context.wait(.12);other,_=self._frame()
+   if bare(before) and bare(other) and same_equipment_inventory(self.service.detector,before,other):break
+   if time.monotonic()>=end:raise Hold('장비 목록 스크롤 전 화면 확인 필요')
+   self.context.wait(.25)
   area=self.service.detector.entries.get('범위_인벤토리')
   if not isinstance(area,dict):raise Hold('장비 목록 범위 확인 필요')
   x,y,w,h=(area[k] for k in ('x','y','w','h'));cx=x+w//2

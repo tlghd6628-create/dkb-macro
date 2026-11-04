@@ -38,7 +38,15 @@ def _run(adapter,context,inputs):
  except Hold as exc:
   # The top-level inventory anchors also exist behind tooltips: never use
   # those anchors alone to dismiss an uncertain popup or resume automation.
-  raise RuntimeError('장비 화면 확인 중단 · '+str(exc)) from exc
+  # Only a scan that sent no equip input and left no tooltip may skip this visit and let the quest go on.
+  from owner_energy_box_detail_candidate import close_mark
+  from owner_equipment_tooltip_candidate import comparison_shell
+  def bare(frame):return inventory(frame) and not close_mark(frame) and not comparison_shell(frame)
+  if '입력 결과' in str(exc) or not pair(bare):raise RuntimeError('장비 화면 확인 중단 · '+str(exc)) from exc
+  LOG.info('장비 확인 이번 방문 건너뜀 · %s · 입력 없음 · 퀘스트 계속',exc)
+  close_inventory(service)
+  if not pair(field):raise RuntimeError('장비 처리 뒤 원래 화면 복귀 미확인')
+  return 'scan_held_skip'
  if status=='pending_confirmation':raise RuntimeError('장비 착용 결과 미확인 · 확인 후 재시도')
  if not pair(inventory):raise RuntimeError('장비 처리 뒤 인벤토리 확인 필요')
  close_inventory(service)
