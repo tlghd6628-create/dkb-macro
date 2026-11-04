@@ -44,10 +44,13 @@ def scene(detector,frame):
         return 'unknown' if detector.find(DUNGEON,frame,threshold=.5) or detector.find(EXIT,frame,threshold=.5) else 'field'
     from project_adapter.secret_exploration import AUTO_NAMES
     if detector.find(MENU,frame,threshold=.95) and any(detector.find(n,frame,threshold=.95) for n in AUTO_NAMES):return outside()
-    from owner_movement import field_hud
+    from owner_movement import field_hud,hud_anchor
     if field_hud(frame):return outside()
     from owner_progression import inventory_parts
     if any(inventory_parts(frame)):return 'inventory'
+    # A notification dot breaks the menu match and a bright backdrop breaks the settings icon, both in
+    # town. With no panel open, the Home icon and AUTO still prove the bare field.
+    if hud_anchor(frame,'home-hud',(662,441,25,29)) and any(detector.find(n,frame,threshold=.95) for n in AUTO_NAMES):return outside()
     return 'unknown'
 
 def timer_pair(service):
