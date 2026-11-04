@@ -584,10 +584,15 @@ class Port:
   if not pending or pending.get('phase')!='sent':raise Hold('확인할 장비 교체 기록 없음')
   slot=pending['proof']['slot'];bounds=SLOTS.get(slot)
   if bounds is None:raise Hold('장착 슬롯 위치 확인 필요')
-  a,_=self._frame();self.context.wait(.12);b,_=self._frame()
-  if inventory_parts(a)!=(True,True) or inventory_parts(b)!=(True,True) or agree(a,b).get(slot) is not True:raise Hold('장착 슬롯 확인 필요')
   x,y,w,h=bounds
-  if not np.array_equal(a[y:y+h,x:x+w],b[y:y+h,x:x+w]):raise Hold('장착 슬롯 화면 변경')
+  # The worn mark and the power toast animate for a moment right after equipping.
+  end=time.monotonic()+4
+  while True:
+   a,_=self._frame();self.context.wait(.12);b,_=self._frame()
+   if (inventory_parts(a)==(True,True) and inventory_parts(b)==(True,True) and agree(a,b).get(slot) is True
+       and np.array_equal(a[y:y+h,x:x+w],b[y:y+h,x:x+w])):break
+   if time.monotonic()>=end:raise Hold('장착 슬롯 확인 필요')
+   self.context.wait(.25)
   final,_=self._frame()
   if inventory_parts(final)!=(True,True) or not np.array_equal(b[y:y+h,x:x+w],final[y:y+h,x:x+w]):raise Hold('장착 슬롯 재확인 필요')
   self.context.checkpoint();self.service.check()
