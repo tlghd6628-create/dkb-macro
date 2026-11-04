@@ -151,7 +151,6 @@ class ShopSettings:
         self.reserve = tk.StringVar(value='' if document['coin_reserve'] is None else str(document['coin_reserve']))
         ttk.Entry(reserve_bar, textvariable=self.reserve, width=14).pack(side='left', padx=5)
         ttk.Label(reserve_bar, text='미설정 시 구매 보류').pack(side='left')
-        ttk.Label(top, text='기본 목록은 참고용입니다. 판매 여부·한도·화면이 확인되지 않으면 보류합니다.').pack(anchor='w',pady=(0,6))
         self.tabs = ttk.Notebook(top)
         self.tabs.pack(fill='both', expand=True)
         self.trees = {}

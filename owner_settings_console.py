@@ -46,8 +46,6 @@ class NativeFields:
   frame=ttk.Frame(parent);frame.pack(fill='x' if compact else 'both',expand=not compact)
   canvas=None;body=frame
   if not compact:canvas,body=scroll_area(frame)
-  from owner_challenge_test import HINTS
-  if name=='보상·정리':ttk.Label(body,text='TEST는 해당 항목을 실제로 실행합니다.',style='DkbHint.TLabel').pack(anchor='w',pady=(0,10))
   group_visible={f['id']:self.model.visible(t) and self.model.visible(g) for t in self.model.schema['tabs'] for g in t['groups'] for f in g['fields']}
   items=[item for item in fields(self.model.schema) if category(item['id'])==name and group_visible[item['id']] and item.get('visible',True) is not False]
   # A long page reads better in two columns; short ones keep one wide column.
@@ -57,11 +55,6 @@ class NativeFields:
    columns=[ttk.Frame(body),ttk.Frame(body)]
    columns[0].grid(row=1,column=0,sticky='new',padx=(0,28));columns[1].grid(row=1,column=1,sticky='new')
    body.columnconfigure(0,weight=1,uniform='page');body.columnconfigure(1,weight=1,uniform='page')
-  hint=HINTS.get(name)
-  if hint:
-   label=ttk.Label(body,text=hint,style='DkbHint.TLabel')
-   if wide:label.grid(row=0,column=0,columnspan=2,sticky='w',pady=(0,10))
-   else:label.pack(anchor='w',pady=(0,10))
   filled=[0,0]
   if name=='기본 설정':self._membership(section_box(columns[0],'멤버십'))
   for title,rows in sections(name,items):

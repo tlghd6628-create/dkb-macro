@@ -54,7 +54,8 @@ def ensure_enhance_tab(service,context,*,identity_check=None):
         context.wait(.08)
 
 
-_STATIC_BOXES=((312,120,476,149),(330,384,462,409),(385,438,445,460),(460,438,496,460))
+# The stage row without what animates: the >>> arrows travelling over x380-397 and the next-stage diamond.
+_STATIC_BOXES=((312,120,380,149),(398,120,412,149),(330,384,462,409),(385,438,445,460),(460,438,496,460))
 def same_static(first,second):
     """Only labelled foreground, never the animated transparent background."""
     if getattr(first,'shape',None)!=(479,897,3) or getattr(second,'shape',None)!=(479,897,3):return False
@@ -63,6 +64,15 @@ def same_static(first,second):
         return (patch.min(axis=2)>155)|((hsv[:,:,0]>12)&(hsv[:,:,0]<40)&(hsv[:,:,1]>100)&(hsv[:,:,2]>150))
     if int(ink(first,_STATIC_BOXES[0]).sum())<3:return False
     return all(np.array_equal(ink(first,box),ink(second,box)) for box in _STATIC_BOXES)
+
+
+def same_static_box(first,second,box):
+    """One box of same_static, to name what moved in a hold."""
+    l,t,r,b=box
+    def ink(frame):
+        patch=frame[t:b,l:r];hsv=cv2.cvtColor(patch,cv2.COLOR_RGB2HSV)
+        return (patch.min(axis=2)>155)|((hsv[:,:,0]>12)&(hsv[:,:,0]<40)&(hsv[:,:,1]>100)&(hsv[:,:,2]>150))
+    return np.array_equal(ink(first),ink(second))
 
 
 def _reference(source):
@@ -216,7 +226,16 @@ class ExtraObserver:
         states=[];frames=[]
         for _ in range(2):
             self._guard();frame=self.service.capture().copy();state=self._state(frame,resources=resources)
-            if state is None:self.last_reason='선택 장비·현재/다음 단계 두 화면 확인 필요';return {'screen_proof':False}
+            # One sparkle or glow frame must not end the read; nothing is pressed here.
+            for _ in range(4):
+                if state is not None:break
+                self.context.wait(.25);self._guard();frame=self.service.capture().copy();state=self._state(frame,resources=resources)
+            if state is None:
+                stage=self.stage_reader(Path(self.service.adapter.project.root),frame,self.kind)
+                self.last_reason='두 화면 확인 필요 · 탭=%s · 같은 장비=%s · 단계=%s'%(tab_selected(frame,self.kind),self._same_item(frame),isinstance(stage,dict))
+                from owner_gear_hold_capture_candidate import enqueue
+                enqueue(self.service.adapter.project.root,'extra-read',self.last_reason,(frame,))
+                return {'screen_proof':False}
             states.append(state);frames.append(frame);self.context.wait(.12)
         if states[0]!=states[1]:self.last_reason='각성·돌파 단계 또는 재료 변경';return {'screen_proof':False}
         # OCR may be slow. Two new exact static regions must re-prove the
@@ -225,7 +244,11 @@ class ExtraObserver:
         for _ in range(2):
             self._guard();f=self.service.capture().copy();tick=self.clock()
             if not self._fresh_view(f,states[-1],frames[-1]):
-                self.last_reason='각성·돌파 최종 화면 변경';return {'screen_proof':False}
+                moved=[i for i,box in enumerate(_STATIC_BOXES) if not same_static_box(f,frames[-1],box)]
+                self.last_reason='각성·돌파 최종 화면 변경 · 영역=%s · 탭=%s · 같은 장비=%s'%(moved,tab_selected(f,self.kind),self._same_item(f))
+                from owner_gear_hold_capture_candidate import enqueue
+                enqueue(self.service.adapter.project.root,'extra-final',self.last_reason,(frames[-1],f))
+                return {'screen_proof':False}
             fresh.append(f);ticks.append(tick);self.context.wait(.08)
         if not 0<ticks[1]-ticks[0]<=1.5 or not 0<=self.clock()-ticks[0]<=1.5:return {'screen_proof':False}
         state=states[-1];obs=[]
@@ -289,44 +312,130 @@ class ExtraObserver:
             and same_static(frame,proof))
 
 
+class _TabNative:
+    """The native list readers, with a plain cell click for selection.
+
+    Native select_growth_equipment belongs to the enhance list. The extra tabs
+    use the same grid, selected here the way this module always has.
+    """
+    def __init__(self,native):self._native=native
+    def __getattr__(self,name):return getattr(self._native,name)
+    def select_growth_equipment(self,service,row):
+        from owner_gear_native_observer_candidate import Hold
+        slot=row['slot'];x,y=self._native._click_xy(slot)
+        l,t,w,h=(slot[k] for k in ('cell_x','cell_y','cell_w','cell_h'))
+        if not (l<=x<l+w and t<=y<t+h):raise Hold('장비 칸 위치 확인 필요')
+        service.click_hit((x,y,(l,t,l+w,t+h)))
+
+
+_TAB_HITS={'breakthrough':(43,111,(14,101,73,121)),'awaken':(43,145,(14,135,73,155))}
+def open_tab(service,context,kind):
+    """The left subtab by its known box, as ensure_enhance_tab does. Navigation only.
+
+    service.button only knows the names its TownServices was built with, and raised
+    KeyError for these tabs on the first real run.
+    """
+    service.click_hit(_TAB_HITS[kind]);context.wait(.3)
+
+
+def tab_source(service,context,identity,targets,kind,tab):
+    """Pick the next worn item from this tab's own list; selection only, no resource input.
+
+    Finished items leave the enhance list, so an item at +50 can only be found here.
+    """
+    from project_adapter import market_inventory as native
+    from owner_gear_native_observer_candidate import Observer
+    context.checkpoint();service.check()
+    tried=getattr(service,'_owner_extra_tried',None)
+    if not isinstance(tried,dict):tried=service._owner_extra_tried={}
+    done=tried.setdefault(kind,set())
+    if not tab_selected(service.capture(),kind):
+        open_tab(service,context,kind)
+    elif done:
+        # Selecting an item narrows this list to that item. Leaving the tab restores it.
+        service.click_hit((43,77,(14,67,73,87)));context.wait(.3)
+        open_tab(service,context,kind)
+    source=Observer(service,context,identity,_TabNative(native),None,None)
+    # The list slides in after the tab changes. Read it once two frames agree.
+    def shape(rows):return [(r.get('index'),r.get('grade'),r.get('equipped'),r.get('equipped_state')) for r in rows]
+    first=second=None;rows=[]
+    for _ in range(15):
+        _,_,first=source.capture();context.wait(.2);_,_,second=source.capture()
+        rows=source.items(second)
+        if tab_selected(first,kind) and tab_selected(second,kind) and shape(source.items(first))==shape(rows):break
+    else:
+        return None
+    grades={'흰':'일반','파랑':'희귀','보라':'영웅'}
+    earlier={r.get('index'):r for r in source.items(first)}
+    selected=native._growth_selected_slot(second,rows)
+    from owner_gear_native_install_candidate import _report
+    _report(service,'장비 %s 목록 · 착용 %d칸 · 이번에 본 칸 %s'%(kind,sum(r.get('equipped') is True for r in rows),sorted(done)))
+    def wanted(row):
+        old=earlier.get(row.get('index'))
+        rule=targets.get(grades.get(row.get('grade')),{})
+        return (type(row.get('index')) is int and row['index']!=selected and row['index'] not in done
+                and old is not None and old.get('slot')==row.get('slot') and old.get('grade')==row.get('grade')
+                and row.get('equipped') is True and row.get('equipped_state')=='장착'
+                and old.get('equipped') is True and rule.get('enabled') is True and rule.get(kind,0)>=1)
+    chosen=next((row for row in rows if wanted(row)),None)
+    if chosen is None:return None
+    done.add(chosen['index'])
+    source.prepare_and_select(chosen['index'])
+    # The detail panel slides in and its glow settles.
+    context.wait(1.0)
+    # ExtraObserver keeps the centre icon of the last frame: it must show this item.
+    source.capture()
+    return source
+
+
 def factory(service,context,identity,targets,kind,*,source=None,stage_reader=read_explicit_stage):
     """Navigate and select with native assets. Never sends a resource input."""
     if kind not in ('awaken','breakthrough'):return None
-    source=source or getattr(service.adapter,'_owner_growth_observer',None)
-    if source is None or source.context is not context or source.service is not service or source.character!=identity:return None
-    ticket=source.ticket
-    goal='awaken' if kind=='awaken' else 'breakthrough'
-    if not isinstance(ticket,dict) or targets.get(ticket.get('grade'),{}).get(goal,0)<1:return None
     from project_adapter import market_inventory as native,growth_equipment_extra as extra
     from owner_native_contracts import pool_for
+    tab=extra.AWAKE_TAB if kind=='awaken' else extra.BREAK_TAB
     original=service.detector
     service.detector=pool_for(service).get('gear_extra')
     observer=None
+    # False: this one item could not be confirmed, the rest of the list still gets its turn.
+    skip=None if source is not None else False
     def cleanup():
         try:
             if observer is not None:observer.finish_result()
         finally:service.detector=original
     try:
+        if source is None:source=tab_source(service,context,identity,targets,kind,tab)
+        if source is None or source.context is not context or source.service is not service or source.character!=identity:
+            cleanup();return None
+        ticket=source.ticket
+        goal='awaken' if kind=='awaken' else 'breakthrough'
+        if not isinstance(ticket,dict) or targets.get(ticket.get('grade'),{}).get(goal,0)<1:
+            cleanup();return None
         context.checkpoint();service.check();before=service.capture()
         # A prior extra may already have selected this same item. Comparison
         # uses its known centre, not a hidden selected-cell E/grade badge.
         probe=ExtraObserver(source,kind,stage_reader=stage_reader)
         if not (source.identity_reader(before,ticket['index'],True)==ticket['identity'] or probe._same_item(before)):
-            cleanup();return None
-        tab=extra.AWAKE_TAB if kind=='awaken' else extra.BREAK_TAB
-        service.button(tab,wait_before_click=.1,required=True);context.wait(.15)
+            from owner_gear_native_install_candidate import _report
+            from owner_gear_hold_capture_candidate import enqueue
+            _report(service,'장비 %s 선택 확인 안 됨 · 칸 %s'%(kind,ticket['index']))
+            enqueue(service.adapter.project.root,'extra-select',kind,(before.copy(),))
+            cleanup();return skip
+        # Pressing the selected tab again could reset the list's selection.
+        if not tab_selected(before,kind):
+            open_tab(service,context,kind)
         pair=[];already_selected=[]
         for _ in range(2):
             context.checkpoint();service.check();frame=service.capture();row=matching_item(source,frame,service.detector)
-            if not tab_selected(frame,kind):cleanup();return None
+            if not tab_selected(frame,kind):cleanup();return skip
             same=probe._same_item(frame)
-            if row is None and not same:cleanup();return None
+            if row is None and not same:cleanup();return skip
             pair.append(row);already_selected.append(same);context.wait(.12)
         if already_selected!=[True,True]:
-            if already_selected!=[False,False] or pair[0]!=pair[1]:cleanup();return None
+            if already_selected!=[False,False] or pair[0]!=pair[1]:cleanup();return skip
             row=pair[1];slot=row['slot'];x,y=native._click_xy(slot)
             l,t,w,h=(slot[k] for k in ('cell_x','cell_y','cell_w','cell_h'))
-            if not l<=x<l+w or not t<=y<t+h:cleanup();return None
+            if not l<=x<l+w or not t<=y<t+h:cleanup();return skip
             context.checkpoint();service.check();service.click_hit((x,y,(l,t,l+w,t+h)));context.wait(.2)
         observer=ExtraObserver(source,kind,stage_reader=stage_reader)
         observer.prepare_material()

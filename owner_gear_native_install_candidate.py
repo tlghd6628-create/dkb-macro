@@ -430,6 +430,8 @@ def _capture_extra_hold(service,root,phase,reason):
     except (OSError,ValueError,TypeError,AttributeError):pass
 
 
+EXTRA_ITEMS_PER_PASS=8;EXTRA_PASS_SECONDS=120
+
 def wrap_extras_decorator(original_decorator,identity_resolver,extra_readers_factory=None,*,clock=None):
     """Keep custom targets from falling through to the native bulk extras.
 
@@ -443,6 +445,8 @@ def wrap_extras_decorator(original_decorator,identity_resolver,extra_readers_fac
         native_batch=original_decorator(original)
         @wraps(original)
         def guarded(service,*args,**kwargs):
+            # The blessing pass shares this entry and has no equipment extras.
+            if kwargs.get('blessing'):return original(service,*args,**kwargs)
             context=service.context;context.checkpoint();service.check()
             try:
                 root=service.adapter.project.root;identity=identity_resolver(service)
@@ -500,66 +504,74 @@ def wrap_extras_decorator(original_decorator,identity_resolver,extra_readers_fac
             if IntentStore(path.with_name(path.stem+'-intent.json')).pending() is not None:
                 _report(service,'장비 돌파·각성 건너뜀 · 앞선 입력 결과 확인 대기');return result
             from owner_growth_reading import breakthrough_allowed
+            service._owner_extra_tried={}
+            pass_deadline=time.monotonic()+EXTRA_PASS_SECONDS
             for kind in ('awaken','breakthrough') if breakthrough_allowed() else ('awaken',):
-                context.checkpoint();service.check()
                 label={'awaken':'각성','breakthrough':'돌파'}[kind]
-                try:pair=extra_readers_factory(service,context,identity,targets,kind)
-                except (Hold,ValueError,OSError,TypeError,KeyError,AttributeError) as exc:
-                    _report(service,'장비 %s 대상 판단 종료 · %s'%(label,str(exc)[:100] if isinstance(exc,Hold) else type(exc).__name__))
-                    return result
-                if pair is None:
-                    _report(service,'장비 %s 대상 없음'%label);continue
-                if not isinstance(pair,tuple) or len(pair) not in (2,3,4) or not all(callable(x) for x in pair):return result
-                # Never send an awakening without a separate post-result reader.
-                if kind=='awaken' and len(pair)!=4:return result
-                try:
-                    def current():return Store(root,identity).revision()==revision and identity_resolver(service)==identity
-                    deadline=time.monotonic()+30;after=None
-                    for step in range(10):
-                        context.checkpoint();service.check()
-                        if time.monotonic()>=deadline:status='partial_time_limit';break
-                        status=run_configured_step(service,context,root,identity,kind,pair[0],pair[1],clock=clock,settings_check=current)
-                        if status!='pending_confirmation':
-                            reader_owner=getattr(pair[0],'__self__',None)
-                            last_pair=getattr(reader_owner,'last_pair',None)
-                            if last_pair and isinstance(last_pair[0],dict) and last_pair[0].get('maximum'):
-                                status='game_cap_reached'
-                            break
-                        sent=intent.pending();post_reader=pair[3] if len(pair)==4 else pair[0]
-                        if kind=='breakthrough':
-                            from owner_growth_reading import RESULT_SETTLE_SECONDS
-                            context.wait(RESULT_SETTLE_SECONDS)
-                        for attempt in range(3):
+                # Each listed worn item once per pass: one at its goal must not end the rest.
+                for turn in range(EXTRA_ITEMS_PER_PASS):
+                    context.checkpoint();service.check()
+                    if time.monotonic()>=pass_deadline:
+                        _report(service,'장비 %s 이번 차례 시간 종료'%label);return result
+                    try:pair=extra_readers_factory(service,context,identity,targets,kind)
+                    except (Hold,ValueError,OSError,TypeError,KeyError,AttributeError) as exc:
+                        _report(service,'장비 %s 대상 판단 종료 · %s'%(label,str(exc)[:100] if isinstance(exc,Hold) else type(exc).__name__+' '+str(exc)[:80]))
+                        return result
+                    if pair is False:continue
+                    if pair is None:
+                        _report(service,'장비 %s %s'%(label,'대상 없음' if turn==0 else '대상 확인 끝'));break
+                    if not isinstance(pair,tuple) or len(pair) not in (2,3,4) or not all(callable(x) for x in pair):return result
+                    # Never send an awakening without a separate post-result reader.
+                    if kind=='awaken' and len(pair)!=4:return result
+                    try:
+                        def current():return Store(root,identity).revision()==revision and identity_resolver(service)==identity
+                        deadline=time.monotonic()+30;after=None
+                        for step in range(10):
                             context.checkpoint();service.check()
-                            after=reconcile_configured_step(context,root,identity,post_reader,clock=clock,before_complete=current)
-                            if after!='hold_result_unknown':break
-                            if attempt<2:context.wait(.2)
-                        if after=='observed_failure':
-                            # Same stage. Continue toward the goal from a fresh
-                            # reading, within this pass's step and time limits.
-                            finish=getattr(getattr(post_reader,'__self__',None),'finish_result',None)
+                            if time.monotonic()>=deadline:status='partial_time_limit';break
+                            status=run_configured_step(service,context,root,identity,kind,pair[0],pair[1],clock=clock,settings_check=current)
+                            if status!='pending_confirmation':
+                                reader_owner=getattr(pair[0],'__self__',None)
+                                last_pair=getattr(reader_owner,'last_pair',None)
+                                if last_pair and isinstance(last_pair[0],dict) and last_pair[0].get('maximum'):
+                                    status='game_cap_reached'
+                                break
+                            sent=intent.pending();post_reader=pair[3] if len(pair)==4 else pair[0]
+                            if kind=='breakthrough':
+                                from owner_growth_reading import RESULT_SETTLE_SECONDS
+                                context.wait(RESULT_SETTLE_SECONDS)
+                            for attempt in range(3):
+                                context.checkpoint();service.check()
+                                after=reconcile_configured_step(context,root,identity,post_reader,clock=clock,before_complete=current)
+                                if after!='hold_result_unknown':break
+                                if attempt<2:context.wait(.2)
+                            if after=='observed_failure':
+                                # Same stage. Continue toward the goal from a fresh
+                                # reading, within this pass's step and time limits.
+                                finish=getattr(getattr(post_reader,'__self__',None),'finish_result',None)
+                                if callable(finish):finish()
+                                status='observed_failure';continue
+                            if after!='observed_progress':
+                                service.adapter._owner_growth_pending_hold=True
+                                _capture_extra_hold(service,root,'result-'+kind,after);break
+                            # Continue only after a REAL durable sent request was
+                            # reconciled. A mocked callback/ordinary True is not
+                            # authority for another material input.
+                            if sent is None or intent.pending() is not None:break
+                            reader_owner=getattr(post_reader,'__self__',None)
+                            finish=getattr(reader_owner,'finish_result',None)
                             if callable(finish):finish()
-                            status='observed_failure';continue
-                        if after!='observed_progress':
-                            service.adapter._owner_growth_pending_hold=True
-                            _capture_extra_hold(service,root,'result-'+kind,after);break
-                        # Continue only after a REAL durable sent request was
-                        # reconciled. A mocked callback/ordinary True is not
-                        # authority for another material input.
-                        if sent is None or intent.pending() is not None:break
-                        reader_owner=getattr(post_reader,'__self__',None)
-                        finish=getattr(reader_owner,'finish_result',None)
-                        if callable(finish):finish()
-                        status='observed_progress'
-                    service.adapter._owner_gear_extra_outcome={'kind':kind,'status':status,
-                        'result':after}
-                    if status=='game_cap_reached':
-                        service.adapter._owner_gear_extra_outcome['game_cap']=last_pair[0]['current']
-                    _report(service,'장비 각성·돌파 목표 처리 · '+str(service.adapter._owner_gear_extra_outcome))
-                finally:
-                    if len(pair)>=3:pair[2]()
-                # One action per native pass. Never progress with pending input.
-                if intent.pending() is not None or status.endswith('pending'):break
+                            status='observed_progress'
+                        service.adapter._owner_gear_extra_outcome={'kind':kind,'status':status,
+                            'result':after}
+                        if status=='game_cap_reached':
+                            service.adapter._owner_gear_extra_outcome['game_cap']=last_pair[0]['current']
+                        reader_owner=getattr(pair[0],'__self__',None)
+                        _report(service,'장비 각성·돌파 목표 처리 · '+str(service.adapter._owner_gear_extra_outcome)+' · 사유='+str(getattr(reader_owner,'last_reason','미확인')))
+                    finally:
+                        if len(pair)>=3:pair[2]()
+                    # Never progress with pending input.
+                    if intent.pending() is not None or status.endswith('pending'):return result
             return result
         return guarded
     decorate._owner_gear_extras_candidate=True
@@ -578,15 +590,15 @@ def _rebind_aliases(modules,old,new):
 def install(native_module,identity_resolver,readers_factory=None,*,clock=None,extra_module=None,extra_readers_factory=None,alias_modules=(),blessing_runner=None):
     if not getattr(native_module.run_growth_equipment,'_owner_gear_native_candidate',False):
         original=native_module.run_growth_equipment
-        native_module.run_growth_equipment=wrap(original,identity_resolver,readers_factory,clock=clock,blessing_runner=blessing_runner)
-        _rebind_aliases(alias_modules,original,native_module.run_growth_equipment)
+        guarded=wrap(original,identity_resolver,readers_factory,clock=clock,blessing_runner=blessing_runner)
+        # The native entry calls its extras only after a native PARTIAL result, and this route
+        # returns a plain bool, so they never ran. Native run_equipment_extras(service) stays
+        # untouched for the native route (no settings file); configured targets run here.
+        if extra_module is not None:
+            guarded=wrap_extras_decorator(lambda route:route,identity_resolver,extra_readers_factory,clock=clock)(guarded)
+            guarded._owner_gear_native_candidate=True
+        native_module.run_growth_equipment=guarded
+        _rebind_aliases(alias_modules,original,guarded)
     else:
         current=native_module.run_growth_equipment
-        _rebind_aliases(alias_modules,getattr(current,'__wrapped__',current),current)
-    if extra_module is not None and not getattr(extra_module.run_equipment_extras,'_owner_gear_extras_candidate',False):
-        original=extra_module.run_equipment_extras
-        extra_module.run_equipment_extras=wrap_extras_decorator(original,identity_resolver,extra_readers_factory,clock=clock)
-        _rebind_aliases(alias_modules,original,extra_module.run_equipment_extras)
-    elif extra_module is not None:
-        current=extra_module.run_equipment_extras
         _rebind_aliases(alias_modules,getattr(current,'__wrapped__',current),current)

@@ -28,14 +28,19 @@ def open_inventory_by_key(service):
     # Normalize a proved partial inventory, never arbitrary dialogs.
     if left and not right:service.click_hit((184,17,(178,10,191,24)));service.context.wait(.2)
     if right and not left:service.click_hit((883,54,(877,48,890,61)));service.context.wait(.2)
-    service.check();service.key(0x49)
-    end=time.monotonic()+3
-    while time.monotonic()<end:
+    # 01:28 real run: one key press in combat did nothing. Press again only while neither
+    # panel shows: the key toggles, so a slow panel must not be closed by a second press.
+    for attempt in range(2):
         service.check()
-        if inventory_parts(service.capture())==(True,True):
-            LOG.info('정보창 열림 · 좌우 패널 확인',extra={'gui_message':'정보창 열림 · 좌우 패널 확인'})
-            return True
-        service.context.wait(.1)
+        if attempt and any(inventory_parts(service.capture())):break
+        service.key(0x49)
+        end=time.monotonic()+3
+        while time.monotonic()<end:
+            service.check()
+            if inventory_parts(service.capture())==(True,True):
+                LOG.info('정보창 열림 · 좌우 패널 확인',extra={'gui_message':'정보창 열림 · 좌우 패널 확인'})
+                return True
+            service.context.wait(.1)
     raise RuntimeError('인벤토리 단축키 입력 후 좌우 패널을 확인하지 못했습니다.')
 
 

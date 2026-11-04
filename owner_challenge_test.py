@@ -8,8 +8,9 @@ import inspect,logging,re,threading
 
 LOG=logging.getLogger('project_gui.DKB')
 DISPATCH,DIRECT,RAID='dispatch','direct','raid'
-GROWTH,STYLE,ALBUM='growth','style','album'
+GROWTH,STYLE,ALBUM,BLESSING='growth','style','album','blessing'
 TARGETS={
+ 'auto_rewards.blessing.enabled':('가호 보상·장착',BLESSING),
  'auto_growth.equipment.enabled':('장비 성장',GROWTH),
  'auto_growth.blessing.enabled':('가호 성장',GROWTH),
  'auto_growth.energy.enabled':('기운 발현',GROWTH),
@@ -29,8 +30,6 @@ TARGETS={
  'auto_challenge.secret_folktale.enabled':('전래동화 비경 24시간',DISPATCH),
  'auto_growth.spirit_training.enabled':('영기수련',DISPATCH),
 }
-HINTS={'비경·보스':'TEST는 실제로 실행합니다. 입장 시간·횟수를 씁니다. 레이드는 지정 단계에 실제로 1회 입장합니다. 보물찾기는 TEST 없음.',
-       '수련':'TEST는 실제로 실행합니다.'}
 # Log text that says the native run ended without doing its work.
 NOT_DONE=re.compile('건너뜀|보류|미완료|진입 불가|티켓 없음|생략|실패|미감지|미확인')
 
@@ -144,6 +143,14 @@ def growth(adapter,context,inputs,key):
         from owner_quest_preflight import read_power
         read_power(adapter,context,inputs)
         return adapter.run_album_rewards(context,inputs)
+    if kind==BLESSING:
+        # The priority equip runs inside the reward job, so this is the one way to see it.
+        from owner_quest_preflight import read_power
+        read_power(adapter,context,inputs)
+        result=adapter.run_blessing_rewards(context,inputs)
+        state=getattr(adapter,'_owner_blessing_policy_outcome',None)
+        visible('가호 장착 결과 · %s',state)
+        return result
     if kind==STYLE:
         # The native dispatcher does not reach style growth on this switch alone.
         from owner_skill_growth_candidate import dispatch_after_native
@@ -175,7 +182,7 @@ def execute(adapter,context,inputs,key):
     previous=getattr(LOCAL,'native_job',None);LOCAL.native_job=key
     try:
         if kind==RAID:return raid_real(adapter,context,inputs)
-        if kind in (GROWTH,STYLE,ALBUM):return growth(adapter,context,inputs,key)
+        if kind in (GROWTH,STYLE,ALBUM,BLESSING):return growth(adapter,context,inputs,key)
         return dispatch(adapter,context,inputs,key) if kind==DISPATCH else direct(adapter,context,inputs,key)
     except ResumeWork:return None  # a boss return to the selected work; a TEST just ends here
     finally:LOCAL.native_job=previous;adapter.values=before

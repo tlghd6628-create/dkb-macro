@@ -109,20 +109,25 @@ class AwakeningObserver:
     def _same_item(self,frame):
         """Compare center icon against every preselection candidate."""
         if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3):return False
-        center=frame[97:117,383:403]
-        if center.shape!=(20,20,3):return False
-        center=cv2.resize(center,(18,18),interpolation=cv2.INTER_AREA)
-        scores=[]
-        for row in self.rows:
-            s=row.get('slot') or {};x=s.get('cell_x',-100)+8;y=s.get('cell_y',-100)+8
-            candidate=self.pre[y:y+18,x:x+18]
-            if candidate.shape!=(18,18,3):return False
-            score=float(cv2.matchTemplate(candidate,center,cv2.TM_CCOEFF_NORMED)[0,0])
-            if not np.isfinite(score):return False
-            scores.append((row.get('index'),score))
-        own=next((v for i,v in scores if i==self.ticket['index']),None)
-        other=[v for i,v in scores if i!=self.ticket['index']]
-        return bool(own is not None and other and own>=.80 and own-max(other)>=.30)
+        # Two pixel alignments of the selected icon, as IconIdentity reads them. Thresholds
+        # are unchanged: the real awaken screen read .779 on one crop and .870 on the other.
+        for detail in (frame[97:117,383:403],frame[97:116,384:403]):
+            center=cv2.resize(detail,(18,18),interpolation=cv2.INTER_AREA)
+            scores=[]
+            for row in self.rows:
+                s=row.get('slot') or {};x=s.get('cell_x',-100)+8;y=s.get('cell_y',-100)+8
+                candidate=self.pre[y:y+18,x:x+18]
+                if candidate.shape!=(18,18,3):return False
+                score=float(cv2.matchTemplate(candidate,center,cv2.TM_CCOEFF_NORMED)[0,0])
+                if not np.isfinite(score):return False
+                scores.append((row.get('index'),score))
+            own=next((v for i,v in scores if i==self.ticket['index']),None)
+            other=[v for i,v in scores if i!=self.ticket['index']]
+            # A white-grade icon draws differently in the centre: .65 to .70 on real screens,
+            # still .43 clear of every other item. The lead is what tells items apart.
+            floor=.60 if self.ticket.get('grade')=='일반' else .80
+            if own is not None and other and own>=floor and own-max(other)>=.30:return True
+        return False
 
     def _read(self,frame):
         if read_zero_to_one(frame) is None or not self._same_item(frame):return None
