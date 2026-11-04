@@ -641,7 +641,12 @@ class SkillUI:
         self.close_known();self.open_story()
         raise Pending('서사 필수 도술 확인 완료 · 임무 완료 표시 재확인')
     def skill_rows(self):
-        rows=self.rows((729,79,80,365))
+        # A flicked list keeps gliding, and the two reads disagree until it stops. Nothing is pressed here.
+        for attempt in range(8):
+            try:rows=self.rows((729,79,80,365));break
+            except Pending as exc:
+                if attempt==7 or '두 화면' not in str(exc):raise
+                self.context.wait(.5)
         known=self.public['all_skill_names'];found=[]
         for r in rows:
             names=[name for name in known if clean(r['text'])==clean(name)]
@@ -987,17 +992,30 @@ class SkillUI:
         ledger.event('requested_learning_partial',**result)
         return result
     def select_preset(self,number):
-        if number!=1:raise Pending('광역 프리셋 1만 자동 설정합니다')
-        self.open_skills();self.click(579,459,skill_screen)
-        self.wait(lambda f:match(f,'preset-open',(644,338,20,66),.96) is not None)
-        self.click(590,436 if number==1 else 416,lambda f:match(f,'preset-open',(644,338,20,66),.96) is not None)
+        if number not in (1,2):raise Pending('프리셋 번호 확인 필요')
+        # The patch made this menu five rows, the last one locked: its lock marks the open menu.
+        menu=lambda f:match(f,'preset-open',(630,338,40,30),.96) is not None
+        self.open_skills()
+        if not menu(self.frame()):self.click(579,459,skill_screen)
+        self.wait(menu)
+        self.click(590,436 if number==1 else 416,menu)
         # First use of an empty preset copies the old deck once. It is an
         # informational game dialog, not purchase/unlock confirmation.
         if match(self.frame(),'preset-copy-notice',(365,228,170,33),.96):
             self.click(450,282,lambda f:match(f,'preset-copy-notice',(365,228,170,33),.96) is not None)
         self.wait(skill_screen)
-        rows=self.rows((530,450,16,17),language='number')
-        if {r['text'].strip() for r in rows if r['score']>=.98}!={str(number)}:raise Pending('현재 프리셋 번호 대조 실패')
+        # The bar is still sliding after a switch, and two early frames disagree. Nothing is pressed here.
+        for attempt in range(4):
+            self.context.wait(.4)
+            # OCR cannot read the bar's lone digit since the patch. The name beside it reads
+            # .94: the user's own name, or the game's default on a new character.
+            try:rows=self.rows((560,450,60,18))
+            except Pending:
+                if attempt==3:raise
+                continue
+            names={1:('광역','프리셋1'),2:('단일','프리셋2')}[number]
+            if any(clean(r['text']) in names for r in rows if r['score']>=.80):return
+        raise Pending('현재 프리셋 이름 대조 실패')
     def unlocked(self):
         import cv2,numpy as np
         frame=self.frame();unlocked=set(range(5))

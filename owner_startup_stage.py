@@ -348,7 +348,8 @@ def install(gui):
                         zoom_out(adapter,context,inputs)
                     if kind=='field':
                         from owner_boss_range import pending,restore
-                        if pending(adapter.project.root):restore(adapter,context,inputs)
+                        # A quest mode keeps it open: quests walk to their monsters.
+                        if adapter.mode=='auto_mode' and pending(adapter.project.root):restore(adapter,context,inputs)
                     if kind in ('field','dungeon'):
                         from owner_timetable import catch_up_overdue
                         catch_up_overdue(adapter,context,inputs)

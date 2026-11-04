@@ -8,8 +8,9 @@ import inspect,logging,re,threading
 
 LOG=logging.getLogger('project_gui.DKB')
 DISPATCH,DIRECT,RAID='dispatch','direct','raid'
-GROWTH,STYLE,ALBUM,BLESSING='growth','style','album','blessing'
+GROWTH,STYLE,ALBUM,BLESSING,PRESET='growth','style','album','blessing','preset'
 TARGETS={
+ 'auto_schedule.boss_raid.skill_preset.enabled':('레이드 단일 덱 구성',PRESET),
  'auto_rewards.blessing.enabled':('가호 보상·장착',BLESSING),
  'auto_growth.equipment.enabled':('장비 성장',GROWTH),
  'auto_growth.blessing.enabled':('가호 성장',GROWTH),
@@ -143,6 +144,11 @@ def growth(adapter,context,inputs,key):
         from owner_quest_preflight import read_power
         read_power(adapter,context,inputs)
         return adapter.run_album_rewards(context,inputs)
+    if kind==PRESET:
+        from owner_quest_preflight import read_power
+        from owner_single_preset import configure
+        read_power(adapter,context,inputs)
+        return configure(adapter,context,inputs)
     if kind==BLESSING:
         # The priority equip runs inside the reward job, so this is the one way to see it.
         from owner_quest_preflight import read_power
@@ -182,7 +188,7 @@ def execute(adapter,context,inputs,key):
     previous=getattr(LOCAL,'native_job',None);LOCAL.native_job=key
     try:
         if kind==RAID:return raid_real(adapter,context,inputs)
-        if kind in (GROWTH,STYLE,ALBUM,BLESSING):return growth(adapter,context,inputs,key)
+        if kind in (GROWTH,STYLE,ALBUM,BLESSING,PRESET):return growth(adapter,context,inputs,key)
         return dispatch(adapter,context,inputs,key) if kind==DISPATCH else direct(adapter,context,inputs,key)
     except ResumeWork:return None  # a boss return to the selected work; a TEST just ends here
     finally:LOCAL.native_job=previous;adapter.values=before
