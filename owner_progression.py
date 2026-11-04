@@ -71,7 +71,12 @@ def read_level(number,korean,frame):
     if any(s>=.985 and re.fullmatch(r'\d{2}',t.strip()) for t,s in texts(wide)):return None
     labels={int(m[1]) for t,s in texts(header) if s>=.88 for m in [re.search(r'레벨\s*(\d{1,2})(?!\d)',t)] if m}
     if len(labels)!=1 or next(iter(labels))>=10:return None
-    return parse_level(number.predict(resized(frame,(53,9,8,15))),header)
+    # The header only proves there is one digit: it read a real 3 as 8 at .97.
+    # The caller still requires two frames to agree.
+    for box in ((52,9,9,15),(53,9,8,15)):
+        digits={int(t.strip()) for t,s in texts(number.predict(resized(frame,box))) if s>=.985 and re.fullmatch(r'[1-9]',t.strip())}
+        if len(digits)==1:return next(iter(digits))
+    return None
 
 
 def parse_power(pages,minimum=.98):
