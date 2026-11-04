@@ -125,7 +125,13 @@ def install(gui):
             LOG.info('초반 장비 장착 완료 · 상자 탐색·개봉 생략');return True
         if not getattr(adapter,'_owner_preparing_gears',False) and now-getattr(adapter,'_owner_inventory_completed',-1e30)<interval:return True
         service=TownServices(adapter,context,inputs,inv.INVENTORY_USE_NAMES)
-        if inv.open_inventory(service) is False:raise RuntimeError('상자 처리 전 장착 상태를 확인하지 못했습니다.')
+        try:
+            if inv.open_inventory(service) is False:raise RuntimeError('상자 처리 전 장착 상태를 확인하지 못했습니다.')
+        except RuntimeError:
+            if not story_dialogue(adapter,service):raise
+            LOG.info('인벤토리 열기 중 대화 장면 시작 · 중단하지 않고 퀘스트로 복귀')
+            adapter._owner_inventory_skip_generation=getattr(adapter,'_owner_inventory_skip_generation',0)+1
+            return True
         first=service.capture();context.wait(.15);service.check();second=service.capture()
         worn=agree(first,second)
         rare_weapon=paired_rare_weapon(Path(adapter.project.root)/'profiles/DKB',first,second) if worn.get('무기') is True else None
