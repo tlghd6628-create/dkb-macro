@@ -6,7 +6,8 @@ ROOT=Path(os.environ.get('DKB_ROOT') or r'C:\Users\홍이\Downloads\도깨비의
 LOG_DIR=ROOT/'vendor/DKB_Auto/logs'
 STATE=Path(__file__).parent/'f1'/'run_watch_offset.txt';STATE.parent.mkdir(exist_ok=True)
 ENDS=('자동 동작 종료','사용자 정지','상태: 정지')
-NOISE=('퀘스트 상태판정','Paddle 준비 완료','화면 자료 저장')
+# Lines a stuck quest keeps printing. They must not count as progress.
+NOISE=('퀘스트 상태판정','Paddle 준비 완료','화면 자료 저장','메인퀘 정체','감정 요구 판독 대조','퀘스트 이동·자동사냥 확인','자동 기능 처리 종료 · 다음 퀘스트','메인퀘 시작','퀘스트 행 판독 보류','진행 진단 저장')
 max_minutes=float(sys.argv[1]);stall_minutes=float(sys.argv[2]) if len(sys.argv)>2 else 12
 def log_path():return LOG_DIR/(time.strftime('%Y-%m-%d')+'.log')
 path=log_path()
