@@ -630,8 +630,13 @@ class Port:
   if not isinstance(area,dict):raise Hold('장비 목록 범위 확인 필요')
   x,y,w,h=(area[k] for k in ('x','y','w','h'));cx=x+w//2
   ui.drag((cx,y+h-35),(cx,y+35),bare);self.context.wait(.2)
-  after,_=self._frame();self.context.wait(.12);final,_=self._frame()
-  if not bare(after) or not bare(final) or not same_equipment_inventory(self.service.detector,after,final):raise Hold('장비 목록 스크롤 후 화면 확인 필요')
+  # The list keeps gliding after a drag, so give it a moment to settle.
+  end=time.monotonic()+3
+  while True:
+   after,_=self._frame();self.context.wait(.12);final,_=self._frame()
+   if bare(after) and bare(final) and same_equipment_inventory(self.service.detector,after,final):break
+   if time.monotonic()>=end:raise Hold('장비 목록 스크롤 후 화면 확인 필요')
+   self.context.wait(.25)
   return not same_equipment_inventory(self.service.detector,other,final)
 
 def run_in_open_inventory(adapter,context,inputs):
