@@ -284,7 +284,13 @@ def install(gui):
         Adapter.run_main_quest=quest
         @wraps(ordinary_step)
         def step(runner,*args,**kwargs):
-            started=time.monotonic();result=ordinary_step(runner,*args,**kwargs)
+            started=time.monotonic()
+            try:result=ordinary_step(runner,*args,**kwargs)
+            except TypeError as exc:
+                # The native guide detector can return nothing on one frame. It killed a run after an hour.
+                if 'cannot unpack non-iterable NoneType' not in str(exc):raise
+                logging.getLogger('project_gui.DKB').warning('튜토리얼 판독 한 프레임 건너뜀 · %s',exc)
+                result=None
             owner=getattr(LOCAL,'quest_owner',None);state=getattr(LOCAL,'quest_state',None)
             if owner and state and state[1]=='auto_move' and state[2]>=started:
                 adapter,context,inputs=owner

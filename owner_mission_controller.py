@@ -392,9 +392,17 @@ def run(adapter,context,inputs):
     runner=BoundedMainQuestRunner(StateROIs(profile,mode=adapter.mode),**deps)
     from project_adapter.reservations import QuestBossReservation
     boss_reservation=QuestBossReservation(adapter,runner)
-    started=time.monotonic();next_teleport=started+1;next_emote=started+1;scene_changes=[];emote_failed_since=None
+    started=time.monotonic();next_teleport=started+1;next_emote=started+1;next_guide=started+5;scene_changes=[];emote_failed_since=None
     while True:
      context.checkpoint()
+     if time.monotonic()>=next_guide:
+      next_guide=time.monotonic()+15
+      from owner_guide_skill import run as run_guide_skill
+      if run_guide_skill(ui):
+       runner=BoundedMainQuestRunner(StateROIs(profile,mode=adapter.mode),**deps)
+       boss_reservation=QuestBossReservation(adapter,runner);scene_changes=[]
+       LOCAL.active=(adapter,context,key,time.monotonic()+6)
+       continue
      if time.monotonic()>=next_emote:
       next_emote=time.monotonic()+(.3 if getattr(adapter,'_owner_emote_requested',None)==key else 2)
       from owner_quest_emote_candidate import run as run_observed_emote
