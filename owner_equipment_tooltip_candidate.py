@@ -605,10 +605,10 @@ class Port:
   if known is None:raise Hold('착용 상세 종료 위치 확인 필요')
   if not _same_single_anchors(frame,known):
    def same_worn(f):
+    # Long names scroll, so the title cannot prove sameness here. Closing any worn detail through
+    # its one X changes nothing, and the worn mark and 장착해제 button prove that is what is open.
     try:return (single_shell(f) and _score(f[116:135,420:445],badge())>=.96
-      and _ocr(self.engine,f,(450,350,70,26))=='장착해제'
-      and same_item(_item_token(known[97:115,390:502],known[128:148,434:454].copy()),
-                    _item_token(f[97:115,390:502],f[128:148,434:454].copy())))
+      and _ocr(self.engine,f,(450,350,70,26))=='장착해제')
     except Hold:return False
    self.context.wait(.12);other,_=self._frame()
    if not same_worn(frame) or not same_worn(other):raise Hold('착용 상세 종료 위치 확인 필요')
