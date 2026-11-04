@@ -7,6 +7,10 @@
 !/COLLABORATION.md
 !/HANDOFF.md
 !/CLAUDE.md
+# The caveman skill only: no hooks, no local settings.
+!/.claude/
+/.claude/*
+!/.claude/skills/
 !/owner_*.py
 !/test_*.py
 !/bootstrap.py
