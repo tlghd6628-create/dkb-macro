@@ -739,8 +739,14 @@ def run_in_open_inventory(adapter,context,inputs):
   if status=='pending_confirmation':
    try:confirmed=port.confirm_worn_detail()
    except Hold:
-    try:port.open_worn_for_confirmation();confirmed=port.confirm_worn_detail()
+    try:port.open_worn_for_confirmation()
     except Hold:return 'pending_confirmation'
+    # Moving scenery behind the detail can fail one look. Every check passes on a still frame.
+    confirmed=None
+    for _ in range(4):
+     try:confirmed=port.confirm_worn_detail();break
+     except Hold:context.wait(.5)
+    if confirmed is None:return 'pending_confirmation'
    port.close_worn_detail()
    adapter._owner_equipment_upgrade_growth_pending={'character':character,'at':time.monotonic()}
    confirmed_count+=1;excluded=[];inventory,_=port._frame()

@@ -57,7 +57,18 @@ def _run(adapter,context,inputs):
   close_inventory(service)
   if not pair(field):raise RuntimeError('장비 처리 뒤 원래 화면 복귀 미확인')
   return 'scan_held_skip'
- if status=='pending_confirmation':raise RuntimeError('장비 착용 결과 미확인 · 확인 후 재시도')
+ if status=='pending_confirmation':
+  # The pending record blocks any new equip input, so continuing cannot equip twice. The next visit
+  # confirms it. Three misses in a row are a real fault and stop the run as before.
+  misses=getattr(adapter,'_owner_equip_confirm_misses',0)+1;adapter._owner_equip_confirm_misses=misses
+  if misses>=3:raise RuntimeError('장비 착용 결과 미확인 · 확인 후 재시도')
+  from owner_worn_stats import popup
+  a=service.capture()
+  if popup(a):service.click_hit((510,106,(503,99,518,113)));context.wait(.3)
+  LOG.info('장비 착용 결과 다음 방문에 재확인 · %d/3',misses)
+  close_inventory(service)
+  return status
+ adapter._owner_equip_confirm_misses=0
  if not pair(inventory):raise RuntimeError('장비 처리 뒤 인벤토리 확인 필요')
  close_inventory(service)
  if not pair(field):raise RuntimeError('장비 처리 뒤 원래 화면 복귀 미확인')
