@@ -64,10 +64,14 @@ def _scroll(ui):
 
 
 def count(ui):
-    """Boxes left, from the popup's own '4개'."""
-    for row in ui.rows((480,118,48,40),pair_minimum=.8):
-        found=re.fullmatch(r'(\d+)개',row['text'].strip())
-        if found and row['score']>=.9:return int(found[1])
+    """Boxes left, from the popup's own '4개', once the popup has finished opening."""
+    for attempt in range(6):
+        try:
+            for row in ui.rows((480,118,48,40),pair_minimum=.8):
+                found=re.fullmatch(r'(\d+)\s*개',row['text'].strip())
+                if found and row['score']>=.9:return int(found[1])
+        except Pending:pass
+        ui.context.wait(.5)
     raise Pending('도술 상자 수량 확인 필요')
 
 

@@ -378,7 +378,7 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
             # any unreadable result stops immediately with the intent retained.
             deadline=time.monotonic()+20
             status='hold_time_limit'
-            numeric_retry=False
+            numeric_retry=False;rereads=0
             for _ in range(50):
                 context.checkpoint();service.check()
                 if time.monotonic()>=deadline:break
@@ -395,6 +395,11 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
                     # Re-read one entirely fresh pair; never combine numbers,
                     # relax confidence, or retry a sent resource operation.
                     numeric_retry=True;observer.use_raw_input_numbers=True;context.wait(.15)
+                    continue
+                # One digit read .83 just after an enhance and ended the visit (+3 on 11-05). No input was sent.
+                if (status=='hold_screen_unverified' and rereads<4 and intent.pending() is None
+                    and getattr(observer,'last_reason',None)=='강화 수치 판독 실패'):
+                    rereads+=1;context.wait(.4)
                     continue
                 if status!='pending_confirmation':break
                 for attempt in range(6):

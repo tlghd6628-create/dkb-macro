@@ -864,7 +864,8 @@ class SkillUI:
         self.context.wait(1.)
         for attempt in range(8):
             try:
-                self.click_word('새로운 도술',(280,70,340,240),lambda f:True,minimum=.94);break
+                # Only dismisses a screen that closes on any press; the learn is proved by the row going away.
+                self.click_word('새로운 도술',(280,70,340,240),lambda f:True,minimum=.80);break
             except Pending:
                 if attempt==7:raise
                 self.context.wait(.4)
