@@ -148,6 +148,29 @@ def defer_full_queue(book,power):
 def hunt_started(result):
  return result is True or result in ('HUNTING_RESUMED','HUNTING_STARTED')
 
+def finish_scene(adapter,context,inputs):
+ """F1 during a quest scene: no panel can open until it ends. Skip it the way the start stage does."""
+ from project_adapter.main_quest import StateROIs,BoundedMainQuestRunner,dependencies
+ from project_adapter.town_services import TownServices
+ from project_adapter import market_inventory as native
+ mode=adapter.mode if adapter.mode in ('main_quest','sub_quest') else 'sub_quest'
+ slots=StateROIs(adapter.project.root/'profiles/DKB',mode=mode)
+ service=TownServices(adapter,context,inputs,native.INVENTORY_USE_NAMES)
+ _,deps=dependencies(adapter,context,inputs)
+ runner=BoundedMainQuestRunner(slots,**deps)
+ handled=False;end=time.monotonic()+30
+ while time.monotonic()<end:
+  context.checkpoint();first=service.capture();context.wait(.12);second=service.capture()
+  key=next((k for k in ('skip_confirm','skip_confirm2','skip') if slots.match(k,first).get('hit') and slots.match(k,second).get('hit')),None)
+  if key is None:break
+  hit=slots.match(key,second)
+  if key=='skip':runner.handle_skip(slots.by_key[key],hit,second)
+  elif key=='skip_confirm2':runner.handle_skip_confirm2(slots.by_key[key],hit,second)
+  else:runner.input_one(key,hit,second)
+  handled=True;context.wait(.6)
+ if handled:LOG.info('임무 시작 전 대화 장면 정리 · 전투력 다시 확인')
+ return handled
+
 def prepare(adapter,context,inputs):
  from owner_progression import state
  from owner_quest_preflight import read_power
@@ -162,9 +185,13 @@ def prepare(adapter,context,inputs):
   if getattr(adapter,'_owner_requested_quest_mode',getattr(adapter,'mode',None))=='sub_quest' and fresh.character and fresh.level is not None and fresh.observed>=observed_after and fresh.power is None:
    LOG.warning('전투력 숫자 미확인 · 캐릭터 새 화면 확인 완료 · 현재 단계 적합 표시 임무만 진행 · 성장 재시도 보류')
    break
-  if attempt==2:raise Pending('임무 선택 전 캐릭터·전투력 두 화면 확인 필요 · 재확인 3회 실패')
+  scene=finish_scene(adapter,context,inputs)
+  if attempt==2 and not scene:raise Pending('임무 선택 전 캐릭터·전투력 두 화면 확인 필요 · 재확인 3회 실패')
   LOG.info('임무 시작 전 화면 재확인 · %d/3 · 잘못된 전투력으로 진행하지 않음',attempt+1)
   context.wait(.5)
+ else:
+  # The last attempt only cleared a scene, so read once more on the field it left.
+  if not read_power(adapter,context,inputs):raise Pending('임무 선택 전 캐릭터·전투력 두 화면 확인 필요 · 재확인 3회 실패')
  if getattr(adapter,'_owner_initial_context',None) is not context:
   from owner_growth_recovery import recover
   recover(adapter,context,inputs)
