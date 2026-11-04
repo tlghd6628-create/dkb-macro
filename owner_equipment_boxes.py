@@ -46,7 +46,8 @@ def inspect(frame):
         patch=frame[y-3:y+12,x+w-11:x+w+5]
         score=max(float(cv2.minMaxLoc(cv2.matchTemplate(patch,needle,cv2.TM_CCOEFF_NORMED))[1]) for needle in needles)
         if score>=.94:answer[part]=True
-        elif score<.35 and float(np.max(patch.std(axis=(0,1))))<14 and float(patch.mean())<100:answer[part]=False
+        # Real level-1 blanks measure score .46-.53, std 8-16, mean 32-42; worn slots score .99, std 50+.
+        elif score<.60 and float(np.max(patch.std(axis=(0,1))))<20 and float(patch.mean())<100:answer[part]=False
         else:answer[part]=None
     return answer
 
