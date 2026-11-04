@@ -1,10 +1,36 @@
-"""One visible choice for the next run, beside the ordinary Start controls."""
+"""One visible choice for the next run, beside the ordinary Start controls.
+
+The main window is the native compact layout; this module only decides where
+the native widgets sit and draws one status card over the free band. Every
+native widget keeps its callback, Tcl variable and saved file. Hidden widgets
+are hidden with the layout's own ``visible`` flag, nothing is destroyed.
+"""
 import copy
 import time
 import tkinter as tk
 from tkinter import ttk
 
 MODES=(('main_quest','메인퀘스트'),('sub_quest','서사퀘스트'),('auto_mode','제자리 사냥'))
+STATE_TEXT={'running':'실행중','paused':'일시정지','stopped':'정지','error':'오류'}
+
+# Picture only. Rectangles are for the authored 477-wide window; a layout of
+# another width keeps the old +70 band instead of these positions.
+WIDTH=477;HEIGHT=412
+PANEL=dict(x=10,y=58,width=457,height=100)
+PLACES={
+ 'start':(10,10,70,30),'pause':(84,10,92,30),'stop':(180,10,70,30),'update':(389,12,78,26),
+ 'accent':(10,50,457,2),
+ 'game_connect':(10,168,96,28),'game_refresh':(110,168,80,28),'game_hint':(196,173,110,19),'input_prepare':(310,168,157,28),
+ 'log':(10,204,443,124),'log_scroll':(453,204,14,124),
+ 'log_send':(10,338,80,28),'log_note':(96,343,150,19),'launcher_start':(250,343,120,19),'details':(387,338,80,28),
+ 'identity.server_name.label':(10,380,30,19),'identity.server_name.entry':(44,379,96,22),
+ 'identity.character_name.label':(150,380,42,19),'identity.character_name.entry':(196,379,96,22),
+ 'identity.save':(302,376,52,27),
+}
+# Removed from the picture; the widgets, their variables and saved values stay.
+HIDDEN=('status','identity.pc_alias.label','identity.pc_alias.entry',
+        'alignment.label','alignment.tl','alignment.bl','alignment.tr','alignment.br','alignment.manager',
+        'mode_fixed','execution_mode')
 
 
 def choose(gui,mode):
@@ -15,32 +41,68 @@ def choose(gui,mode):
     return gui.set_execution_mode(mode)
 
 
+def arranged(authored,hud_on):
+    """A copy of the authored layout with this module's positions applied."""
+    layout=copy.deepcopy(authored)
+    components=layout['components']
+    if layout['width']!=WIDTH:
+        # Unknown width: keep the former behaviour, a band above the native rows.
+        layout['height']+=70
+        for rect in components.values():
+            if rect['y']>=40:rect['y']+=70
+        return layout
+    for key,(x,y,width,height) in PLACES.items():
+        if key in components:components[key].update(x=x,y=y,width=width,height=height,visible=True)
+    for key in HIDDEN:
+        if key in components:components[key]['visible']=False
+    for key in ('hud','hud_place'):
+        # The HUD switch stays reachable only while a saved HUD state is on.
+        if key in components:components[key]['visible']=bool(hud_on)
+    layout['height']=HEIGHT
+    return layout
+
+
 class MainPanel:
     def __init__(self,gui):
         self.gui=gui;self.closed=False;self.timer=None;self.view=None
-        self.frame=ttk.Frame(gui.root,padding=(4,0))
-        self.mode=tk.StringVar(gui.root,value=gui.load_settings_model().mode)
+        from owner_settings_theme import prepare,SURFACE,BORDER,FONT
+        prepare(gui.root)
+        self.frame=tk.Frame(gui.root,background=SURFACE,highlightthickness=1,highlightbackground=BORDER,highlightcolor=BORDER,borderwidth=0)
+        self.frame._dkb_card=True
+        body=ttk.Frame(self.frame,style='DkbCard.TFrame');body.pack(fill='both',expand=True,padx=12,pady=(8,6))
+        # Row 1: run state, current activity. The schedule button lands top-right.
+        top=ttk.Frame(body,style='DkbCard.TFrame');top.pack(fill='x')
+        self.state_text=tk.StringVar(gui.root,value='정지')
+        self.pill=tk.Label(top,textvariable=self.state_text,font=(FONT,9,'bold'),padx=10,pady=1,background='#CBD0D8',foreground='#3B4252')
+        self.pill.pack(side='left')
         self.hint=tk.StringVar(gui.root)
+        self.hint_label=ttk.Label(top,textvariable=self.hint,style='DkbCard.TLabel',font=(FONT,9),wraplength=250)
+        self.hint_label.pack(side='left',padx=(10,0))
+        # Row 2: the mode for the next run.
+        modes=ttk.Frame(body,style='DkbCard.TFrame');modes.pack(fill='x',pady=(9,0))
+        ttk.Label(modes,text='모드',style='DkbCardMuted.TLabel',width=8).pack(side='left')
+        self.mode=tk.StringVar(gui.root,value=gui.load_settings_model().mode)
         self.buttons=[]
-        for index,(value,label) in enumerate(MODES):
-            button=ttk.Radiobutton(self.frame,text=label,variable=self.mode,value=value,command=self.selected)
-            button.grid(row=0,column=index,padx=(0,8),sticky='w');self.buttons.append(button)
-        self.hint_label=ttk.Label(self.frame,textvariable=self.hint,font=('Malgun Gothic',8))
-        self.hint_label.grid(row=2,column=0,columnspan=3,sticky='w',pady=(2,0))
+        for value,label in MODES:
+            button=ttk.Radiobutton(modes,text=label,variable=self.mode,value=value,command=self.selected,style='DkbCard.TRadiobutton')
+            button.pack(side='left',padx=(0,14));self.buttons.append(button)
+        # Row 3: hunt spot, game connection.
         self._hunt_identity=None;self._hunt_identity_checked=-1e30
         self.hunt_slot=tk.StringVar(gui.root,value='')
         self.hunt_source=tk.StringVar(gui.root,value='fixed')
-        self.hunt_row=ttk.Frame(self.frame)
-        self.hunt_row.grid(row=1,column=0,columnspan=3,sticky='w')
-        self.hunt_label=ttk.Label(self.hunt_row,text='사냥 위치',font=('Malgun Gothic',8))
-        self.hunt_label.pack(side='left',padx=(0,8))
-        self.hunt_fixed=ttk.Radiobutton(self.hunt_row,text='고정',variable=self.hunt_source,value='fixed',command=self.save_hunt_slot)
+        self.hunt_row=ttk.Frame(body,style='DkbCard.TFrame')
+        self.hunt_row.pack(fill='x',pady=(3,0))
+        self.hunt_label=ttk.Label(self.hunt_row,text='사냥 위치',style='DkbCardMuted.TLabel',width=8)
+        self.hunt_label.pack(side='left')
+        self.hunt_fixed=ttk.Radiobutton(self.hunt_row,text='고정',variable=self.hunt_source,value='fixed',command=self.save_hunt_slot,style='DkbCard.TRadiobutton')
         self.hunt_fixed.pack(side='left')
-        self.hunt_combo=ttk.Combobox(self.hunt_row,textvariable=self.hunt_slot,values=('1','2','3','4'),width=3,state='readonly')
-        self.hunt_combo.pack(side='left',padx=(2,12))
+        self.hunt_combo=ttk.Combobox(self.hunt_row,textvariable=self.hunt_slot,values=('1','2','3','4'),width=3,state='readonly',style='Dkb.TCombobox')
+        self.hunt_combo.pack(side='left',padx=(2,14))
         self.hunt_combo.bind('<<ComboboxSelected>>',self.save_hunt_slot)
-        self.hunt_power=ttk.Radiobutton(self.hunt_row,text='전투력별',variable=self.hunt_source,value='power',command=self.save_hunt_slot)
+        self.hunt_power=ttk.Radiobutton(self.hunt_row,text='전투력별',variable=self.hunt_source,value='power',command=self.save_hunt_slot,style='DkbCard.TRadiobutton')
         self.hunt_power.pack(side='left')
+        self.game_text=tk.StringVar(gui.root,value='')
+        ttk.Label(self.hunt_row,textvariable=self.game_text,style='DkbCardMuted.TLabel').pack(side='right')
         self.originals_hidden=[]
         gui.root.bind('<Destroy>',lambda event:self.close() if event.widget is gui.root else None,add='+')
         self.refresh()
@@ -54,15 +116,16 @@ class MainPanel:
         gui=self.gui;view=getattr(gui,'visual_view',None)
         if view is not None:
             if view.layout is not getattr(view,'_owner_main_layout',None):
-                layout=copy.deepcopy(view.layout)
-                layout['height']+=70
-                for rect in layout['components'].values():
-                    if rect['y']>=40:rect['y']+=70
+                authored=getattr(view,'_owner_authored_layout',None)
+                if authored is None:authored=view._owner_authored_layout=copy.deepcopy(view.layout)
+                layout=arranged(authored,view.hud)
                 view._owner_main_layout=layout;view.layout=layout
                 view.predicates['execution_mode']=lambda:False
+                for key in HIDDEN:
+                    if key in view.widgets:view.predicates[key]=lambda:False
                 view.apply()
             if not view.hud:
-                self.frame.place(x=10,y=43,width=max(1,gui.root.winfo_width()-20),height=67)
+                self.frame.place(**PANEL)
                 self.frame.lift()
             else:self.frame.place_forget()
         # The former update slot now opens the game-only current-screen viewer.
@@ -77,6 +140,21 @@ class MainPanel:
             if widget.winfo_exists():widget.place_forget()
         controls.screen_link=gui.update_button
         controls.telegram.position()
+
+    def paint_state(self,state):
+        """Run-state pill and connection text, from the values the host already keeps."""
+        from owner_main_theme import STATE_COLORS
+        key=getattr(self.gui,'_painted_state',None) or ('paused' if state['status']=='paused' else 'running' if state['status']=='running' else 'stopped')
+        colors=STATE_COLORS.get(key,STATE_COLORS['stopped'])
+        var=getattr(self.gui,'state',None)
+        text=var.get() if var is not None else STATE_TEXT.get(state['status'],state['status'])
+        if self.state_text.get()!=text:self.state_text.set(text)
+        foreground='#FFFFFF' if key!='stopped' else colors['foreground']
+        if self.pill.cget('background')!=colors['accent']:self.pill.configure(background=colors['accent'],foreground=foreground)
+        game=getattr(self.gui,'game_state',None)
+        value=game.get() if game is not None else ''
+        game_text='게임 '+('연결' if value=='연결' else '미연결')
+        if self.game_text.get()!=game_text:self.game_text.set(game_text)
 
     def refresh(self,schedule=True):
         if self.closed or self.gui.closed.is_set():return
@@ -93,18 +171,20 @@ class MainPanel:
         self.hunt_fixed.configure(state='disabled' if locked else 'normal')
         self.hunt_power.configure(state='disabled' if locked else 'normal')
         self.hunt_combo.configure(state='readonly' if not locked and self.hunt_source.get()=='fixed' else 'disabled')
-        text=('실행 중 · 모드를 바꾸려면 먼저 F3으로 중지하세요.' if state['status']=='running' else
-              '일시정지 중 · F1을 누르면 하던 작업을 재개합니다.' if state['status']=='paused' else
-              '중지 처리 중입니다.' if busy else '원하는 모드 선택 후 F1 시작 · 자동 저장됩니다.')
+        text=('실행 중 · 모드 변경은 F3 중지 후' if state['status']=='running' else
+              '일시정지 · F1 계속' if state['status']=='paused' else
+              '중지 처리 중' if busy else '대기 · 모드 선택 후 F1 시작')
+        if state['status']=='running' and state.get('current_task'):text=str(state['current_task'])
         stage=getattr(self.gui,'_owner_stage_snapshot',None)
         if stage and state['status'] in ('running','paused'):
-            text=('일시정지 · ' if state['status']=='paused' else '')+'현재 위치: '+stage['location_label']+' · '+stage['phase']
+            text=('일시정지 · ' if state['status']=='paused' else '')+stage['location_label']+' · '+stage['phase']
         recognition=getattr(self.gui,'_owner_ocr_readiness',None)
         if recognition is not None and not recognition.done.is_set():
-            text='인식 준비 중 · 게임 입력 대기 · F3 중지 가능'
+            text='인식 준비 중 · F3 중지 가능'
         elif recognition is not None and recognition.error:
             text='인식 준비 실패 · 실행 기록 확인'
         if self.hint.get()!=text:self.hint.set(text)
+        self.paint_state(state)
         if schedule:self.timer=self.gui.root.after(250,self.refresh)
 
     def sync_hunt_slot(self):

@@ -7,7 +7,7 @@ import json,logging,time,re,uuid,hashlib,math
 from pathlib import Path
 from owner_shop_reader_candidate import scan_current_town,read_weekly_quote,balance_observation,find_visible_row,find_ocr_row,discover_visible_items
 from owner_shop_settings_candidate import ShopSettingsStore
-from owner_shop_settings_candidate import NAMES
+from owner_shop_settings_candidate import NAMES,DEFAULT_COIN_RESERVE
 from owner_shop_transaction_candidate import ShopJournal,Hold
 from biol_base.session import Cancelled
 LOG=logging.getLogger('project_gui.DKB')
@@ -34,14 +34,19 @@ def inspect_current_shop(adapter,context,inputs):
  return result
 
 def _asset_match(frame,name,box,threshold=.97):
+ """Same rectangle, same threshold; `name.png` plus optional `name.N.png` cut
+ from lossless product frames. The first JPEG-cut originals stay as they are."""
  import cv2,numpy as np
  from PIL import Image
- try:needle=np.asarray(Image.open(Path(__file__).parent/'assets/shop-rows'/(name+'.png')).convert('RGB'))
- except OSError:return False
+ root=Path(__file__).parent/'assets/shop-rows'
  x,y,w,h=box;patch=frame[y:y+h,x:x+w]
- if patch.shape[0]<needle.shape[0] or patch.shape[1]<needle.shape[1]:return False
- score=cv2.matchTemplate(patch,needle,cv2.TM_CCOEFF_NORMED)
- return bool(np.isfinite(score).all() and float(score.max())>=threshold)
+ for path in [root/(name+'.png')]+sorted(root.glob(name+'.[0-9].png')):
+  try:needle=np.asarray(Image.open(path).convert('RGB'))
+  except OSError:continue
+  if patch.shape[0]<needle.shape[0] or patch.shape[1]<needle.shape[1]:continue
+  score=cv2.matchTemplate(patch,needle,cv2.TM_CCOEFF_NORMED)
+  if np.isfinite(score).all() and float(score.max())>=threshold:return True
+ return False
 
 def _paired(ui,proof):
  first=ui.frame();ui.context.wait(.12);second=ui.frame()
@@ -50,7 +55,9 @@ def _paired(ui,proof):
 def _balance(ui):
  rows=ui.rows((408,4,45,19),language='korean');value=balance_observation(rows)
  pair=getattr(ui,'_owner_last_rows_pair',None)
- if not value or not pair or not all(_asset_match(f,'header-coin',(393,8,16,17)) for f in pair[0]):
+ # The HUD currency group is centred, so the coin icon moves a few pixels
+ # with the digit count (567.22K vs 1.89M). Keep the exact icon, widen the box.
+ if not value or not pair or not all(_asset_match(f,'header-coin',(386,5,26,23)) for f in pair[0]):
   raise Hold('현재 엽전 잔액 두 화면 확인 필요')
  value['frame_ids']=[hashlib.sha256(frame.tobytes()+str(tick).encode()).hexdigest() for frame,tick in zip(pair[0],pair[1])]
  if len(value['frame_ids'])!=2 or value['frame_ids'][0]==value['frame_ids'][1]:raise Hold('서로 다른 두 화면 필요')
@@ -218,6 +225,10 @@ def _buy_one(adapter,context,inputs,item,shop):
  chosen=[r for r in document['items'] if r['shop']==shop and r['name']==item and r['enabled'] is True]
  if len(chosen)!=1:raise Hold('체크한 상품 확인 필요')
  reserve=document['coin_reserve']
+ if reserve is None:
+  # A missing file already means the default reserve; an empty field saved
+  # from the editor meant the same to the user, not "never buy".
+  reserve=DEFAULT_COIN_RESERVE;LOG.info('남길 엽전 미설정 · 기본 %d 적용',reserve)
  if type(reserve) is not int or reserve<0:raise Hold('남길 엽전 확인 필요')
  if shop=='remote' and not paid(root):raise Hold('멤버십 설정 확인 필요')
  began=time.monotonic();read_power(adapter,context,inputs);progress=state(adapter)
@@ -254,7 +265,7 @@ def _buy_one(adapter,context,inputs,item,shop):
   except (Hold,Pending,OSError,ValueError,TypeError) as exc:
    LOG.info('상점 목록 자동 판독 보류 · %s',str(exc))
   current=[r for r in document['items'] if r['shop']==shop and r['name']==item and r['enabled'] is True]
-  if len(current)!=1 or current[0]!=chosen[0] or document['coin_reserve']!=reserve:
+  if len(current)!=1 or current[0]!=chosen[0] or document['coin_reserve'] not in (reserve,None):
    raise Hold('상점 구매 설정이 변경되어 다시 확인합니다')
  if shop not in seen:sync_page();seen.add(shop)
  quote=_find_quote(ui,item,on_page=sync_page)
@@ -335,9 +346,12 @@ def dispatch_configured(adapter,context,inputs):
  root=adapter.project.root;profile=configured_identity(root);store=ShopSettingsStore(root,profile)
  if not store.path.exists():return {'status':'no_settings'}
  document=store.read_document()
- if document.get('enabled',True) is not True:return {'status':'no_selection'}
  selected=[r for r in document['items'] if r['enabled']]
- if not selected:return {'status':'no_selection'}
+ if document.get('enabled',True) is not True:
+  # The master switch silently hides the whole appointment; say so once here.
+  LOG.info('상점 구매 생략 · 설정 상품 구매 사용 꺼짐 · 선택 품목 %d개',len(selected))
+  return {'status':'no_selection','reason':'설정 상품 구매 사용 꺼짐'}
+ if not selected:return {'status':'no_selection','reason':'선택 품목 없음'}
  supported=selected
  holds=[];confirmed=0
  for setting in supported:

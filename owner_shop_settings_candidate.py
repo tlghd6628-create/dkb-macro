@@ -148,9 +148,9 @@ class ShopSettings:
         reserve_bar = ttk.Frame(top)
         reserve_bar.pack(fill='x', pady=(0, 5))
         ttk.Label(reserve_bar, text='남길 엽전').pack(side='left')
-        self.reserve = tk.StringVar(value='' if document['coin_reserve'] is None else str(document['coin_reserve']))
+        # An empty field is saved as the default reserve the runtime applies.
+        self.reserve = tk.StringVar(value=str(DEFAULT_COIN_RESERVE if document['coin_reserve'] is None else document['coin_reserve']))
         ttk.Entry(reserve_bar, textvariable=self.reserve, width=14).pack(side='left', padx=5)
-        ttk.Label(reserve_bar, text='미설정 시 구매 보류').pack(side='left')
         self.tabs = ttk.Notebook(top)
         self.tabs.pack(fill='both', expand=True)
         self.trees = {}
@@ -242,7 +242,7 @@ class ShopSettings:
     def save(self):
         try:
             value = self.reserve.get().strip().replace(',', '')
-            self.store.write(self.rows, int(value) if value else None,expected_revision=self.open_revision,enabled=self.enabled.get())
+            self.store.write(self.rows, int(value) if value else DEFAULT_COIN_RESERVE,expected_revision=self.open_revision,enabled=self.enabled.get())
         except (ValueError, OSError) as error:
             messagebox.showerror('상점 설정 저장 실패', str(error), parent=self.window); return
         self.open_revision=self.store.revision()
