@@ -84,6 +84,22 @@ def positive_skill_icons(first,second):
  a,b=page(first),page(second)
  return [(sid,y) for sid,y in a if any(other==sid and abs(y-y2)<=3 for other,y2 in b)]
 
+def _icons_to_end(ui,Pending):
+ """Target icons on every page of the proved owned-only list, until the list stops moving."""
+ import numpy as np
+ from owner_skill_ui import skill_screen
+ ui.open_skills();ui.all_filter(True)
+ for _ in range(3):ui.drag((762,118),(762,424),skill_screen)
+ found=set();previous=None
+ for _ in range(30):
+  ui.context.wait(1.);first=ui.frame();ui.context.wait(.12);second=ui.frame()
+  if not owned_filter_frame(first) or not owned_filter_frame(second):raise Pending('보유 도술 필터 변경')
+  found.update(sid for sid,_y in positive_skill_icons(first,second))
+  page=second[79:440,695:840].astype('int16')
+  if previous is not None and float(np.abs(page-previous).mean())<4:return found
+  previous=page;ui.drag((762,425),(762,117),skill_screen)
+ raise Pending('보유 도술 목록 끝 확인 실패')
+
 class _RequiredSkillsFound(Exception):
  def __init__(self,owned):self.owned=set(owned)
 
@@ -269,7 +285,12 @@ def scan_learned(adapter,context,inputs):
  try:
   try:owned=ui.scan_owned()
   except _RequiredSkillsFound as done:owned=done.owned
+  except Pending as exc:
+   # List names are too small to agree on every read, and an empty page used to end the check.
+   LOG.info('보유 도술 이름 판독 보류 · 아이콘으로 끝까지 확인 · %s',exc)
+   owned=_icons_to_end(ui,Pending)
   if not owned_filter_proved(ui):raise Pending('보유 도술 전용 필터 확인 필요')
+  adapter._owner_starter_owned=(context,set(owned))
  finally:
   try:ui.close_known()
   except Exception as exc:raise ChoiceNavigationError('도술 화면을 닫고 일반 화면으로 돌아왔는지 확인 필요') from exc

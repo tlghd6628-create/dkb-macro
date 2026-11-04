@@ -199,6 +199,9 @@ def item_name(text,known):
     names=[name for name in known if clean(name)==clean(value)]
     return names[0] if len(names)==1 else None
 
+class NoLearnRow(Pending):
+    """No 배우기 row names this skill: it still lacks fragments, or it is already learned."""
+
 class SkillUI:
     def __init__(self,adapter,context,inputs):
         from project_adapter.town_services import TownServices
@@ -254,7 +257,7 @@ class SkillUI:
                 if pressed:self.inputs.up('mouse','left')
         self.context.wait(.2)
         self.touched=True
-    def rows(self,box,*,language='korean',pair=True,pair_minimum=.86,text_mode='raw'):
+    def rows(self,box,*,language='korean',pair=True,pair_minimum=.86,text_mode='raw',_again=0):
         """OCR worker has no input; stale/late responses are discarded."""
         import numpy as np
         from tools.ocr_support import get_paddle_engine
@@ -306,6 +309,11 @@ class SkillUI:
             a,b=answers
             if not paired_rows_match(a,b,pair_minimum):
                 self._owner_last_pair_mismatch={'first':a,'second':b}
+                # Pulsing dots and a list still gliding spoil one pair. The agreement needed is the same.
+                if _again<4:
+                    self.context.wait(.4)
+                    return self.rows(box,language=language,pair=pair,pair_minimum=pair_minimum,text_mode=text_mode,_again=_again+1)
+                LOG.info('도술 두 화면 판독 불일치 · 영역=%s · %s / %s',box,[(r['text'],round(r['score'],2)) for r in a][:8],[(r['text'],round(r['score'],2)) for r in b][:8])
                 raise Pending('도술 두 화면 판독 불일치')
             self._owner_last_rows_pair=(frames,ticks,answers)
         self.last_text_frame=frames[-1];self.last_text_tick=ticks[-1]
@@ -764,6 +772,7 @@ class SkillUI:
                      and 0<=age<=180)
         elif ledger.item.get('story_step')!=5:allowed=False
         if not allowed:raise Pending('승인하지 않은 도술 개별 학습 보류')
+        if coupon:return self._learn_target(sid,name,ledger)
         owned=self.scan_owned()
         if not isinstance(owned,set):raise Pending('도술 학습 전 보유 확인 필요')
         if sid in owned:
@@ -814,6 +823,56 @@ class SkillUI:
         if not isinstance(after,set) or sid not in after:raise Pending('개별 도술 학습 후 보유 확인 필요: '+name)
         intents[str(sid)].update(status='confirmed',proof='name_and_fresh_paired_owned_scan')
         ledger.event('individual_learning_verified',skill=sid,name=name)
+        return True
+    def learn_rows(self):
+        """Rows offering 배우기, at the top of the all-skills list."""
+        self.open_skills();self.all_filter(False)
+        for _ in range(3):self.drag((762,118),(762,424),skill_screen)
+        self.context.wait(.8)
+        return [r for r in self.rows((798,79,45,365),pair_minimum=.9) if r['score']>=.94 and clean(r['text'])==clean('배우기')]
+    def title_is(self,sid,name):
+        """Selected skill's big title. A split or weak reading also needs its own icon beside it."""
+        rows=self.rows((46,70,155,25));text=clean(''.join(r['text'] for r in sorted(rows,key=lambda r:r['x'])))
+        if text!=clean(name) or not rows:return False
+        worst=min(r['score'] for r in rows)
+        return worst>=.94 or (worst>=.85 and identify_icon(self.frame(),(8,66,46,46))==sid)
+    def _learn_target(self,sid,name,ledger):
+        """List names are too small to read reliably, so each 배우기 row is opened and named by its title."""
+        intents=ledger.item.setdefault('learning_intents',{})
+        pending=intents.get(str(sid),{}).get('status')=='intent'
+        hit=None
+        for row in self.learn_rows():
+            self.click(754,row['y'],skill_screen);self.context.wait(.6)
+            if self.title_is(sid,name):hit=row;break
+        if hit is None:
+            if pending:
+                # The fragments are gone and nothing offers this skill, so the sent learn took effect.
+                intents[str(sid)].update(status='confirmed',proof='no_learn_row_after_intent')
+                ledger.event('individual_learning_reconciled',skill=sid);return True
+            raise NoLearnRow(name)
+        if pending:raise Pending('이전 도술 학습 결과 확인 필요: '+name)
+        before=len(self.learn_rows())
+        self.click(754,hit['y'],skill_screen);self.context.wait(.6)
+        if not self.title_is(sid,name):raise Pending('선택 도술 이름 확인 필요: '+name)
+        self.click_word('배우기',(798,hit['y']-15,35,30),skill_screen,minimum=.94)
+        self.context.wait(.5);first=self.frame();self.context.wait(.12);second=self.frame()
+        if not learn_confirm_for(first,sid) or not learn_confirm_for(second,sid):
+            raise Pending('선택 도술과 개별 학습 확인창 불일치')
+        intents[str(sid)]={'status':'intent','skill':name,'at':time.time()}
+        ledger.event('individual_learning_intent',skill=sid,name=name)
+        self.click_word('확인',(430,290,112,55),lambda f:learn_confirm_for(f,sid),minimum=.94)
+        self.context.wait(1.)
+        for attempt in range(8):
+            try:
+                self.click_word('새로운 도술',(280,70,340,240),lambda f:True,minimum=.94);break
+            except Pending:
+                if attempt==7:raise
+                self.context.wait(.4)
+        self.wait(skill_screen,seconds=8);self.context.wait(.8)
+        if len(self.learn_rows())>=before:raise Pending('개별 도술 학습 후 배우기 행 감소 확인 필요: '+name)
+        intents[str(sid)].update(status='confirmed',proof='learn_dialog_icon_and_learn_row_gone')
+        ledger.event('individual_learning_verified',skill=sid,name=name)
+        LOG.info('도술 학습 확인 · %s',name)
         return True
     def enter_shop(self,style):
         if style not in ('파멸','저격','연타','강타'):raise Pending('엽전 상인 분류 확인 필요')

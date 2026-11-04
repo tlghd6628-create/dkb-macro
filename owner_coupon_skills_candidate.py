@@ -30,7 +30,7 @@ def process(adapter,context,inputs):
  from owner_energy_box_runtime_candidate import fresh_character
  from owner_hunt_rules_candidate import configured_identity
  from owner_skill_goal import runtime_ledger,Pending
- from owner_skill_ui import SkillUI
+ from owner_skill_ui import SkillUI,NoLearnRow
  from owner_learned_skills_candidate import LearnedSkills
  progress=state(adapter);character=progress.character
  if not fresh_character(adapter,context,progress) or progress.level<30:return 'identity_or_level_hold'
@@ -56,7 +56,16 @@ def process(adapter,context,inputs):
    try:
     # The existing method proves the exact individual skill + learn dialog,
     # and holds instead of pressing the bulk learn button.
-    if ui.learn_one(sid,ledger,coupon=True) is not True:raise Pending('개별 학습 결과 미확인')
+    try:learned=ui.learn_one(sid,ledger,coupon=True)
+    except NoLearnRow:
+     # Only a finished owned-only scan without this skill's icon may spend a box.
+     scan=getattr(adapter,'_owner_starter_owned',None)
+     if not scan or scan[0] is not context or sid in scan[1]:raise
+     ui.close_known()
+     from owner_skill_box import claim
+     claim(ui,ledger,sid,name)
+     learned=ui.learn_one(sid,ledger,coupon=True)
+    if learned is not True:raise Pending('개별 학습 결과 미확인')
     current.observed(name,verified=True);outcomes.append((name,'verified'))
    except Pending as exc:
     outcomes.append((name,'held'))
