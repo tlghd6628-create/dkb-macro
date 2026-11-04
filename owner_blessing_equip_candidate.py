@@ -41,7 +41,8 @@ def read_compare(root,frame):
             pieces=texts(title_box)
             if pieces and all(score>=.80 for _,score in pieces):
                 joined=re.sub(r'\s+','',''.join(text for text,_ in pieces))
-                match=re.fullmatch(r'(봉황|나비|도깨비|연꽃|토끼)가호장식([1-5])\2?(?:\(귀속\))?',joined)
+                # The gap after a name can come back as a stray stroke: 나비 + 1가호.
+                match=re.fullmatch(r'(봉황|나비|도깨비|연꽃|토끼)[1Il|]?가호장식([1-5])\2?(?:\(귀속\))?',joined)
                 if match:titles=[{'pattern':match.group(1),'slot':int(match.group(2))}]
         if not titles:
             # Korean OCR can read the small slot digit as ']' or omit it. Only
