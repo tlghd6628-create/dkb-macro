@@ -157,6 +157,12 @@ def restart_idle_quest(ui,idle):
  import numpy as np
  frame=ui.frame()
  if getattr(frame,'shape',None)!=(479,897,3):return False
+ # A guide can open a known full-screen menu mid-quest, like the treatment screen. Nothing moves until it closes.
+ from owner_start_menu import kind as menu_kind,normalize as leave_menu
+ if menu_kind(frame) in ('몽련 치료','지도','성장','가호') and not ui.opened:
+  ui.context.wait(.12)
+  if menu_kind(ui.frame()):
+   leave_menu(ui.service);idle.update(crop=None,at=time.monotonic());return True
  now=time.monotonic();crop=frame[18:100,12:95].mean(axis=2)
  if idle.get('crop') is None or float(np.abs(crop-idle['crop']).mean())>IDLE_MINIMAP_CHANGE:
   idle.update(crop=crop,at=now);return False

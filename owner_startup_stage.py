@@ -260,6 +260,12 @@ def install(gui):
                     finally:LOCAL.monitoring=True
                     continue
                 if initial==second=='unknown':
+                    # A guide can open a known full-screen menu after the start check already ran.
+                    from owner_start_menu import kind as menu_kind,normalize as leave_menu
+                    if menu_kind(first) and menu_kind(first)==menu_kind(second_frame):
+                        from project_adapter.town_services import TownServices
+                        leave_menu(TownServices(adapter,context,inputs,['버튼_나가기']))
+                        continue
                     if guide_visible(adapter,first,second_frame):
                         if tutorial_deadline is None:tutorial_deadline=time.monotonic()+60
                         if time.monotonic()>tutorial_deadline:raise RuntimeError('시작 튜토리얼 처리가 60초를 넘어 진단 확인이 필요합니다.')
