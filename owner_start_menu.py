@@ -12,9 +12,11 @@ def growth_title(name='growth'):
 
 def kind(frame):
  if getattr(frame,'shape',None)!=(479,897,3):return None
- from owner_skill_ui import skill_screen,quest_screen
+ from owner_skill_ui import skill_screen,quest_screen,map_screen
  if skill_screen(frame):return '도술'
  if quest_screen(frame):return '임무'
+ # A stop during a potion or teleport trip can leave the world map open.
+ if map_screen(frame):return '지도'
  import cv2,numpy as np
  for source,label in (('growth','성장'),('blessing','가호'),('treatment','몽련 치료')):
   title=growth_title(source);patch=frame[7:30,36:101]
