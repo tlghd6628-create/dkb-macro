@@ -38,15 +38,17 @@ def read_selected_title(ui,y):
  left_rows=ui.rows(row_box,pair_minimum=.80);left=title_from_rows(left_rows)
  right_rows=ui.rows((679,76,196,28),pair_minimum=.75);right=title_from_rows(right_rows)
  weak=False
- if left is None:
+ if left is None or not re.search(r'\[[^\]]+\]',left):
   candidate=title_from_rows(left_rows,.80);corroboration=title_from_rows(right_rows,.75)
   if candidate and corroboration:
    categories=[re.findall(r'\[[^\]]+\]',re.sub(r'\s+','',s)) for s in (candidate,corroboration)]
    numbers=[re.findall(r'\d+',s) for s in (candidate,corroboration)]
+   # The small row font garbles the chapter tag: '[장] 과량의 부름' or '2정 수정의 정체' beside
+   # '[2장]수정의 정체'. Only the tag may differ, so the detail heading supplies the identity.
+   def body(s):return re.sub(r'^\S*\d\S*\s+','',re.sub(r'\[[^\]]+\]\s*','',s))
+   same_tag=categories[1] and (not categories[0] or re.sub(r'\d','',categories[0][0])==re.sub(r'\d','',categories[1][0]))
    if categories[0] and categories[0]==categories[1] and numbers[0] and numbers[1] and numbers[0][-1]==numbers[1][-1] and agree_titles(candidate,corroboration,.60):left,right,weak=candidate,corroboration,True
-   # The small row font drops the chapter digit: '[장] 과량의 부름' beside '[1장] 괴량의 부름'.
-   # Only that digit may differ, so the detail heading supplies the identity.
-   elif categories[0] and categories[1] and re.sub(r'\d','',categories[0][0])==re.sub(r'\d','',categories[1][0]) and re.findall(r'\d+',re.sub(r'\[[^\]]+\]','',candidate))==re.findall(r'\d+',re.sub(r'\[[^\]]+\]','',corroboration)) and agree_titles(candidate,corroboration,.60):left,right,weak=corroboration,corroboration,True
+   elif same_tag and re.findall(r'\d+',body(candidate))==re.findall(r'\d+',body(corroboration)) and agree_titles(body(candidate),body(corroboration),.60):left,right,weak=corroboration,corroboration,True
  ui._owner_last_mission_read={'clicked_y':y,'selected_y':center,'row':left_rows,'detail':right_rows}
  # Paired, actual highlighted row is the primary identity. This also avoids
  # truncating a long name in the much narrower detail header.
