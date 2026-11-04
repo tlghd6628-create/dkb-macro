@@ -1,5 +1,6 @@
 """Read-only: colour vs text-foreground scoring on the real modal and map, old layout, and neighbours."""
 from pathlib import Path
+import os
 import sys,json
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import bootstrap
@@ -8,7 +9,7 @@ from PIL import Image
 from roi_runtime import RoiDetector
 import owner_movement as m
 D=Path(__file__).resolve().parent
-L=Path(r'C:\Users\홍이\Downloads\도깨비의 세계\owner\current_checks\live')
+L=Path(os.environ.get('DKB_ROOT') or r'C:\Users\홍이\Downloads\도깨비의 세계')/'owner/current_checks/live'
 frames={'modal_new':np.asarray(Image.open(bootstrap.A/'logs/quest-incidents/20261104T014134Z-2877466c/screen.png').convert('RGB')),
  'map_new':np.asarray(Image.open(D/'map_frame_897x479.png').convert('RGB')),
  'modal_old':np.asarray(Image.open(L/'b-move-dialog.png').convert('RGB')),'field_old':np.asarray(Image.open(L/'b-move-field.png').convert('RGB'))}

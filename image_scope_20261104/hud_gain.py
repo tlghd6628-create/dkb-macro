@@ -1,5 +1,6 @@
 """Read-only: HUD ink brightness by screen type, before and after the update."""
 from pathlib import Path
+import os
 import sys,json,collections
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import bootstrap
@@ -16,7 +17,7 @@ post=sorted(p for p in c.iterdir() if p.is_dir() and p.name>='20261104T1000' and
 for p in post:
     f=np.asarray(Image.open(p/'screen.png').convert('RGB'))
     print(p.name[9:15],'modal' if m.find(f,'teleport-b-button',(340,270,200,70),.9,.5) else '-',stat(f))
-L=Path(r'C:\Users\홍이\Downloads\도깨비의 세계\owner\current_checks\live')
+L=Path(os.environ.get('DKB_ROOT') or r'C:\Users\홍이\Downloads\도깨비의 세계')/'owner/current_checks/live'
 for name in('town-field.png','b-move-field.png','b-move-dialog.png','new-map-field.png'):
     f=np.asarray(Image.open(L/name).convert('RGB'));print(name,stat(f),'field_hud',m.field_hud(f))
 pre=[p for p in sorted((bootstrap.A/'logs/scene-corpus').iterdir()) if p.is_dir() and p.name>='20261102' and p.name<='20261103']

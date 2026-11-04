@@ -1,8 +1,9 @@
 """Contact sheet of post-update saved frames, for viewing only."""
 from pathlib import Path
+import os
 import numpy as np,sys
 from PIL import Image,ImageDraw
-A=Path(r'C:\Users\홍이\Downloads\도깨비의 세계\vendor\DKB_Auto\logs\scene-corpus\20261104')
+A=Path(os.environ.get('DKB_ROOT') or r'C:\Users\홍이\Downloads\도깨비의 세계')/'vendor/DKB_Auto/logs/scene-corpus/20261104'
 ds=sorted(p for p in A.iterdir() if p.is_dir() and p.name>='20261104T1000' and (p/'screen.png').exists())
 W,H=299,160;cols=5;rows=(len(ds)+cols-1)//cols
 sheet=Image.new('RGB',(W*cols,H*rows))

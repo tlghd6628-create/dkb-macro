@@ -1,8 +1,9 @@
 """User-requested: answer the program's own two dialogs. 확인 on the blocked second launch, 예 on stop-and-close.
 Then wait for the program's shutdown line. Touches only these two dialogs, never the game."""
 from pathlib import Path
+import os
 import time,win32gui,win32con
-LOG=Path(r'C:\Users\홍이\Downloads\도깨비의 세계\vendor\DKB_Auto\logs')/(time.strftime('%Y-%m-%d')+'.log')
+LOG=Path(os.environ.get('DKB_ROOT') or r'C:\Users\홍이\Downloads\도깨비의 세계')/'vendor/DKB_Auto/logs'/(time.strftime('%Y-%m-%d')+'.log')
 start=LOG.stat().st_size
 def press(title,button,text):
     tops=[]

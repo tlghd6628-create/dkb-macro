@@ -6,7 +6,7 @@ import sys,time,ctypes,json,os
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import win32gui,win32con
 from PIL import ImageGrab
-LOG=Path(r'C:\Users\홍이\Downloads\도깨비의 세계\vendor\DKB_Auto\logs')/(time.strftime('%Y-%m-%d')+'.log')
+LOG=Path(os.environ.get('DKB_ROOT') or r'C:\Users\홍이\Downloads\도깨비의 세계')/'vendor/DKB_Auto/logs'/(time.strftime('%Y-%m-%d')+'.log')
 OUT=Path(__file__).parent/'gui';OUT.mkdir(exist_ok=True)
 user=ctypes.windll.user32;user.SetProcessDPIAware()
 def window(part):

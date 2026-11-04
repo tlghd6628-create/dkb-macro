@@ -1,8 +1,9 @@
 """User-approved check: make the mail reward cycle due, so the fixed path runs on the next F1. Program must be closed.
 Only this one record's time changes; a backup is kept. Nothing is claimed unless mail is really there."""
 from pathlib import Path
+import os
 import json,shutil,time
-S=Path(r'C:\Users\홍이\Downloads\도깨비의 세계\vendor\DKB_Auto\settings\owner-reward-cycle.json')
+S=Path(os.environ.get('DKB_ROOT') or r'C:\Users\홍이\Downloads\도깨비의 세계')/'vendor/DKB_Auto/settings/owner-reward-cycle.json'
 B=Path(__file__).parent/'user_flags_backup';B.mkdir(exist_ok=True);shutil.copy2(S,B/(time.strftime('%H%M%S')+'_owner-reward-cycle.json'))
 d=json.loads(S.read_text(encoding='utf-8'))
 for name,row in d['characters'].items():

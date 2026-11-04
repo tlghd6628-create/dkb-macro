@@ -1,9 +1,10 @@
 """Contact sheet of pre-update frames whose scene() reading changed, for review by eye."""
 from pathlib import Path
+import os
 import json
 from PIL import Image,ImageDraw
 D=Path(__file__).parent
-A=Path(r'C:\Users\홍이\Downloads\도깨비의 세계\vendor\DKB_Auto\logs\scene-corpus')
+A=Path(os.environ.get('DKB_ROOT') or r'C:\Users\홍이\Downloads\도깨비의 세계')/'vendor/DKB_Auto/logs/scene-corpus'
 data=json.loads((D/'scene_slots.json').read_text(encoding='utf-8'))['changed']
 rows=[('F>U',n) for n in data['pre|field|unknown']]+[('U>F',n) for n in data['pre|unknown|field']]
 W,H=299,160;cols=5;n=(len(rows)+cols-1)//cols;sheet=Image.new('RGB',(W*cols,H*n))
