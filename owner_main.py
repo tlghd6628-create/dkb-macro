@@ -102,7 +102,6 @@ class MainPanel:
         self.hunt_power=ttk.Radiobutton(self.hunt_row,text='전투력별',variable=self.hunt_source,value='power',command=self.save_hunt_slot,style='DkbCard.TRadiobutton')
         self.hunt_power.pack(side='left')
         self.game_text=tk.StringVar(gui.root,value='')
-        ttk.Label(self.hunt_row,textvariable=self.game_text,style='DkbCardMuted.TLabel').pack(side='right')
         self.originals_hidden=[]
         gui.root.bind('<Destroy>',lambda event:self.close() if event.widget is gui.root else None,add='+')
         self.refresh()

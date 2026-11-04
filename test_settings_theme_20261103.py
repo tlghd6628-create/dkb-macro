@@ -40,7 +40,8 @@ class NativePages(Base):
   for name in PAGES:
    native=NativeFields(self.gui);native.build(tk.Frame(self.tk),name)
    self.assertEqual(set(native.vars),self.visible(name),name)
-   self.assertEqual({item['id'] for item,_ in native.controls},self.visible(name),name)
+   from owner_settings_console import UNAVAILABLE
+   self.assertEqual({item['id'] for item,_ in native.controls},self.visible(name)-set(UNAVAILABLE),name)
  def test_every_item_is_in_exactly_one_section_in_schema_order(self):
   for name in PAGES:
    visible=self.visible(name)

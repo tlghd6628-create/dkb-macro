@@ -131,6 +131,12 @@ class ShopSettingsStore:
                 os.unlink(tmp)
 
 
+TARGET_CHOICES=tuple(range(1,51))+('최대',)
+
+def target_text(row):
+    return '최대' if row['mode']=='max' else str(row['quantity'])
+
+
 class ShopSettings:
     def __init__(self, parent, root, character, *, embedded=False):
         self.store = ShopSettingsStore(root, character)
@@ -144,7 +150,8 @@ class ShopSettings:
         top = ttk.Frame(self.window, padding=10)
         top.pack(fill='both', expand=True)
         self.enabled=tk.BooleanVar(self.window,value=document.get('enabled',True))
-        ttk.Checkbutton(top,text='설정 상품 구매 사용',variable=self.enabled).pack(anchor='w',pady=(0,8))
+        self.enabled_row=ttk.Frame(top);self.enabled_row.pack(fill='x',pady=(0,8))
+        ttk.Checkbutton(self.enabled_row,text='설정 상품 구매 사용',variable=self.enabled).pack(side='left')
         reserve_bar = ttk.Frame(top)
         reserve_bar.pack(fill='x', pady=(0, 5))
         ttk.Label(reserve_bar, text='남길 엽전').pack(side='left')
@@ -157,46 +164,84 @@ class ShopSettings:
         for shop, label in SHOP_NAMES.items():
             tab = ttk.Frame(self.tabs, padding=5)
             self.tabs.add(tab, text=label)
-            tree = ttk.Treeview(tab, columns=('name', 'enabled', 'current', 'target','support'), show='headings', selectmode='browse')
-            for col, title, width in [('name', '품목', 220), ('enabled', '사용', 55),
-                                      ('current', '현재', 65), ('target', '목표', 65),('support','판독 상태',120)]:
+            tree = ttk.Treeview(tab, columns=('name', 'enabled', 'target'), show='headings', selectmode='browse')
+            for col, title, width in [('name', '품목', 300), ('enabled', '사용', 60), ('target', '목표', 90)]:
                 tree.heading(col, text=title)
                 tree.column(col, width=width, stretch=col=='name')
             bar = ttk.Scrollbar(tab, orient='vertical', command=tree.yview)
             tree.configure(yscrollcommand=bar.set)
             bar.pack(side='right', fill='y'); tree.pack(fill='both', expand=True)
-            tree.bind('<ButtonRelease-1>', lambda event, s=shop: self.toggle_enabled(event, s))
-            tree.bind('<Double-1>', lambda event, s=shop: self.edit_selected(s))
+            tree.bind('<ButtonRelease-1>', lambda event, s=shop: self.cell_clicked(event, s))
+            tree.bind('<Double-1>', lambda event, s=shop: self.rename_clicked(event, s))
             self.trees[shop] = tree
         buttons = ttk.Frame(top); buttons.pack(fill='x', pady=8)
         ttk.Button(buttons, text='품목 추가', command=self.add).pack(side='left')
-        ttk.Button(buttons, text='선택 수정', command=lambda: self.edit_selected(self.shop())).pack(side='left', padx=4)
-        ttk.Button(buttons, text='선택 삭제', command=self.delete).pack(side='left')
+        ttk.Button(buttons, text='선택 삭제', command=self.delete).pack(side='left', padx=4)
         ttk.Button(buttons, text='저장 후 닫기', command=self.save).pack(side='right')
         self.refresh()
 
-    def toggle_enabled(self, event, shop):
+    def add_test(self,request):
+        result=tk.StringVar(self.enabled_row)
+        ttk.Button(self.enabled_row,text='TEST',width=6,command=lambda:request(result)).pack(side='left',padx=(8,12))
+        ttk.Label(self.enabled_row,textvariable=result).pack(side='left')
+
+    def cell_clicked(self, event, shop):
         tree = self.trees[shop]
-        if tree.identify_region(event.x, event.y) != 'cell' or tree.identify_column(event.x) != '#2':
-            return
         row_id = tree.identify_row(event.y)
-        if row_id:
+        if tree.identify_region(event.x, event.y) != 'cell' or not row_id:
+            return
+        column = tree.identify_column(event.x)
+        if column == '#2':
             row = self.rows[int(row_id)]
             row['enabled'] = not row['enabled']
             tree.set(row_id, 'enabled', '☑' if row['enabled'] else '☐')
+        elif column == '#3':
+            self.edit_target(tree, row_id)
+
+    def rename_clicked(self, event, shop):
+        tree = self.trees[shop]
+        if tree.identify_region(event.x, event.y) == 'cell' and tree.identify_column(event.x) == '#1':
+            self.edit_selected(shop)
+
+    def edit_target(self, tree, row_id):
+        """The target cell edits in place: arrows, typing, Enter or clicking away."""
+        box = tree.bbox(row_id, 'target')
+        if not box:
+            return
+        row = self.rows[int(row_id)]
+        field = ttk.Spinbox(tree, values=TARGET_CHOICES, justify='center')
+        field.set(target_text(row))
+        field.place(x=box[0], y=box[1], width=box[2], height=box[3])
+        field.focus_set(); field.selection_range(0, 'end')
+        done = []
+        def finish(keep):
+            if done:
+                return
+            done.append(True); text = field.get(); field.destroy()
+            if keep:
+                self.set_target(int(row_id), text)
+        field.bind('<Return>', lambda _: finish(True))
+        field.bind('<FocusOut>', lambda _: finish(True))
+        field.bind('<Escape>', lambda _: finish(False))
+
+    def set_target(self, index, text):
+        """Anything that is not a whole number of at least 1 leaves the row as it was."""
+        text = text.strip(); row = self.rows[index]
+        if text == '최대':
+            row['mode'] = 'max'
+        elif text.isdigit() and int(text) >= 1:
+            row.update(mode='quantity', quantity=int(text))
+        self.trees[row['shop']].set(str(index), 'target', target_text(row))
 
     def shop(self):
         return list(SHOP_NAMES)[self.tabs.index('current')]
 
     def refresh(self):
-        from owner_shop_reader_candidate import OBSERVED_NAMES
         for tree in self.trees.values():
             tree.delete(*tree.get_children())
         for index, row in enumerate(self.rows):
-            status=('구매창 미검증' if row['name']=='1단 체력 회복 물약' else
-                    ('후보·실전 미검증' if row['name'] in OBSERVED_NAMES else 'OCR·실전 미검증'))
             self.trees[row['shop']].insert('', 'end', iid=str(index), values=(row['name'],
-                '☑' if row['enabled'] else '☐', '—', '최대' if row['mode'] == 'max' else row['quantity'],status))
+                '☑' if row['enabled'] else '☐', target_text(row)))
 
     def add(self):
         self.edit(None, self.shop())
