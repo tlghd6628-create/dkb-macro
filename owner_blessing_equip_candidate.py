@@ -69,9 +69,10 @@ def read_compare(root,frame):
     left_x=366+(8 if result[0]['pattern']=='도깨비' else 0)
     right_x=522+(8 if result[1]['pattern']=='도깨비' else 0)
     left=cv2.cvtColor(frame[99:113,left_x:left_x+8],cv2.COLOR_RGB2GRAY)
-    right=cv2.cvtColor(frame[99:113,right_x:right_x+8],cv2.COLOR_RGB2GRAY)
-    if left.shape!=(14,8) or right.shape!=(14,8):return None
-    score=float(cv2.matchTemplate(left,right,cv2.TM_CCOEFF_NORMED)[0,0])
+    # The digit's place moves a few pixels with the name's width, so look around it.
+    right=cv2.cvtColor(frame[99:113,right_x-8:right_x+16],cv2.COLOR_RGB2GRAY)
+    if left.shape!=(14,8) or right.shape!=(14,24):return None
+    score=float(cv2.minMaxLoc(cv2.matchTemplate(right,left,cv2.TM_CCOEFF_NORMED))[1])
     if not np.isfinite(score) or score<.90:return None
     return tuple(result)
 
