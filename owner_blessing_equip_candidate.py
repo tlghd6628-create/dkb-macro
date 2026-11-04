@@ -37,6 +37,13 @@ def read_compare(root,frame):
     for title_box,grade_box,digit_base in (((300,94,431,120),(304,125,363,145),366),((453,94,590,120),(456,125,516,145),522)):
         titles=[p for text,score in texts(title_box) if score>=.80 for p in [parse_title(text)] if p]
         if not titles:
+            # The current font splits a title: 토끼가호 + 장식1 + 1(귀속), the slot digit read twice.
+            pieces=texts(title_box)
+            if pieces and all(score>=.80 for _,score in pieces):
+                joined=re.sub(r'\s+','',''.join(text for text,_ in pieces))
+                match=re.fullmatch(r'(봉황|나비|도깨비|연꽃|토끼)가호장식([1-5])\2?(?:\(귀속\))?',joined)
+                if match:titles=[{'pattern':match.group(1),'slot':int(match.group(2))}]
+        if not titles:
             # Korean OCR can read the small slot digit as ']' or omit it. Only
             # a separately high-confidence numerical crop may supply it.
             names=[]
@@ -123,11 +130,17 @@ def equip_selected(service,context,identity,order,*,settings_check,reader=read_c
         context.checkpoint();service.check();frame=service.capture()
         if callable(candidate_check) and candidate_check(frame) is not True:candidate_proven=False
         value=reader(root,frame)
-        if equip_hit(frame) is None or not compare_worn_mark(frame):return 'hold_screen'
+        if equip_hit(frame) is None or not compare_worn_mark(frame):
+            from owner_gear_hold_capture_candidate import enqueue
+            enqueue(service.adapter.project.root,'blessing-compare','장착 버튼=%s · 착용 표시=%s'%(equip_hit(frame) is not None,bool(compare_worn_mark(frame))),(frame,))
+            return 'hold_screen'
         values.append(value);frames.append(frame);context.wait(.12)
     if values[0] is None and values[1] is not None and same_compare_appearance(frames[0],frames[1]):values[0]=values[1]
     if values[1] is None and values[0] is not None and same_compare_appearance(frames[0],frames[1]):values[1]=values[0]
-    if any(value is None for value in values):return 'hold_screen'
+    if any(value is None for value in values):
+        from owner_gear_hold_capture_candidate import enqueue
+        enqueue(service.adapter.project.root,'blessing-compare','글자 판독 실패',(frames[-1],))
+        return 'hold_screen'
     if expected_category is not None and (values[0][0].get('slot')!=expected_category or values[0][1].get('slot')!=expected_category):return 'hold_category'
     if values[0]!=values[1] or compare(values[0][0],values[0][1],order)!='replace':return 'hold_policy'
     if settings_check() is not True:return 'hold_settings'
