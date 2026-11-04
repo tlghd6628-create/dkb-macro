@@ -61,7 +61,8 @@ def plan(worn,level=None,rare_weapon=None):
     # The coupon rare fan is a level-30 task; unknown level never opens it.
     if (worn.get('무기') is False or (worn.get('무기') is True and rare_weapon is False)) and type(level) is int and level>=30:items.append(WEAPON)
     armor=[p for p in ARMOR_PARTS if worn.get(p) is False]
-    accessories=[p for p in ('팔찌','반지','목걸이','귀걸이') if worn.get(p) is False]
+    # The accessory box opens on the same turn as the rare fan, under the same known-level rule.
+    accessories=[p for p in ('팔찌','반지','목걸이','귀걸이') if worn.get(p) is False] if type(level) is int and level>=30 else []
     if armor:items.append(ARMOR)
     if accessories:items.append(ACCESSORY)
     return items,armor,accessories
