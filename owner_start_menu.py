@@ -4,7 +4,7 @@ from functools import lru_cache,wraps
 import logging
 LOG=logging.getLogger('project_gui.DKB')
 
-@lru_cache(maxsize=2)
+@lru_cache(maxsize=3)
 def growth_title(name='growth'):
  import numpy as np
  from PIL import Image
@@ -16,7 +16,7 @@ def kind(frame):
  if skill_screen(frame):return '도술'
  if quest_screen(frame):return '임무'
  import cv2,numpy as np
- for source,label in (('growth','성장'),('blessing','가호')):
+ for source,label in (('growth','성장'),('blessing','가호'),('treatment','몽련 치료')):
   title=growth_title(source);patch=frame[7:30,36:101]
   scores=cv2.matchTemplate(patch,title,cv2.TM_CCOEFF_NORMED)
   scores=np.where(np.isfinite(scores),scores,-1)
