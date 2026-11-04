@@ -41,7 +41,8 @@ def read_selected_title(ui,y):
  # Rows use a tiny font: [2장] read as [2정], 2정 and [장], and two frames can differ.
  # The detail heading reads near .96, but its box is narrower, so a row visibly longer than the
  # heading means the name was cut off there, and the row path below keeps the full name.
- heading=title_from_rows(ui.rows((679,76,196,28),pair_minimum=.75),.85)
+ # A long heading splits in two, and the tag part read .84 on [3장], leaving the rest without its tag.
+ heading=title_from_rows(ui.rows((679,76,196,28),pair_minimum=.75),.80)
  if heading and re.search(r'\[[^\]]+\]',heading):
   try:row=title_from_rows(ui.rows(row_box,pair_minimum=.60),.60)
   except Pending:row=None

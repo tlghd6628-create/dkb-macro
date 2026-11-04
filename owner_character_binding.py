@@ -16,6 +16,7 @@ LOG=logging.getLogger('project_gui.DKB')
 _LOCK=threading.RLock()
 BOUND='bound';MATCHED='matched';CROSSED='crossed';MISMATCH='mismatch';UNAVAILABLE='unavailable'
 HEAD_MATCH=.915
+_HEADS={}
 
 
 def _path(root):return Path(root)/'settings/owner-character-binding.json'
@@ -56,6 +57,12 @@ def name_head(frame):
     return None
 
 
+def shown_on(frame,character):
+    """The stable key is the hash from the first level, so later levels compare the first glyph."""
+    stored=_HEADS.get(character);head=name_head(frame)
+    return bool(stored and head and same_head(stored,head))
+
+
 def same_head(stored,head):
     import cv2,numpy as np
     try:
@@ -82,6 +89,7 @@ def resolve(root,profile,glyph_hash,level,head=None):
             if head:document['profiles'][profile]['head']=head
         elif row.get(band)==glyph_hash or row.get('high' if level>=10 else 'low')==glyph_hash:
             # 'high' and 'low' are records from before per-level hashes.
+            _HEADS[row['character']]=row.get('head')
             if row.get('level')==level and (row.get('head') or not head):return row['character'],MATCHED
             row['level']=level;status=MATCHED
             if head and not row.get('head'):row['head']=head
@@ -91,6 +99,7 @@ def resolve(root,profile,glyph_hash,level,head=None):
             if row.get('head') and head and not same_head(row['head'],head):return glyph_hash,MISMATCH
             row[band]=glyph_hash;row['level']=level;status=CROSSED
             if head and not row.get('head'):row['head']=head
+            _HEADS[row['character']]=row.get('head')
         else:return glyph_hash,MISMATCH
         try:_write(path,document)
         except OSError as exc:LOG.warning('캐릭터 연결 기록 저장 보류 · %s',exc)

@@ -131,6 +131,11 @@ class Observer:
         # Existing native routine is used only for selection, never growth.
         self.native.select_growth_equipment(self.service,evidence[1][3])
         self.context.checkpoint();self.service.check()
+        # The tile flashes after a click and reads as unselected until the flash ends.
+        for _ in range(20):
+            frame=self.capture()[2]
+            if self.native._growth_selected_slot(frame,self.items(frame))==index:break
+            self.context.wait(.2);self.context.checkpoint()
         self.ticket={'index':index,'grade':evidence[1][0],'identity':evidence[1][1],'row':evidence[1][3],
                      'captured_at':second[1]}
         return self.ticket

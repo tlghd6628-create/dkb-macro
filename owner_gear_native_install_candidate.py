@@ -285,7 +285,7 @@ def _row_shows(frame,row,before,reference):
 
 def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner=None):
     @wraps(original)
-    def guarded(service,*,blessing=False):
+    def guarded(service,*,blessing=False,_tried=frozenset()):
         context=service.context;context.checkpoint();service.check()
         try:
             root=service.adapter.project.root
@@ -412,6 +412,12 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
                 _candidate_continuation[identity]=(index,observer.ticket['identity'],revision)
             else:
                 _candidate_continuation.pop(identity,None)
+            # A rare weapon with no stones has a dim button and sends nothing, and it used to
+            # end the visit with white gear still ready. Each worn item gets one look.
+            if (status=='hold_screen_unverified' and getattr(observer,'last_reason',None)=='재료 또는 실행 버튼 미확인'
+                and intent.pending() is None and index not in _tried):
+                _report(service,f"성장 재료 없음 · 칸={index} · 다음 착용 장비 확인")
+                return guarded(service,_tried=_tried|{index})
             # Native caller result semantics are unverified; do not assert full
             # completion when one item advanced or an item was held.
             return False
