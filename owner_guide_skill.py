@@ -50,5 +50,8 @@ def run(ui):
   LOG.info('길라잡이 도술 보류 · %s',exc)
  finally:
   ui.close_known()
+  # Learning can leave the skill window up. The quest list cannot open over it.
+  if skill_screen(ui.frame()):
+   ui.key(0x4b);ui.context.wait(.5)
  LOG.info('길라잡이 도술 · %s',('모두 배우기 완료 · 슬롯 자동 장착' if learned else '배울 도술 없음 · 다음 확인까지 대기'))
  return learned

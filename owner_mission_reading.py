@@ -31,22 +31,23 @@ def selected_center(frame):
 def title_body(text):
  return re.sub(r'^\S*\d\S*\s+','',re.sub(r'\[[^\]]+\]\s*','',text))
 
-def read_selected_title(ui,y,*,detail_first=False):
- """Use the actual selected row after auto-scroll, plus its detail heading."""
+def read_selected_title(ui,y):
+ """Name the selected mission from its detail heading; the row must not contradict it."""
  frame=ui.frame();center=selected_center(frame)
  if center is None:raise MissionRowUnreadable('선택 강조 행 확인 필요')
  ui.context.wait(.10)
  if selected_center(ui.frame())!=center:raise MissionRowUnreadable('선택 행 이동 중')
  row_box=(70,max(96,center-12),430,24)
- if detail_first:
-  # Main quest rows use a tiny font: [2장] read as [2정], 2정 and [장], and two frames can differ.
-  # The detail heading reads near .96, so it names the quest. The row only has to not contradict it.
-  heading=title_from_rows(ui.rows((679,76,196,28),pair_minimum=.75),.85)
-  if heading and re.search(r'\[\d+장\]',re.sub(r'\s+','',heading)):
-   try:row=title_from_rows(ui.rows(row_box,pair_minimum=.60),.60)
-   except Pending:row=None
-   if (row is None or agree_titles(title_body(row),title_body(heading),.50)) and selected_center(ui.frame())==center:
-    return heading,center
+ # Rows use a tiny font: [2장] read as [2정], 2정 and [장], and two frames can differ.
+ # The detail heading reads near .96, but its box is narrower, so a row visibly longer than the
+ # heading means the name was cut off there, and the row path below keeps the full name.
+ heading=title_from_rows(ui.rows((679,76,196,28),pair_minimum=.75),.85)
+ if heading and re.search(r'\[[^\]]+\]',heading):
+  try:row=title_from_rows(ui.rows(row_box,pair_minimum=.60),.60)
+  except Pending:row=None
+  whole=row is None or len(clean(title_body(row)))<=len(clean(title_body(heading)))+2
+  if whole and (row is None or agree_titles(title_body(row),title_body(heading),.50)) and selected_center(ui.frame())==center:
+   return heading,center
  left_rows=ui.rows(row_box,pair_minimum=.80);left=title_from_rows(left_rows)
  right_rows=ui.rows((679,76,196,28),pair_minimum=.75);right=title_from_rows(right_rows)
  weak=False

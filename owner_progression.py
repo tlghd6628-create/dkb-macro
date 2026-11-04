@@ -268,8 +268,8 @@ def observe_inventory(service,*,force=False):
     if not np.array_equal(np.min(patch,axis=2)>150,np.min(frames[0][9:25,x:x+33],axis=2)>150):
         LOG.info('육성 캐릭터 판독 보류 · 두 화면 이름 영역 불일치');return False
     character=hashlib.sha256((np.min(patch,axis=2)>150).tobytes()).hexdigest()[:24]
-    from owner_character_binding import observe as bind_character
-    character=bind_character(service.adapter,character,level)
+    from owner_character_binding import observe as bind_character,name_head
+    character=bind_character(service.adapter,character,level,name_head(frames[-1]))
     progress.accept(level,power,character)
     from owner_equipment_boxes import agree
     from owner_startup_receipts import Preparation

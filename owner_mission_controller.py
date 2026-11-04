@@ -152,7 +152,8 @@ def hunt_started(result):
 
 def restart_idle_quest(ui,idle):
  """Auto-move can drop after a boss fight, and the native runner then only clicks empty ground.
- A minimap unchanged for two minutes on the bare field presses the quest's own auto-progress again."""
+ A minimap unchanged for two minutes on the bare field presses the quest's own auto-progress again.
+ Observed only on a main quest. The same applies to story quests, since the risk does not depend on mode."""
  import numpy as np
  frame=ui.frame()
  if getattr(frame,'shape',None)!=(479,897,3):return False
@@ -160,36 +161,26 @@ def restart_idle_quest(ui,idle):
  if idle.get('crop') is None or float(np.abs(crop-idle['crop']).mean())>IDLE_MINIMAP_CHANGE:
   idle.update(crop=crop,at=now);return False
  if now-idle['at']<IDLE_SECONDS or not ui.normal():return False
- LOG.info('메인퀘 자리 정체 %d초 · 자동 진행 다시 누름',now-idle['at'])
- ui.open('main_quest');ui.start_selected();idle.update(crop=None,at=now)
+ LOG.info('임무 자리 정체 %d초 · 자동 진행 다시 누름 · %s',now-idle['at'],ui.adapter.mode)
+ ui.open(ui.adapter.mode);ui.start_selected();idle.update(crop=None,at=now)
  return True
 
 def finish_scene(adapter,context,inputs):
- """F1 during a quest scene: no panel can open until it ends. Skip it the way the start stage does."""
- from project_adapter.main_quest import StateROIs,BoundedMainQuestRunner,dependencies
+ """F1 during a quest scene or dimmed guide: no panel can open until it ends. Uses the start stage's handlers."""
+ from project_adapter.main_quest import StateROIs
  from project_adapter.town_services import TownServices
  from project_adapter import market_inventory as native
+ from owner_startup_stage import known_dialog,press_dialog,guide_visible,guide_handler
  mode=adapter.mode if adapter.mode in ('main_quest','sub_quest') else 'sub_quest'
  slots=StateROIs(adapter.project.root/'profiles/DKB',mode=mode)
  service=TownServices(adapter,context,inputs,native.INVENTORY_USE_NAMES)
- _,deps=dependencies(adapter,context,inputs)
- runner=BoundedMainQuestRunner(slots,**deps)
  handled=False;end=time.monotonic()+30
  while time.monotonic()<end:
   context.checkpoint();first=service.capture();context.wait(.12);second=service.capture()
-  key=next((k for k in ('skip_confirm','skip_confirm2','skip') if slots.match(k,first).get('hit') and slots.match(k,second).get('hit')),None)
-  if key is None:
-   # A dimmed guide also blocks the panel. Same handler as the start stage.
-   from tutorial_highlight import load_config,detect_tutorial_highlight,TutorialHandler
-   config=load_config(adapter.project.root/'profiles'/adapter.project.code)
-   if not (detect_tutorial_highlight(first,config).tutorial_detected and detect_tutorial_highlight(second,config).tutorial_detected):break
-   result=TutorialHandler(config,capture=service.capture,inputs=inputs,context=context,execution_gate=service.check,user_log=LOG.info,logger=LOG).handle_tutorial_if_present()
-   if result in ('FAILED','DETECTED_BUT_UNSAFE'):break
-   handled=True;context.wait(.6);continue
-  hit=slots.match(key,second)
-  if key=='skip':runner.handle_skip(slots.by_key[key],hit,second)
-  elif key=='skip_confirm2':runner.handle_skip_confirm2(slots.by_key[key],hit,second)
-  else:runner.input_one(key,hit,second)
+  key=known_dialog(slots,first,second)
+  if key:press_dialog(adapter,context,inputs,service,slots,key,second)
+  elif not guide_visible(adapter,first,second):break
+  elif guide_handler(adapter,context,inputs,service).handle_tutorial_if_present() in ('FAILED','DETECTED_BUT_UNSAFE'):break
   handled=True;context.wait(.6)
  if handled:
   LOG.info('임무 시작 전 대화·안내 정리 · 전투력 다시 확인')
@@ -417,7 +408,7 @@ def run(adapter,context,inputs):
      if time.monotonic()>=next_guide:
       next_guide=time.monotonic()+15
       from owner_guide_skill import run as run_guide_skill
-      if run_guide_skill(ui) or (adapter.mode=='main_quest' and restart_idle_quest(ui,idle_quest)):
+      if run_guide_skill(ui) or restart_idle_quest(ui,idle_quest):
        runner=BoundedMainQuestRunner(StateROIs(profile,mode=adapter.mode),**deps)
        boss_reservation=QuestBossReservation(adapter,runner);scene_changes=[]
        LOCAL.active=(adapter,context,key,time.monotonic()+6)
