@@ -1,0 +1,490 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "symbol": "0",
+      "file": "0-0.png",
+      "sha256": "6cdb80e93328c0724c80055d4a2d97c03d18593f4ca3cb7b0a121cb2b9f0c59a",
+      "source": "energy_counter_10_of49_native_1.png",
+      "source_sha256": "c14fa3ba0ada5650566c1cf8fc68a7fb12de6d31eb580c62259e6c0f023d6b13",
+      "box": [
+        440,
+        323,
+        446,
+        331
+      ]
+    },
+    {
+      "symbol": "1",
+      "file": "1-0.png",
+      "sha256": "1d53c7e2883ca15fa78ec202945e831e8597a4e7df2044617680bda2dc62d889",
+      "source": "energy_counter_1_of49_native_1.png",
+      "source_sha256": "176f41f3c6bd24114f170e48f442d9ccef2f4c540fb0a113669abbf283580c02",
+      "box": [
+        439,
+        323,
+        442,
+        331
+      ]
+    },
+    {
+      "symbol": "2",
+      "file": "2-0.png",
+      "sha256": "d65eb246f0a40ddb0e8d7110c1ae02c2801572c5ca81e358cd6d8312be1bc511",
+      "source": "energy_counter_2_of49_native_1.png",
+      "source_sha256": "e0d63ce9d9447c171ccd601441fe047b9e5f8b23dd4624178c6d28a3e652962b",
+      "box": [
+        438,
+        323,
+        444,
+        331
+      ]
+    },
+    {
+      "symbol": "3",
+      "file": "3-0.png",
+      "sha256": "892d1caf4c3e62eab83e532acecec5da561f0fe8dd02ac2d58eb691ffdd7d428",
+      "source": "energy_counter_3_of49_native_1.png",
+      "source_sha256": "b229749ff8790e125224984931b8c665dba22a47ba28995d9c98fcf49eec103f",
+      "box": [
+        438,
+        323,
+        444,
+        331
+      ]
+    },
+    {
+      "symbol": "4",
+      "file": "4-0.png",
+      "sha256": "d67397062032bda1e14aa7f48f68175014130899d4b59dbfc77c138c4277888c",
+      "source": "energy_counter_2_of49_native_1.png",
+      "source_sha256": "e0d63ce9d9447c171ccd601441fe047b9e5f8b23dd4624178c6d28a3e652962b",
+      "box": [
+        448,
+        323,
+        454,
+        331
+      ]
+    },
+    {
+      "symbol": "5",
+      "file": "5-0.png",
+      "sha256": "7980ba18e6fc3d4727e99b6a19ebea06f07692d6811a0cde369d94ae6d7fd373",
+      "source": "energy_counter_5_of49_native_1.png",
+      "source_sha256": "4bb0661532aefb936bb2544608b611fab7eb42fbd8373eefcec51c3c9ab50c8c",
+      "box": [
+        438,
+        323,
+        443,
+        331
+      ]
+    },
+    {
+      "symbol": "6",
+      "file": "6-0.png",
+      "sha256": "a14cf0cbd9ef3ed696be5b50703d9f964e1b1c85797c422e2a53832ca41a7a11",
+      "source": "energy_counter_6_of49_native_1.png",
+      "source_sha256": "b422f5c6beaf04e234b04b0a0cb9964024712b67a5ddd3172c0fe29b0bccbf42",
+      "box": [
+        438,
+        323,
+        443,
+        331
+      ]
+    },
+    {
+      "symbol": "7",
+      "file": "7-0.png",
+      "sha256": "27609967c56ece09d02ed9529f68fa3d5890414ba96183b30c578d501a32010d",
+      "source": "energy_counter_7_of49_native_1.png",
+      "source_sha256": "b3653408c0cc312033d8dfb0e0d1762f3594eeb47f796e8693b05f3945095ee9",
+      "box": [
+        438,
+        323,
+        444,
+        331
+      ]
+    },
+    {
+      "symbol": "8",
+      "file": "8-0.png",
+      "sha256": "782ece59b9d174be400a81849e311bc04c9201ff87eaddc6ce00095e786c0c69",
+      "source": "energy_counter_8_of49_native_1.png",
+      "source_sha256": "2c3b7c3ee3187e76bf3a78305c5eb5eba4f5f00a9d1691101aae59ae5ee85815",
+      "box": [
+        438,
+        323,
+        444,
+        331
+      ]
+    },
+    {
+      "symbol": "9",
+      "file": "9-0.png",
+      "sha256": "14f66ce991a620fbdcbf5735f01acd66c82f6e5e6583ed25a6a44da5db754618",
+      "source": "energy_counter_2_of49_native_1.png",
+      "source_sha256": "e0d63ce9d9447c171ccd601441fe047b9e5f8b23dd4624178c6d28a3e652962b",
+      "box": [
+        454,
+        323,
+        459,
+        331
+      ]
+    },
+    {
+      "symbol": "/",
+      "file": "slash-0.png",
+      "sha256": "337ba51d0c478ea55e96eb2fe27737708fcf6aff3eb5cf24f61a98abc4064075",
+      "source": "energy_counter_2_of49_native_1.png",
+      "source_sha256": "e0d63ce9d9447c171ccd601441fe047b9e5f8b23dd4624178c6d28a3e652962b",
+      "box": [
+        444,
+        323,
+        448,
+        331
+      ]
+    },
+    {
+      "symbol": "5",
+      "file": "5-1.png",
+      "sha256": "6ca7bd272614d389682fc464c128f737fefaa29a8caa637cae85f15dd17d99b9",
+      "source": "energy_counter_5_of49_native_1.png",
+      "source_sha256": "4bb0661532aefb936bb2544608b611fab7eb42fbd8373eefcec51c3c9ab50c8c",
+      "box": [
+        438,
+        323,
+        444,
+        331
+      ]
+    },
+    {
+      "symbol": "6",
+      "file": "6-1.png",
+      "sha256": "c2bb7ece01a7833d3e5c06753bc43fffe2ebabf46b40e3cd8551020e46bee8ea",
+      "source": "energy_counter_6_of49_native_1.png",
+      "source_sha256": "b422f5c6beaf04e234b04b0a0cb9964024712b67a5ddd3172c0fe29b0bccbf42",
+      "box": [
+        438,
+        323,
+        444,
+        331
+      ]
+    },
+    {
+      "symbol": "/",
+      "file": "slash-1.png",
+      "sha256": "18428b9ee629f18239e83e271131b869b20a26183a064e86d77f14ddd96c860b",
+      "source": "energy_counter_1_of49_native_1.png",
+      "source_sha256": "176f41f3c6bd24114f170e48f442d9ccef2f4c540fb0a113669abbf283580c02",
+      "box": [
+        443,
+        323,
+        447,
+        331
+      ]
+    },
+    {
+      "symbol": "4",
+      "file": "4-1.png",
+      "sha256": "ed8ec2b578b861acfb2364fa4878e565499a9fc43cddba59c021939379d004da",
+      "source": "energy_counter_1_of49_native_1.png",
+      "source_sha256": "176f41f3c6bd24114f170e48f442d9ccef2f4c540fb0a113669abbf283580c02",
+      "box": [
+        447,
+        323,
+        453,
+        331
+      ]
+    },
+    {
+      "symbol": "9",
+      "file": "9-1.png",
+      "sha256": "2fbaa6cb2ebf5ab6db17b02c9e86c2265bb10a1a34665a16b4944970158d3118",
+      "source": "energy_counter_1_of49_native_1.png",
+      "source_sha256": "176f41f3c6bd24114f170e48f442d9ccef2f4c540fb0a113669abbf283580c02",
+      "box": [
+        453,
+        323,
+        458,
+        331
+      ]
+    },
+    {
+      "symbol": "/",
+      "file": "slash-2.png",
+      "sha256": "ce92048a1cffc8401b8a3bda09dc59219ee854ae739b163355fbc65848ea29b8",
+      "source": "energy_counter_3_of49_native_1.png",
+      "source_sha256": "b229749ff8790e125224984931b8c665dba22a47ba28995d9c98fcf49eec103f",
+      "box": [
+        444,
+        323,
+        448,
+        331
+      ]
+    },
+    {
+      "symbol": "4",
+      "file": "4-2.png",
+      "sha256": "72ca0827de7831f8a1dd716b05dcf8023684459fc87e9e6aaac1e3be7cf45b54",
+      "source": "energy_counter_3_of49_native_1.png",
+      "source_sha256": "b229749ff8790e125224984931b8c665dba22a47ba28995d9c98fcf49eec103f",
+      "box": [
+        448,
+        323,
+        454,
+        331
+      ]
+    },
+    {
+      "symbol": "9",
+      "file": "9-2.png",
+      "sha256": "6e686c438774c8f7d979b266dfbfa99602f83db6be22dfb3ccfda9f838db8598",
+      "source": "energy_counter_3_of49_native_1.png",
+      "source_sha256": "b229749ff8790e125224984931b8c665dba22a47ba28995d9c98fcf49eec103f",
+      "box": [
+        454,
+        323,
+        459,
+        331
+      ]
+    },
+    {
+      "symbol": "/",
+      "file": "slash-3.png",
+      "sha256": "ce92048a1cffc8401b8a3bda09dc59219ee854ae739b163355fbc65848ea29b8",
+      "source": "energy_counter_5_of49_native_1.png",
+      "source_sha256": "4bb0661532aefb936bb2544608b611fab7eb42fbd8373eefcec51c3c9ab50c8c",
+      "box": [
+        444,
+        323,
+        448,
+        331
+      ]
+    },
+    {
+      "symbol": "4",
+      "file": "4-3.png",
+      "sha256": "72ca0827de7831f8a1dd716b05dcf8023684459fc87e9e6aaac1e3be7cf45b54",
+      "source": "energy_counter_5_of49_native_1.png",
+      "source_sha256": "4bb0661532aefb936bb2544608b611fab7eb42fbd8373eefcec51c3c9ab50c8c",
+      "box": [
+        448,
+        323,
+        454,
+        331
+      ]
+    },
+    {
+      "symbol": "9",
+      "file": "9-3.png",
+      "sha256": "6e686c438774c8f7d979b266dfbfa99602f83db6be22dfb3ccfda9f838db8598",
+      "source": "energy_counter_5_of49_native_1.png",
+      "source_sha256": "4bb0661532aefb936bb2544608b611fab7eb42fbd8373eefcec51c3c9ab50c8c",
+      "box": [
+        454,
+        323,
+        459,
+        331
+      ]
+    },
+    {
+      "symbol": "/",
+      "file": "slash-4.png",
+      "sha256": "cd05ceed968eec1aaada5af0b907faf686debc5374b18ae6f694836da9e8e2ff",
+      "source": "energy_counter_6_of49_native_1.png",
+      "source_sha256": "b422f5c6beaf04e234b04b0a0cb9964024712b67a5ddd3172c0fe29b0bccbf42",
+      "box": [
+        444,
+        323,
+        448,
+        331
+      ]
+    },
+    {
+      "symbol": "4",
+      "file": "4-4.png",
+      "sha256": "ce97fa847c5ed149e1a2c87fd9d4aecb04576565c9d7a0c0082f1d37d46eef2f",
+      "source": "energy_counter_6_of49_native_1.png",
+      "source_sha256": "b422f5c6beaf04e234b04b0a0cb9964024712b67a5ddd3172c0fe29b0bccbf42",
+      "box": [
+        448,
+        323,
+        454,
+        331
+      ]
+    },
+    {
+      "symbol": "9",
+      "file": "9-4.png",
+      "sha256": "e062d7c86eda7184cca56d71f95965bf78c7b7a3165c013a1de18a3aee514699",
+      "source": "energy_counter_6_of49_native_1.png",
+      "source_sha256": "b422f5c6beaf04e234b04b0a0cb9964024712b67a5ddd3172c0fe29b0bccbf42",
+      "box": [
+        454,
+        323,
+        459,
+        331
+      ]
+    },
+    {
+      "symbol": "/",
+      "file": "slash-5.png",
+      "sha256": "3ee4441fa20dd857eb6b4e3e011d688f41b0cf551153905e63d1b24c50debb77",
+      "source": "energy_counter_7_of49_native_1.png",
+      "source_sha256": "b3653408c0cc312033d8dfb0e0d1762f3594eeb47f796e8693b05f3945095ee9",
+      "box": [
+        444,
+        323,
+        448,
+        331
+      ]
+    },
+    {
+      "symbol": "4",
+      "file": "4-5.png",
+      "sha256": "2336223ff5d84c2022f432a00e36d038c002a82023bb16c6b2fe83fef47ee2ed",
+      "source": "energy_counter_7_of49_native_1.png",
+      "source_sha256": "b3653408c0cc312033d8dfb0e0d1762f3594eeb47f796e8693b05f3945095ee9",
+      "box": [
+        448,
+        323,
+        454,
+        331
+      ]
+    },
+    {
+      "symbol": "9",
+      "file": "9-5.png",
+      "sha256": "840ab2ed74b2bbef6b0f70ea8da12c99d9ac0fd5952611a2b5ed60d04a52bed3",
+      "source": "energy_counter_7_of49_native_1.png",
+      "source_sha256": "b3653408c0cc312033d8dfb0e0d1762f3594eeb47f796e8693b05f3945095ee9",
+      "box": [
+        454,
+        323,
+        459,
+        331
+      ]
+    },
+    {
+      "symbol": "/",
+      "file": "slash-6.png",
+      "sha256": "40e1193025069445ebbde083ecc743e2bac623733611057692a5d7ca0e68eddc",
+      "source": "energy_counter_8_of49_native_1.png",
+      "source_sha256": "2c3b7c3ee3187e76bf3a78305c5eb5eba4f5f00a9d1691101aae59ae5ee85815",
+      "box": [
+        444,
+        323,
+        448,
+        331
+      ]
+    },
+    {
+      "symbol": "4",
+      "file": "4-6.png",
+      "sha256": "99e17008600865fca23171c1ae4961df25971489845fb41fbf7fe913e4970391",
+      "source": "energy_counter_8_of49_native_1.png",
+      "source_sha256": "2c3b7c3ee3187e76bf3a78305c5eb5eba4f5f00a9d1691101aae59ae5ee85815",
+      "box": [
+        448,
+        323,
+        454,
+        331
+      ]
+    },
+    {
+      "symbol": "9",
+      "file": "9-6.png",
+      "sha256": "47b7f8103ac0a8d0156cf6aa7be6cf0d33156d1d596129dcbd152189a9140dda",
+      "source": "energy_counter_8_of49_native_1.png",
+      "source_sha256": "2c3b7c3ee3187e76bf3a78305c5eb5eba4f5f00a9d1691101aae59ae5ee85815",
+      "box": [
+        454,
+        323,
+        459,
+        331
+      ]
+    },
+    {
+      "symbol": "/",
+      "file": "slash-7.png",
+      "sha256": "d731fd2382930af7e848cb5d6b8c8505e258d4b1a4353c4de44e12c3e308849e",
+      "source": "energy_counter_10_of49_native_1.png",
+      "source_sha256": "c14fa3ba0ada5650566c1cf8fc68a7fb12de6d31eb580c62259e6c0f023d6b13",
+      "box": [
+        446,
+        323,
+        450,
+        331
+      ]
+    },
+    {
+      "symbol": "4",
+      "file": "4-7.png",
+      "sha256": "16ce38fe3e64da5ec5d8aa6d633a8fa88e6d868f6c6f9b796fd2a077d8e08aba",
+      "source": "energy_counter_10_of49_native_1.png",
+      "source_sha256": "c14fa3ba0ada5650566c1cf8fc68a7fb12de6d31eb580c62259e6c0f023d6b13",
+      "box": [
+        450,
+        323,
+        456,
+        331
+      ]
+    },
+    {
+      "symbol": "9",
+      "file": "9-7.png",
+      "sha256": "169ac022d7de34189c52aefd0c860b27fbb4106734ce95a17733ba4a0f144947",
+      "source": "energy_counter_10_of49_native_1.png",
+      "source_sha256": "c14fa3ba0ada5650566c1cf8fc68a7fb12de6d31eb580c62259e6c0f023d6b13",
+      "box": [
+        456,
+        323,
+        461,
+        331
+      ]
+    },
+    {
+      "symbol": "8",
+      "file": "8-1.png",
+      "sha256": "2e9ee4ea88b25be4deb7d7240b357623cf9ea1c64dc5f74ecb1c8a396de22761",
+      "source": "energy_counter_1_of48_train.png",
+      "source_sha256": "8de1a061c94ea740c225192b473cb933bb821e47891cfef8811332103cc0e626",
+      "box": [
+        453,
+        319,
+        458,
+        334
+      ],
+      "region": "denominator"
+    },
+    {
+      "symbol": "7",
+      "file": "7-1.png",
+      "sha256": "873f86847dee207ece0e15f4d1ee1ff551f2950df1a1be1571c758360f6fd772",
+      "source": "energy_counter_1_of47_train.png",
+      "source_sha256": "773000c49e8480e0494c89381162096096543b57a0577321da641fd4fdc4dd21",
+      "box": [
+        453,
+        319,
+        458,
+        334
+      ],
+      "region": "denominator"
+    },
+    {
+      "symbol": "6",
+      "file": "6-denominator-native46.png",
+      "region": "denominator",
+      "sha256": "d4ae25c721ab424cdb50c69e94f743405473f2b11d2125c25309329fedb73a24",
+      "source": "20261102_135158_83dab78b.png",
+      "source_kind": "native original MAX46 manual confirmation, no consumption",
+      "source_sha256": "65c6a9487e6ccdd3923c32389603ca90887f4ec087ea6b2f77ac2ad1bfac2e26",
+      "box": [
+        457,
+        319,
+        462,
+        334
+      ]
+    }
+  ]
+}

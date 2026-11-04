@@ -1,0 +1,205 @@
+{
+  "version": 1,
+  "viewport": [
+    897,
+    479
+  ],
+  "cards": {
+    "웃음": {
+      "row": 0,
+      "left": 262,
+      "shape": [
+        9,
+        35
+      ],
+      "bits": "000000000000e1c0000036fc000007cf800001fff80000047e000001ec400000e5f8000000000000",
+      "column_x": 279,
+      "click_dy": 15,
+      "proof": "existing_saved_panel",
+      "source": "emote-panel-top.png"
+    },
+    "부끄": {
+      "row": 0,
+      "left": 321,
+      "shape": [
+        9,
+        35
+      ],
+      "bits": "000000000002200000007efc00000fcd800001f9b000007f36000007ffc0000023f8000000000000",
+      "column_x": 338,
+      "click_dy": 15,
+      "proof": "existing_saved_panel",
+      "source": "emote-panel-top.png"
+    },
+    "삐짐": {
+      "row": 0,
+      "left": 380,
+      "shape": [
+        9,
+        35
+      ],
+      "bits": "0000000000072fc00000fdf800001f9f000003f6e000007efc00000fd1800001ebf0000000000000",
+      "column_x": 397,
+      "click_dy": 15,
+      "proof": "existing_saved_panel",
+      "source": "emote-panel-top.png"
+    },
+    "놀람": {
+      "row": 1,
+      "left": 262,
+      "shape": [
+        9,
+        35
+      ],
+      "bits": "00000000000107a000003ef600000fff800000fbf000001f7e000003ffc000000000000000000000",
+      "column_x": 279,
+      "click_dy": 15,
+      "proof": "existing_saved_panel",
+      "source": "emote-panel-top.png"
+    },
+    "메롱": {
+      "row": 1,
+      "left": 321,
+      "shape": [
+        9,
+        35
+      ],
+      "bits": "000000000003f7c000007ef800000fdf800001fff000003f7c000007ef8000000000000000000000",
+      "column_x": 338,
+      "click_dy": 15,
+      "proof": "existing_saved_panel",
+      "source": "emote-panel-top.png"
+    },
+    "윙크": {
+      "row": 1,
+      "left": 380,
+      "shape": [
+        9,
+        35
+      ],
+      "bits": "000000000007afc00000f41800001fbf000001f06000007e0c00000fff8000000000000000000000",
+      "column_x": 397,
+      "click_dy": 15,
+      "proof": "existing_saved_panel",
+      "source": "emote-panel-top.png"
+    },
+    "화남": {
+      "row": 2,
+      "left": 262,
+      "shape": [
+        9,
+        35
+      ],
+      "bits": "000000000000962000007ec6000007ff800000fff00000097e000007efc000000000000000000000",
+      "column_x": 279,
+      "click_dy": 15,
+      "proof": "existing_saved_panel",
+      "source": "emote-panel-middle.png"
+    },
+    "하품": {
+      "row": 2,
+      "left": 321,
+      "shape": [
+        9,
+        35
+      ],
+      "bits": "000000000001b7c000007e5000000edf8000017ff000002f7c0000076f8000000000000000000000",
+      "column_x": 338,
+      "click_dy": 15,
+      "proof": "existing_saved_panel",
+      "source": "emote-panel-middle.png"
+    },
+    "울기": {
+      "row": 2,
+      "left": 380,
+      "shape": [
+        9,
+        35
+      ],
+      "bits": "000000000007efc00000fc7800001f8f000003f16000007e6c00000fd98000000000000000000000",
+      "column_x": 397,
+      "click_dy": 15,
+      "proof": "existing_saved_panel",
+      "source": "emote-panel-middle.png"
+    },
+    "졸기": {
+      "row": 3,
+      "left": 262,
+      "shape": [
+        9,
+        35
+      ],
+      "bits": "000000000001f02000003ef400000fe2800001fc5000001f1a000003ee4000007e08000000000000",
+      "column_x": 279,
+      "click_dy": 15,
+      "proof": "existing_saved_panel",
+      "source": "emote-panel-row-324.png"
+    },
+    "뽐내기": {
+      "row": 3,
+      "left": 321,
+      "shape": [
+        9,
+        35
+      ],
+      "bits": "00000000003d4e0c0007e9df8000fd38f0001fe71e0003f4e2c0007efdd8000fc383000000000000",
+      "column_x": 338,
+      "click_dy": 15,
+      "proof": "existing_saved_panel",
+      "source": "emote-panel-row-324.png"
+    },
+    "황당": {
+      "row": 3,
+      "left": 380,
+      "shape": [
+        9,
+        35
+      ],
+      "bits": "0000000000036fc00000fdf800001fe3000003f7e000007ef800000fd9800000f1e0000000000000",
+      "column_x": 397,
+      "click_dy": 15,
+      "proof": "existing_saved_panel",
+      "source": "emote-panel-row-324.png"
+    },
+    "앉기": {
+      "row": 4,
+      "left": 262,
+      "shape": [
+        9,
+        35
+      ],
+      "bits": "000000000000102000007af400000de2800000e8500000171a0000026e4000007f88000000000000",
+      "column_x": 279,
+      "click_dy": 15,
+      "proof": "existing_saved_panel",
+      "source": "emote-panel-row-324.png"
+    },
+    "인사": {
+      "row": 4,
+      "left": 321,
+      "shape": [
+        9,
+        35
+      ],
+      "bits": "000000000000204000007e4800001bc9000001f93000003b740000045b800000fe30000000000000",
+      "column_x": 338,
+      "click_dy": 15,
+      "proof": "existing_saved_panel",
+      "source": "emote-panel-row-324.png"
+    },
+    "으쓱": {
+      "row": 4,
+      "left": 380,
+      "shape": [
+        9,
+        35
+      ],
+      "bits": "00000000000004800000f8b0000011bf0000033fe000003cfc0000001f800001f830000000000000",
+      "column_x": 397,
+      "click_dy": 15,
+      "proof": "existing_saved_panel",
+      "source": "emote-panel-row-324.png"
+    }
+  },
+  "scope": "15 available basic emotes; locked paid emotes excluded; no send/completion evidence"
+}

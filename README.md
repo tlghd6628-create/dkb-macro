@@ -12,9 +12,7 @@
 - 협업 규칙과 변경 이력
 - 실행 중 설치본, 진단자료, 캐릭터 정보, 설정, 키, 원본 바이너리, 백업은 제외
 
-GitHub 원격 저장소 연결과 최초 업로드는 아직 완료되지 않았다.
-
 ## 협업
 
-[COLLABORATION.md](COLLABORATION.md)의 파일 담당과 검증 규칙을 따른다.
+[HANDOFF.md](HANDOFF.md)에서 구조와 남은 일을, [COLLABORATION.md](COLLABORATION.md)에서 작업 규칙을 본다.
 서명·빌드·설치·서버 배포는 별도 절차로 수행한다.

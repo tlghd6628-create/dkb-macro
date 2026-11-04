@@ -1,0 +1,24 @@
+# Native modules and the game are not here, so this checks syntax and leaks only.
+# Real checks run on each PC with the installed program.
+name: check
+on:
+  push:
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Syntax
+        run: python -m compileall -q owner_*.py test_*.py bootstrap.py image_scope_20261104
+      - name: No private files
+        run: |
+          bad=$(git ls-files | grep -Ei '(\.pem|\.key|\.log|PRIVATE|settings/|credentials|fixtures_)' || true)
+          if [ -n "$bad" ]; then echo "$bad"; exit 1; fi
+      - name: No secrets
+        run: |
+          bad=$(git grep -nIE 'BEGIN [A-Z ]*PRIVATE KEY|ghp_[A-Za-z0-9]{20}|sk-[A-Za-z0-9]{20}|[0-9]{8,10}:[A-Za-z0-9_-]{30,}' -- . ':!.github' || true)
+          if [ -n "$bad" ]; then echo "$bad" | cut -c1-120; exit 1; fi

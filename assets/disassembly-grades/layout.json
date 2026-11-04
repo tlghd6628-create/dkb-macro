@@ -1,0 +1,39 @@
+{
+  "basis": [
+    897,
+    479
+  ],
+  "header": [
+    544,
+    145,
+    698,
+    172
+  ],
+  "boxes": {
+    "normal": [
+      569,
+      249,
+      611,
+      267
+    ],
+    "rare": [
+      611,
+      249,
+      652,
+      267
+    ],
+    "hero": [
+      652,
+      249,
+      693,
+      267
+    ],
+    "empty": [
+      550,
+      191,
+      693,
+      225
+    ]
+  },
+  "source": "user screenshots 2026-11-03; character-independent dialog controls"
+}

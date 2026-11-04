@@ -1,0 +1,2 @@
+# The apply tool compares exact bytes with the installed files. Never rewrite line endings.
+* -text

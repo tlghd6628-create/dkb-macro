@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "note": "Reviewed observations shipped with the update. A requirement is not a send, and a send is not quest completion. Hints never authorize a click.",
+  "cards": {
+    "웃음": {
+      "native_image": "버튼_채팅창_감정_웃음",
+      "search_first": "up"
+    },
+    "화남": {
+      "card": "angry",
+      "native_image": "버튼_채팅창_감정_화남",
+      "search_first": "up"
+    },
+    "졸기": {
+      "card": "sleep",
+      "search_first": "down"
+    },
+    "뽐내기": {
+      "card": "proud",
+      "search_first": "down"
+    },
+    "황당": {
+      "card": "surprise",
+      "search_first": "down"
+    }
+  },
+  "quests": {
+    "외전|항아리를옮긴자|8": {
+      "emote": "화남",
+      "proof": "actual_frames",
+      "observed": [
+        "20261103T085424-713fff9b",
+        "20261103T085459-6bf7a372",
+        "20261103T085511-bfee4b07",
+        "20261103T085540-72d04027"
+      ],
+      "send_verified": false,
+      "title_image": {
+        "root": "title-hangari-root",
+        "digit": "title-hangari-8",
+        "root_min": 0.85,
+        "digit_min": 0.9
+      }
+    },
+    "외전|동굴에서들린소리|4": {
+      "emote": "황당",
+      "proof": "actual_frames",
+      "observed": [
+        "20261102T082953",
+        "20261102T091217",
+        "20261102T234758",
+        "20261103T085152"
+      ],
+      "send_verified": false,
+      "title_image": null
+    },
+    "외전|교대가늦어진이유|4": {
+      "emote": "졸기",
+      "proof": "actual_frames",
+      "observed": [
+        "20261102T072523",
+        "20261102T072746",
+        "20261102T082426"
+      ],
+      "send_verified": false,
+      "title_image": null
+    },
+    "외전|산길의호환|10": {
+      "emote": "뽐내기",
+      "proof": "actual_frames",
+      "observed": [
+        "20261102T053715",
+        "20261102T054037"
+      ],
+      "send_verified": false,
+      "title_image": null
+    },
+    "외전|동굴에갇힌도사|7": {
+      "emote": "으쓱",
+      "proof": "actual_frames",
+      "observed": [
+        "2026-11-03 actual mission UI 18:49-18:50 two observations; selected stage7 and explicit 으쓱 requirement"
+      ],
+      "send_verified": false,
+      "title_image": {
+        "root": "title-cave-root",
+        "digit": "title-cave-7",
+        "root_min": 0.85,
+        "digit_min": 0.9
+      },
+      "observed_book_titles": [
+        "외전동글에도사",
+        "외전동굴에갈헌도사",
+        "외전동굴에같헌도사"
+      ]
+    }
+  }
+}

@@ -1,11 +1,23 @@
 # Default deny: only explicitly reviewed source and collaboration documents.
 /*
 !/.gitignore
+!/.gitattributes
+!/.github/
 !/README.md
 !/COLLABORATION.md
+!/HANDOFF.md
 !/owner_*.py
 !/test_*.py
 !/bootstrap.py
+# Recognition images the overlay loads at runtime. Small UI crops only.
+!/assets/
+# Tools that drive the real program and game. Their output stays out.
+!/image_scope_20261104/
+/image_scope_20261104/*
+!/image_scope_20261104/*.py
 
-# Private runtime state, keys, diagnostics, original binaries and snapshots
-# remain excluded by the default rule above.
+__pycache__/
+*.pyc
+
+# Private runtime state, keys, diagnostics, original binaries, full screenshots
+# and snapshots remain excluded by the default rule above.

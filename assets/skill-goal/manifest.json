@@ -1,0 +1,245 @@
+{
+  "skill-title": [
+    "skill-life-restored-window.png",
+    [
+      39,
+      11,
+      45,
+      18
+    ]
+  ],
+  "quest-title": [
+    "mission-main-window.png",
+    [
+      39,
+      11,
+      45,
+      18
+    ]
+  ],
+  "completed": [
+    "mission-skill-story-five-active-window.png",
+    [
+      628,
+      224,
+      18,
+      18
+    ]
+  ],
+  "preset-open": [
+    "skill-presets-popup-window.png",
+    [
+      647,
+      341,
+      14,
+      59
+    ]
+  ],
+  "preset-copy-notice": [
+    "skill-preset-autocopy-notice-window.png",
+    [
+      368,
+      233,
+      160,
+      24
+    ]
+  ],
+  "preset1": [
+    "skill-life-restored-window.png",
+    [
+      532,
+      452,
+      14,
+      13
+    ]
+  ],
+  "skill-checked-all": [
+    "skill-life-restored-window.png",
+    [
+      690,
+      60,
+      12,
+      12
+    ]
+  ],
+  "shop-quantity": [
+    "skill-shop-quantity-window.png",
+    [
+      409,
+      151,
+      79,
+      25
+    ]
+  ],
+  "learn-confirm": [
+    "skill-learn-confirm-window.png",
+    [
+      380,
+      150,
+      145,
+      24
+    ]
+  ],
+  "slot-lock": [
+    "skill-life-restored-window.png",
+    [
+      543,
+      371,
+      14,
+      15
+    ]
+  ],
+  "order-title": [
+    "skill-order-empty-window.png",
+    [
+      410,
+      41,
+      80,
+      21
+    ]
+  ],
+  "shop-available": [
+    "skill-shop-partial-unlocked-window.png",
+    [
+      49,
+      142,
+      56,
+      10
+    ]
+  ],
+  "shop-coin": [
+    "skill-shop-partial-unlocked-window.png",
+    [
+      49,
+      129,
+      11,
+      11
+    ]
+  ],
+  "shop-fragments100": [
+    "skill-shop-partial-unlocked-window.png",
+    [
+      27,
+      140,
+      16,
+      10
+    ]
+  ],
+  "shop-title": [
+    "skill-shop-quantity-window.png",
+    [
+      85,
+      12,
+      59,
+      16
+    ]
+  ],
+  "quest-search-close": [
+    "mission-search-empty-window.png",
+    [
+      869,
+      14,
+      14,
+      15
+    ]
+  ],
+  "quote-10000": [
+    "skill-shop-quantity-window.png",
+    [
+      463,
+      200,
+      46,
+      18
+    ]
+  ],
+  "quote-one": [
+    "skill-shop-quantity-window.png",
+    [
+      434,
+      241,
+      17,
+      16
+    ]
+  ],
+  "story-search-1": [
+    "mission-search-skill-results-window.png",
+    [
+      49,
+      73,
+      181,
+      30
+    ]
+  ],
+  "story-search-2": [
+    "mission-search-skill-results-window.png",
+    [
+      641,
+      73,
+      166,
+      30
+    ]
+  ],
+  "story-search-3": [
+    "mission-search-skill-results-window.png",
+    [
+      49,
+      117,
+      181,
+      30
+    ]
+  ],
+  "story-search-4": [
+    "mission-search-skill-results-window.png",
+    [
+      337,
+      117,
+      182,
+      30
+    ]
+  ],
+  "story-search-5": [
+    "mission-search-skill-results-window.png",
+    [
+      641,
+      117,
+      166,
+      30
+    ]
+  ],
+  "map-title": [
+    "world-map-window.png",
+    [
+      54,
+      10,
+      61,
+      19
+    ]
+  ],
+  "map-search-field": [
+    "map-search-empty-window.png",
+    [
+      46,
+      40,
+      130,
+      22
+    ]
+  ],
+  "story-search-tutorial1": [
+    "mission-search-skill-results-window.png",
+    [
+      337,
+      73,
+      182,
+      30
+    ]
+  ],
+  "story-title5": [
+    "mission-skill-story-five-active-window.png",
+    [
+      689,
+      81,
+      165,
+      19
+    ]
+  ]
+}
