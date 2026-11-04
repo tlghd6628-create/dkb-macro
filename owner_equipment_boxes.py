@@ -9,6 +9,7 @@ SLOTS={'무기':(17,211,26,27),'반지':(160,241,23,22),'팔찌':(160,211,23,22)
  '장갑':(126,179,26,27),'투구':(17,152,25,26),'허리띠':(127,149,25,25)}
 WEAPON='버튼_인벤토리_희귀무기상자';ARMOR='버튼_인벤토리_희귀방어구상자';ACCESSORY='버튼_희귀_장신구상자'
 ARMOR_PARTS=('갑옷','다리','신발','장갑','투구','허리띠')
+BOX_POSITION={WEAPON:2,ARMOR:3,ACCESSORY:4};UNUSED_ITEM='버튼_인벤토리_상자열기'
 
 @lru_cache(maxsize=2)
 def _weapon_grade_detector(profile):
@@ -64,6 +65,13 @@ def plan(worn,level=None,rare_weapon=None):
     if armor:items.append(ARMOR)
     if accessories:items.append(ACCESSORY)
     return items,armor,accessories
+
+def native_items(items):
+    """The native routine compares fixed list positions: 2 weapon, 3 armor, 4 accessory.
+    A shorter list raises IndexError, so unused positions hold a name that is never a bag item."""
+    result=[UNUSED_ITEM]*5
+    for name in items:result[BOX_POSITION[name]]=name
+    return result
 
 def close_inventory(service):
     from owner_progression import inventory_parts
@@ -136,9 +144,7 @@ def install(gui):
         # The native routine opens the inventory itself. Pressing its button on an open panel closes it.
         close_inventory(service);context.wait(.3)
         previous=(inv.INVENTORY_USE_ITEMS,inv.RARE_ARMOR_PRIORITY,inv.RARE_ACCESSORY_PRIORITY)
-        # The native routine reads three fixed positions, so a shorter list raises IndexError.
-        # Repeat allowed names rather than padding with a box this plan did not choose.
-        inv.INVENTORY_USE_ITEMS=(items*3)[:max(3,len(items))];inv.RARE_ARMOR_PRIORITY=armor;inv.RARE_ACCESSORY_PRIORITY=accessories
+        inv.INVENTORY_USE_ITEMS=native_items(items);inv.RARE_ARMOR_PRIORITY=armor;inv.RARE_ACCESSORY_PRIORITY=accessories
         try:return ordinary(adapter,context,inputs)
         finally:inv.INVENTORY_USE_ITEMS,inv.RARE_ARMOR_PRIORITY,inv.RARE_ACCESSORY_PRIORITY=previous
     @wraps(use)
