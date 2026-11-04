@@ -72,6 +72,11 @@ def read_level(number,korean,frame):
     wide=number.predict(resized(frame,(53,9,12,15)))
     level=parse_level(wide,header)
     if level is not None:return level
+    # Level 17 read .95 as a number and .85 in the header, both right and both under their gates.
+    # Two independent readers agreeing on one value is proof enough, and two frames must still agree.
+    numbers={int(t.strip()) for t,s in texts(wide) if s>=.90 and re.fullmatch(r'\d{1,2}',t.strip()) and 1<=int(t.strip())<=50}
+    named={int(m[1]) for t,s in texts(header) if s>=.80 for m in [re.search(r'레벨\s*(\d{1,2})(?!\d)',t)] if m and 1<=int(m[1])<=50}
+    if len(numbers)==1 and numbers==named:return next(iter(numbers))
     # A strong two-digit reading contradicts the header: keep holding, never narrow past it.
     if any(s>=.985 and re.fullmatch(r'\d{2}',t.strip()) for t,s in texts(wide)):return None
     labels={int(m[1]) for t,s in texts(header) if s>=.88 for m in [re.search(r'레벨\s*(\d{1,2})(?!\d)',t)] if m}
