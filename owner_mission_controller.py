@@ -295,6 +295,9 @@ def run(adapter,context,inputs):
    context.checkpoint()
    try:
     require_cleanup_closed(ui)
+    # The next main quest stays locked behind this guide, so check before picking one.
+    from owner_guide_skill import run as run_guide_skill
+    run_guide_skill(ui)
     from owner_quest_position_recovery import resume_pending
     if resume_pending(ui,book):adapter._owner_restore_story_once=True
     if pending_death_baselines(book) and time.monotonic()>=baseline_retry_at:
