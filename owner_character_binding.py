@@ -41,21 +41,20 @@ def _write(path,document):
 
 
 def name_head(frame):
-    """First name glyph, found as the first ink run wider than a level digit. None if unreadable.
+    """First name glyph: the first ink after a gap of 3 or more, past the level label. None if unreadable.
 
+    Width cannot find it: two level digits can touch and look wider than a glyph (level 34).
     Real frames at levels 1, 3, 7, 8, 9, 12, 17 scored .956 or more against each other, and a different
     character at level 50 scored .869 at most. Names sharing a first glyph cannot be told apart here.
     """
-    import numpy as np
-    columns=(frame[9:25,50:112].min(axis=2)>150).any(axis=0).tolist()+[False]
-    start=None
+    columns=(frame[9:25,50:112].min(axis=2)>150).any(axis=0).tolist()
+    gap=0
     for i,ink in enumerate(columns):
-        if ink and start is None:start=i
-        if not ink and start is not None:
-            if i-start>=7:
-                x=50+start;patch=frame[8:26,x-1:x+9].min(axis=2).astype('uint8')
-                return patch.tolist() if patch.shape==(18,10) else None
-            start=None
+        if not ink:gap+=1;continue
+        if i>=8 and gap>=3:
+            x=50+i;patch=frame[8:26,x-1:x+9].min(axis=2).astype('uint8')
+            return patch.tolist() if patch.shape==(18,10) else None
+        gap=0
     return None
 
 
