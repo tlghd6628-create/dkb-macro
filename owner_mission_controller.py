@@ -162,13 +162,22 @@ def finish_scene(adapter,context,inputs):
  while time.monotonic()<end:
   context.checkpoint();first=service.capture();context.wait(.12);second=service.capture()
   key=next((k for k in ('skip_confirm','skip_confirm2','skip') if slots.match(k,first).get('hit') and slots.match(k,second).get('hit')),None)
-  if key is None:break
+  if key is None:
+   # A dimmed guide also blocks the panel. Same handler as the start stage.
+   from tutorial_highlight import load_config,detect_tutorial_highlight,TutorialHandler
+   config=load_config(adapter.project.root/'profiles'/adapter.project.code)
+   if not (detect_tutorial_highlight(first,config).tutorial_detected and detect_tutorial_highlight(second,config).tutorial_detected):break
+   result=TutorialHandler(config,capture=service.capture,inputs=inputs,context=context,execution_gate=service.check,user_log=LOG.info,logger=LOG).handle_tutorial_if_present()
+   if result in ('FAILED','DETECTED_BUT_UNSAFE'):break
+   handled=True;context.wait(.6);continue
   hit=slots.match(key,second)
   if key=='skip':runner.handle_skip(slots.by_key[key],hit,second)
   elif key=='skip_confirm2':runner.handle_skip_confirm2(slots.by_key[key],hit,second)
   else:runner.input_one(key,hit,second)
   handled=True;context.wait(.6)
- if handled:LOG.info('임무 시작 전 대화 장면 정리 · 전투력 다시 확인')
+ if handled:
+  LOG.info('임무 시작 전 대화·안내 정리 · 전투력 다시 확인')
+  context.wait(1.5)
  return handled
 
 def prepare(adapter,context,inputs):
