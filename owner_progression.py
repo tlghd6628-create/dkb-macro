@@ -77,6 +77,10 @@ def read_level(number,korean,frame):
     numbers={int(t.strip()) for t,s in texts(wide) if s>=.90 and re.fullmatch(r'\d{1,2}',t.strip()) and 1<=int(t.strip())<=50}
     named={int(m[1]) for t,s in texts(header) if s>=.80 for m in [re.search(r'레벨\s*(\d{1,2})(?!\d)',t)] if m and 1<=int(m[1])<=50}
     if len(numbers)==1 and numbers==named:return next(iter(numbers))
+    # The header confuses 3 and 8: level 30 read 80 at .91 beside a number read 30 at .999.
+    # It still proves how many digits there are, so a strong number with that many digits stands.
+    strong={int(t.strip()) for t,s in texts(wide) if s>=.985 and re.fullmatch(r'\d{2}',t.strip()) and 10<=int(t.strip())<=50}
+    if len(strong)==1 and any(s>=.88 and re.search(r'레벨\s*\d{2}(?!\d)',t) for t,s in texts(header)):return next(iter(strong))
     # A strong two-digit reading contradicts the header: keep holding, never narrow past it.
     if any(s>=.985 and re.fullmatch(r'\d{2}',t.strip()) for t,s in texts(wide)):return None
     labels={int(m[1]) for t,s in texts(header) if s>=.88 for m in [re.search(r'레벨\s*(\d{1,2})(?!\d)',t)] if m}
@@ -111,6 +115,12 @@ def power_image(frame):
 
 
 def read_inventory_power(engine,frame):
+    # The fixed box can catch the tail of the x icon: 27,992 read as 427,992, a confident wrong value.
+    # A crop starting after the icon cannot, so it is read first.
+    box=power_digits_box(frame)
+    if box is not None:
+        value=parse_power(engine.predict(resized(frame,box)))
+        if value is not None:return value
     original=engine.predict(resized(frame,(40,47,42,17)))
     value=parse_power(original)
     if value is not None:return value
