@@ -268,11 +268,17 @@ def install(gui):
                 if initial==second=='unknown':
                     from project_adapter.main_quest import StateROIs,BoundedMainQuestRunner,dependencies
                     slots=StateROIs(adapter.project.root/'profiles/DKB',mode=adapter.mode)
-                    dialog_key=next((key for key in ('skip','skip_confirm','skip_confirm2') if slots.match(key,first).get('hit') and slots.match(key,second_frame).get('hit')),None)
+                    # The top-right skip button stays visible behind the confirm dialog, so confirm is checked first.
+                    dialog_key=next((key for key in ('skip_confirm','skip_confirm2','skip') if slots.match(key,first).get('hit') and slots.match(key,second_frame).get('hit')),None)
                     if dialog_key:
                         attempts_key=(gui._owner_stage_epoch,'start-dialog-'+dialog_key)
+                        total_key=(gui._owner_stage_epoch,'start-dialog-total')
                         stage_attempts[attempts_key]=stage_attempts.get(attempts_key,0)+1
-                        if stage_attempts[attempts_key]>6:raise RuntimeError('시작 대화 넘기기 확인이 6회 반복되어 진단 확인이 필요합니다.')
+                        stage_attempts[total_key]=stage_attempts.get(total_key,0)+1
+                        if stage_attempts[attempts_key]>6 or stage_attempts[total_key]>60:raise RuntimeError('시작 대화 넘기기 확인이 6회 반복되어 진단 확인이 필요합니다.')
+                        # Moving between skip and confirm is progress: a level-1 opening has many scenes in a row.
+                        for other in ('skip','skip_confirm','skip_confirm2'):
+                            if other!=dialog_key:stage_attempts.pop((gui._owner_stage_epoch,'start-dialog-'+other),None)
                         _,deps=dependencies(adapter,context,inputs)
                         runner=BoundedMainQuestRunner(slots,**deps);hit=slots.match(dialog_key,service.capture())
                         if not hit.get('hit'):continue
