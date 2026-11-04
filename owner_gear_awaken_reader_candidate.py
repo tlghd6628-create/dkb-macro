@@ -31,7 +31,11 @@ def read_observed_transition(frame):
         try:reference=np.asarray(Image.open(_ASSETS/name).convert('RGB'))
         except (OSError,ValueError):return None
         if reference.shape!=patch.shape:return None
-        score=float(cv2.matchTemplate(patch,reference,cv2.TM_CCOEFF_NORMED)[0,0])
+        # The next-stage diamond on the right sparkles: the whole line read .951 to .984
+        # on real screens. The current stage and arrow on the left hold still, and a
+        # higher current stage changes them. Threshold unchanged.
+        score=max(float(cv2.matchTemplate(patch,reference,cv2.TM_CCOEFF_NORMED)[0,0]),
+                  float(cv2.matchTemplate(patch[:,:44],reference[:,:44],cv2.TM_CCOEFF_NORMED)[0,0]))
         if np.isfinite(score):scores.append(score)
     if not scores or max(scores)<.965:return None
     return {'current':None,'next':None,'kind':'observed_awakening_line','score':max(scores)}

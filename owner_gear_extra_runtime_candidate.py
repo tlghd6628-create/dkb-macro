@@ -54,7 +54,8 @@ def ensure_enhance_tab(service,context,*,identity_check=None):
         context.wait(.08)
 
 
-_STATIC_BOXES=((312,120,476,149),(330,384,462,409),(385,438,445,460),(460,438,496,460))
+# The first box stops short of the sparkling next-stage diamond.
+_STATIC_BOXES=((312,120,412,149),(330,384,462,409),(385,438,445,460),(460,438,496,460))
 def same_static(first,second):
     """Only labelled foreground, never the animated transparent background."""
     if getattr(first,'shape',None)!=(479,897,3) or getattr(second,'shape',None)!=(479,897,3):return False
@@ -216,7 +217,16 @@ class ExtraObserver:
         states=[];frames=[]
         for _ in range(2):
             self._guard();frame=self.service.capture().copy();state=self._state(frame,resources=resources)
-            if state is None:self.last_reason='선택 장비·현재/다음 단계 두 화면 확인 필요';return {'screen_proof':False}
+            # One sparkle or glow frame must not end the read; nothing is pressed here.
+            for _ in range(4):
+                if state is not None:break
+                self.context.wait(.25);self._guard();frame=self.service.capture().copy();state=self._state(frame,resources=resources)
+            if state is None:
+                stage=self.stage_reader(Path(self.service.adapter.project.root),frame,self.kind)
+                self.last_reason='두 화면 확인 필요 · 탭=%s · 같은 장비=%s · 단계=%s'%(tab_selected(frame,self.kind),self._same_item(frame),isinstance(stage,dict))
+                from owner_gear_hold_capture_candidate import enqueue
+                enqueue(self.service.adapter.project.root,'extra-read',self.last_reason,(frame,))
+                return {'screen_proof':False}
             states.append(state);frames.append(frame);self.context.wait(.12)
         if states[0]!=states[1]:self.last_reason='각성·돌파 단계 또는 재료 변경';return {'screen_proof':False}
         # OCR may be slow. Two new exact static regions must re-prove the
@@ -358,7 +368,8 @@ def tab_source(service,context,identity,targets,kind,tab):
     if chosen is None:return None
     done.add(chosen['index'])
     source.prepare_and_select(chosen['index'])
-    context.wait(.25)
+    # The detail panel slides in and its glow settles.
+    context.wait(1.0)
     # ExtraObserver keeps the centre icon of the last frame: it must show this item.
     source.capture()
     return source
