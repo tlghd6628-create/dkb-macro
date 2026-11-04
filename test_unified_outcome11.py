@@ -144,15 +144,25 @@ class Binding(unittest.TestCase):
     def setUp(self):self.root=scratch(self)
     def test_first_reading_binds_then_matches(self):
         self.assertEqual(binding.resolve(self.root,'p','a',30),('a',binding.BOUND))
+        self.assertEqual(binding.resolve(self.root,'p','a',31),('a',binding.CROSSED))
         self.assertEqual(binding.resolve(self.root,'p','a',31),('a',binding.MATCHED))
     def test_other_character_is_a_mismatch(self):
         binding.resolve(self.root,'p','a',30)
         self.assertEqual(binding.resolve(self.root,'p','b',30),('b',binding.MISMATCH))
     def test_level_ten_crossing_keeps_the_same_key(self):
-        binding.resolve(self.root,'p','low',9)
-        self.assertEqual(binding.resolve(self.root,'p','high',10),('low',binding.CROSSED))
-        self.assertEqual(binding.resolve(self.root,'p','high',11),('low',binding.MATCHED))
-        self.assertEqual(binding.resolve(self.root,'p','other',12)[1],binding.MISMATCH)
+        import numpy as np
+        own=np.random.RandomState(1).randint(0,255,(18,10)).tolist();other=np.random.RandomState(2).randint(0,255,(18,10)).tolist()
+        binding.resolve(self.root,'p','low',9,own)
+        self.assertEqual(binding.resolve(self.root,'p','high',10,own),('low',binding.CROSSED))
+        self.assertEqual(binding.resolve(self.root,'p','high',10,own),('low',binding.MATCHED))
+        self.assertEqual(binding.resolve(self.root,'p','other',12,other)[1],binding.MISMATCH)
+    def test_later_level_is_known_by_its_first_glyph(self):
+        import numpy as np
+        frame=np.zeros((479,897,3),'uint8');frame[9:25,72:88]=200
+        head=binding.name_head(frame);binding.resolve(self.root,'p','low',9,head)
+        self.assertTrue(binding.shown_on(np.array(frame),'low'))
+        self.assertFalse(binding.shown_on(np.zeros((479,897,3),'uint8'),'low'))
+        self.assertFalse(binding.shown_on(frame,'unknown'))
     def test_lower_band_after_high_is_not_a_crossing(self):
         binding.resolve(self.root,'p','high',30)
         self.assertEqual(binding.resolve(self.root,'p','low',5)[1],binding.MISMATCH)

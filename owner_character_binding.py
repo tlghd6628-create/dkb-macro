@@ -86,7 +86,7 @@ def resolve(root,profile,glyph_hash,level,head=None):
         row=document['profiles'].get(profile)
         if not isinstance(row,dict):
             document['profiles'][profile]={'character':glyph_hash,band:glyph_hash,'level':level};status=BOUND
-            if head:document['profiles'][profile]['head']=head
+            if head:document['profiles'][profile]['head']=head;_HEADS[glyph_hash]=head
         elif row.get(band)==glyph_hash or row.get('high' if level>=10 else 'low')==glyph_hash:
             # 'high' and 'low' are records from before per-level hashes.
             _HEADS[row['character']]=row.get('head')
