@@ -12,6 +12,7 @@ for name in FILES:
 stamp=time.strftime('%Y%m%d_%H%M%S');backup=D/'installed_backup'/stamp;rows=[]
 for name in FILES:
     target=backup/name;target.parent.mkdir(parents=True,exist_ok=True);(I/name).exists() and shutil.copy2(I/name,target)
+    (I/name).parent.mkdir(parents=True,exist_ok=True)
     temp=(I/name).with_name((I/name).name+'.imagescope.tmp');shutil.copy2(C/name,temp);os.replace(temp,I/name)
     if sha(I/name)!=sha(C/name):raise SystemExit('hash mismatch: '+name)
     rows.append({'file':name,'after':sha(I/name)})
