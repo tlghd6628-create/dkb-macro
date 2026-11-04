@@ -109,7 +109,7 @@ def release_functional_hold(book,key):
 
 STORY_RECHECK_SECONDS=300
 # Real minimap change at level 17: about 4 while standing with monsters around, 22 while walking.
-IDLE_MINIMAP_CHANGE=10;IDLE_SECONDS=120
+IDLE_MINIMAP_CHANGE=10;IDLE_SECONDS=120;PREPARE_SECONDS=180
 
 def pending_death_baselines(book):
  return [row for row in book.item.get('quests',{}).values() if row.get('block',{}).get('reason')=='death' and row['block'].get('baseline') is None and row.get('completed') is not True]
@@ -193,7 +193,9 @@ def prepare(adapter,context,inputs):
  from owner_task_flow import bootstrap,defer
  from project_adapter._entry import Adapter
  context.checkpoint();adapter.exit_sleep_mode(context,inputs)
- for attempt in range(3):
+ # A quest fight or scene can hold the screen for minutes, and three quick tries used to stop the run.
+ attempt=0;deadline=time.monotonic()+PREPARE_SECONDS
+ while True:
   context.checkpoint()
   observed_after=time.monotonic()
   if read_power(adapter,context,inputs):break
@@ -201,13 +203,11 @@ def prepare(adapter,context,inputs):
   if getattr(adapter,'_owner_requested_quest_mode',getattr(adapter,'mode',None))=='sub_quest' and fresh.character and fresh.level is not None and fresh.observed>=observed_after and fresh.power is None:
    LOG.warning('전투력 숫자 미확인 · 캐릭터 새 화면 확인 완료 · 현재 단계 적합 표시 임무만 진행 · 성장 재시도 보류')
    break
-  scene=finish_scene(adapter,context,inputs)
-  if attempt==2 and not scene:raise Pending('임무 선택 전 캐릭터·전투력 두 화면 확인 필요 · 재확인 3회 실패')
-  LOG.info('임무 시작 전 화면 재확인 · %d/3 · 잘못된 전투력으로 진행하지 않음',attempt+1)
-  context.wait(.5)
- else:
-  # The last attempt only cleared a scene, so read once more on the field it left.
-  if not read_power(adapter,context,inputs):raise Pending('임무 선택 전 캐릭터·전투력 두 화면 확인 필요 · 재확인 3회 실패')
+  finish_scene(adapter,context,inputs)
+  if time.monotonic()>=deadline:raise Pending('임무 선택 전 캐릭터·전투력 두 화면 확인 필요 · %d초 재확인 실패'%PREPARE_SECONDS)
+  attempt+=1
+  if attempt==1 or attempt%10==0:LOG.info('임무 시작 전 화면 재확인 · %d회 · 잘못된 전투력으로 진행하지 않음',attempt)
+  context.wait(3)
  if getattr(adapter,'_owner_initial_context',None) is not context:
   from owner_growth_recovery import recover
   recover(adapter,context,inputs)
