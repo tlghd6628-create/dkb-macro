@@ -54,7 +54,7 @@ def compare_frame(frame,engine):
  worn=_score(frame[116:135,345:365],badge());candidate=_score(frame[116:135,500:520],badge())
  if candidate>=.90:raise Hold('착용 표시 확인 필요')
  grades=(_ocr(engine,frame,(311,130,33,23)),_ocr(engine,frame,(467,130,33,23)))
- kinds=(_ocr(engine,frame,(404,128,38,22)),_ocr(engine,frame,(559,128,39,22)))
+ kinds=(_part_name(engine,frame,(404,128,38,22)),_part_name(engine,frame,(559,128,39,22)))
  buttons=(_ocr(engine,frame,(370,350,72,26)),_ocr(engine,frame,(526,350,72,26)))
  if any(grade not in ('일반','희귀','영웅') for grade in grades):raise Hold('장비 등급 글자 확인 필요')
  if kinds[0]!=kinds[1] or kinds[0] not in PART_MAP:raise Hold('같은 부위 장비 확인 필요')
@@ -71,15 +71,20 @@ def worn_detail_frame(frame,engine):
  """Read the observed single equipped-weapon tooltip; no input."""
  if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or frame.dtype!=np.uint8:raise Hold('장착 장비 상세 확인 필요')
  if _score(frame[116:135,420:445],badge())<.96:raise Hold('장착 표시 확인 필요')
- grade=_ocr(engine,frame,(390,130,35,23));kind=_ocr(engine,frame,(483,128,33,22));button=_ocr(engine,frame,(450,350,70,26))
+ grade=_ocr(engine,frame,(390,130,35,23));kind=_part_name(engine,frame,(483,128,33,22));button=_ocr(engine,frame,(450,350,70,26))
  if grade not in ('일반','희귀','영웅') or kind not in PART_MAP or button!='장착해제':raise Hold('장착 부위·등급·버튼 확인 필요')
  return {'slot':PART_MAP[kind],'grade':grade,'item':_item_token(frame[97:115,390:502],frame[128:148,434:454].copy())}
+
+def _part_name(engine,frame,box):
+ """The glyph 찌 reads near .70 and sometimes as 짜. Only an exact part name passes the caller's check."""
+ text=_ocr(engine,frame,box,minimum=.60)
+ return '팔찌' if text=='팔짜' else text
 
 def initial_candidate_frame(frame,engine):
  """Single un-worn tooltip; blank slot must be proved separately."""
  if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or frame.dtype!=np.uint8:raise Hold('초기 장비 상세 확인 필요')
  if _score(frame[116:135,420:445],badge())>=.90:raise Hold('이미 착용한 장비')
- grade=_ocr(engine,frame,(390,130,35,23));kind=_ocr(engine,frame,(483,128,33,22));button=_ocr(engine,frame,(450,350,70,26))
+ grade=_ocr(engine,frame,(390,130,35,23));kind=_part_name(engine,frame,(483,128,33,22));button=_ocr(engine,frame,(450,350,70,26))
  if grade not in ('일반','희귀','영웅') or kind not in PART_MAP or button!='장착':raise Hold('초기 장비 부위·등급·장착 버튼 확인 필요')
  return {'slot':PART_MAP[kind],'candidate_grade':grade,
          'candidate_item':_item_token(frame[97:115,390:502],frame[128:148,434:454].copy()),
@@ -516,14 +521,16 @@ class Port:
   from owner_progression import inventory_parts
   a,_=self._frame();self.context.wait(.12);b,_=self._frame()
   from owner_worn_stats import popup
-  if popup(a) and popup(b):
-   # The clicked cell opened a single worn-item detail, not a comparison.
+  from owner_energy_box_detail_candidate import close_mark
+  # One X at this spot: a worn-item detail, or an unworn item on a blank slot.
+  def single(frame):return popup(frame) or (inventory_parts(frame)==(True,True) and close_mark(frame) and not comparison_shell(frame))
+  if single(a) and single(b):
    # It has only one X and nothing to equip; same close as the start menu's.
    final,_=self._frame()
-   if not popup(final):raise Hold('장비창 종료 전 화면 변경')
+   if not single(final):raise Hold('장비창 종료 전 화면 변경')
    self.context.checkpoint();self.service.check();self.service.click_hit((510,106,(503,99,518,113)))
    self.context.wait(.2);x,_=self._frame();self.context.wait(.12);y,_=self._frame()
-   if popup(x) or popup(y) or inventory_parts(x)!=(True,True) or inventory_parts(y)!=(True,True):raise Hold('장비창 종료 후 인벤토리 미확인')
+   if single(x) or single(y) or inventory_parts(x)!=(True,True) or inventory_parts(y)!=(True,True):raise Hold('장비창 종료 후 인벤토리 미확인')
    return 'inventory_restored'
   if not same_comparison_for_close(a,b):raise Hold('판독 불가 장비창 형태 확인 필요')
   for frame in (a,b):
