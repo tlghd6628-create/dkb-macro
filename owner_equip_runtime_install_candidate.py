@@ -42,7 +42,12 @@ def _run(adapter,context,inputs):
   from owner_energy_box_detail_candidate import close_mark
   from owner_equipment_tooltip_candidate import comparison_shell
   def bare(frame):return inventory(frame) and not close_mark(frame) and not comparison_shell(frame)
-  if '입력 결과' in str(exc) or not pair(bare):raise RuntimeError('장비 화면 확인 중단 · '+str(exc)) from exc
+  if '입력 결과' in str(exc):raise RuntimeError('장비 화면 확인 중단 · '+str(exc)) from exc
+  # Auto-move can change zones during the visit, which closes the panel on its own.
+  if pair(field):
+   LOG.info('장비 확인 이번 방문 건너뜀 · %s · 창이 이미 닫힘 · 퀘스트 계속',exc)
+   return 'scan_held_skip'
+  if not pair(bare):raise RuntimeError('장비 화면 확인 중단 · '+str(exc)) from exc
   LOG.info('장비 확인 이번 방문 건너뜀 · %s · 입력 없음 · 퀘스트 계속',exc)
   close_inventory(service)
   if not pair(field):raise RuntimeError('장비 처리 뒤 원래 화면 복귀 미확인')
