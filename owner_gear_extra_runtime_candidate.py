@@ -54,8 +54,8 @@ def ensure_enhance_tab(service,context,*,identity_check=None):
         context.wait(.08)
 
 
-# The stage row without what animates: the >>> arrows at x381-385 and the next-stage diamond.
-_STATIC_BOXES=((312,120,380,149),(387,120,412,149),(330,384,462,409),(385,438,445,460),(460,438,496,460))
+# The stage row without what animates: the >>> arrows travelling over x380-397 and the next-stage diamond.
+_STATIC_BOXES=((312,120,380,149),(398,120,412,149),(330,384,462,409),(385,438,445,460),(460,438,496,460))
 def same_static(first,second):
     """Only labelled foreground, never the animated transparent background."""
     if getattr(first,'shape',None)!=(479,897,3) or getattr(second,'shape',None)!=(479,897,3):return False
