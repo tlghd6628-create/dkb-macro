@@ -263,7 +263,6 @@ def install(gui):
                     # A guide can open a known full-screen menu after the start check already ran.
                     from owner_start_menu import kind as menu_kind,normalize as leave_menu
                     if menu_kind(first) and menu_kind(first)==menu_kind(second_frame):
-                        from project_adapter.town_services import TownServices
                         leave_menu(TownServices(adapter,context,inputs,['버튼_나가기']))
                         continue
                     if guide_visible(adapter,first,second_frame):
