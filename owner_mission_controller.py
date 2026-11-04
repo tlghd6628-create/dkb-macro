@@ -159,7 +159,7 @@ def restart_idle_quest(ui,idle):
  if getattr(frame,'shape',None)!=(479,897,3):return False
  # A guide can open a known full-screen menu mid-quest, like the treatment screen. Nothing moves until it closes.
  from owner_start_menu import kind as menu_kind,normalize as leave_menu
- if menu_kind(frame) in ('몽련 치료','지도','성장','가호') and not ui.opened:
+ if menu_kind(frame) in ('몽련 치료','지도','성장','가호','영기 수련') and not ui.opened:
   ui.context.wait(.12)
   if menu_kind(ui.frame()):
    leave_menu(ui.service);idle.update(crop=None,at=time.monotonic());return True

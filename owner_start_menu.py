@@ -10,6 +10,16 @@ def growth_title(name='growth'):
  from PIL import Image
  return np.asarray(Image.open(Path(__file__).parent/'assets/start-menu'/(name+'-title.png')).convert('RGB'))
 
+@lru_cache(maxsize=1)
+def training_banner():
+ import numpy as np
+ from PIL import Image
+ return np.asarray(Image.open(Path(__file__).parent/'assets/start-menu/training-none.png').convert('RGB'))
+
+def idle_training(frame):
+ import cv2
+ return float(cv2.matchTemplate(frame[425:452,380:515],training_banner(),cv2.TM_CCOEFF_NORMED).max())>=.97
+
 def kind(frame):
  if getattr(frame,'shape',None)!=(479,897,3):return None
  from owner_skill_ui import skill_screen,quest_screen,map_screen
@@ -17,6 +27,9 @@ def kind(frame):
  if quest_screen(frame):return '임무'
  # A stop during a potion or teleport trip can leave the world map open.
  if map_screen(frame):return '지도'
+ # A guide can open spirit training with nothing running: '진행 중인 수련이 없습니다'. A running
+ # training has no such banner, so it still goes to the existing resume path.
+ if idle_training(frame):return '영기 수련'
  import cv2,numpy as np
  for source,label in (('growth','성장'),('blessing','가호'),('treatment','몽련 치료')):
   title=growth_title(source);patch=frame[7:30,36:101]
