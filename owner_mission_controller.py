@@ -308,6 +308,8 @@ def run(adapter,context,inputs):
    context.checkpoint()
    try:
     require_cleanup_closed(ui)
+    # A dimmed guide or scene blocks every menu, so clear it before opening the quest list.
+    finish_scene(adapter,context,inputs)
     # The next main quest stays locked behind this guide, so check before picking one.
     from owner_guide_skill import run as run_guide_skill
     run_guide_skill(ui)
