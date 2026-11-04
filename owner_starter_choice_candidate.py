@@ -55,8 +55,12 @@ def owned_filter_frame(frame):
 
 def owned_filter_proved(ui):
  """Require a positively observed unchecked filter, not absent checkmark."""
- first=ui.frame();ui.context.wait(.12);second=ui.frame()
- return owned_filter_frame(first) and owned_filter_frame(second)
+ # The list is still settling right after a scroll or filter press, so give it a moment.
+ for attempt in range(5):
+  first=ui.frame();ui.context.wait(.12);second=ui.frame()
+  if owned_filter_frame(first) and owned_filter_frame(second):return True
+  ui.context.wait(.4)
+ return False
 
 def positive_skill_icons(first,second):
  """Find target icons with full-catalog competition in two saved frames.
