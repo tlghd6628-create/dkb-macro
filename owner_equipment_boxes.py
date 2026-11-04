@@ -66,6 +66,16 @@ def plan(worn,level=None,rare_weapon=None):
     if accessories:items.append(ACCESSORY)
     return items,armor,accessories
 
+def story_dialogue(adapter,service):
+    """Two frames showing a known scene-skip control prove a quest scene is on screen."""
+    from project_adapter.main_quest import StateROIs
+    mode=adapter.mode if adapter.mode in ('main_quest','sub_quest') else 'sub_quest'
+    slots=StateROIs(Path(adapter.project.root)/'profiles/DKB',mode=mode)
+    def seen(frame):return any(slots.match(key,frame).get('hit') for key in ('skip','skip_confirm','skip_confirm2'))
+    if not seen(service.capture()):return False
+    service.context.wait(.12)
+    return seen(service.capture())
+
 def native_items(items):
     """The native routine compares fixed list positions: 2 weapon, 3 armor, 4 accessory.
     A shorter list raises IndexError, so unused positions hold a name that is never a bag item."""
@@ -145,8 +155,14 @@ def install(gui):
         close_inventory(service);context.wait(.3)
         previous=(inv.INVENTORY_USE_ITEMS,inv.RARE_ARMOR_PRIORITY,inv.RARE_ACCESSORY_PRIORITY)
         inv.INVENTORY_USE_ITEMS=native_items(items);inv.RARE_ARMOR_PRIORITY=armor;inv.RARE_ACCESSORY_PRIORITY=accessories
-        try:return ordinary(adapter,context,inputs)
+        try:result=ordinary(adapter,context,inputs)
         finally:inv.INVENTORY_USE_ITEMS,inv.RARE_ARMOR_PRIORITY,inv.RARE_ACCESSORY_PRIORITY=previous
+        if result is False and story_dialogue(adapter,service):
+            # A quest scene took over the screen. Let the quest loop finish it; the next visit retries.
+            LOG.info('인벤토리 사용 중 대화 장면 시작 · 중단하지 않고 퀘스트로 복귀')
+            adapter._owner_inventory_skip_generation=getattr(adapter,'_owner_inventory_skip_generation',0)+1
+            return True
+        return result
     @wraps(use)
     def with_energy(adapter,context,inputs):
         skip_before=getattr(adapter,'_owner_inventory_skip_generation',0)
