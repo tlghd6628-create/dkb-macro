@@ -264,6 +264,12 @@ class Observer:
                                           context=self.context,threshold=self.config.get('threshold',.85))
             level=result.get('value') if isinstance(result,dict) else None
             confidence=result.get('confidence') if isinstance(result,dict) else None
+            if type(level) is not int:
+                # This box finds nothing on one digit (0 to 9), so the first enhance of an item never
+                # confirmed. The input-side reader sees those, and still needs two agreeing frames.
+                detail=self.native.read_growth_equipment_detail(self.service,frame,self.config,item=self.ticket['row'])
+                level=detail.get('enhancement') if isinstance(detail,dict) else None
+                confidence=1. if type(level) is int else None
             if (type(level) is not int or not 0<=level<=50 or type(confidence) not in (int,float)
                 or confidence<self.config.get('threshold',.85)):
                 self.last_reason='결과 숫자 판독 실패';return {'screen_proof':False}
