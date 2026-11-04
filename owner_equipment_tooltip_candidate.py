@@ -532,6 +532,9 @@ class Port:
    self.context.wait(.2);x,_=self._frame();self.context.wait(.12);y,_=self._frame()
    if single(x) or single(y) or inventory_parts(x)!=(True,True) or inventory_parts(y)!=(True,True):raise Hold('장비창 종료 후 인벤토리 미확인')
    return 'inventory_restored'
+  # The clicked cell opened nothing (an empty cell read as occupied after a scroll). Nothing to close.
+  if all(inventory_parts(f)==(True,True) and not close_mark(f) and not comparison_shell(f) and _score(f[116:135,345:365],badge())<.90 and _score(f[116:135,420:445],badge())<.90 for f in (a,b)):
+   return 'inventory_restored'
   if not same_comparison_for_close(a,b):raise Hold('판독 불가 장비창 형태 확인 필요')
   for frame in (a,b):
    worn_mark=_score(frame[116:135,345:365],badge())>=.96
