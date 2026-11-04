@@ -206,14 +206,14 @@ class Rows(Base):
  def console(self):
   self.gui.logger=logging.getLogger('fake')
   console=SettingsConsole(self.gui,{});console.window.withdraw();self.addCleanup(console.window.destroy);return console
- def test_every_row_has_its_test_and_treasure_does_not(self):
+ def test_every_row_has_its_test_including_treasure(self):
   console=self.console()
   buttons=[w for w in walk(console.window) if w.winfo_class()=='TButton' and str(w.cget('text'))=='TEST']
   visible={item['id'] for item,_ in console.native.controls}
   # The growth switches sit on the growth pages, each with its own TEST.
   from owner_settings_layout import GROWTH_SWITCHES
   self.assertEqual(len(buttons),len(REWARDS)+len(set(TARGETS)&visible)+len(GROWTH_SWITCHES))
-  self.assertNotIn('auto_challenge.treasure_hunt.enabled',TARGETS)
+  self.assertIn('auto_challenge.treasure_hunt.enabled',TARGETS)
   self.assertIn('auto_challenge.treasure_hunt.enabled',visible)
   self.assertLessEqual({'auto_schedule.boss_raid.enabled','auto_growth.spirit_training.enabled','auto_schedule.field_boss.enabled'},visible)
  def test_each_test_saves_first_and_goes_to_its_own_row(self):
