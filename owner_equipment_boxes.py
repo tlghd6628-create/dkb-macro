@@ -133,6 +133,8 @@ def install(gui):
                 LOG.info('무기 등급 미확인 · 부채 상자 처리 완료 여부를 판단하지 않음')
             else:LOG.info('필요한 장비 상자 없음 · 상자 탐색·개봉 생략')
             return True
+        # The native routine opens the inventory itself. Pressing its button on an open panel closes it.
+        close_inventory(service);context.wait(.3)
         previous=(inv.INVENTORY_USE_ITEMS,inv.RARE_ARMOR_PRIORITY,inv.RARE_ACCESSORY_PRIORITY)
         inv.INVENTORY_USE_ITEMS=items;inv.RARE_ARMOR_PRIORITY=armor;inv.RARE_ACCESSORY_PRIORITY=accessories
         try:return ordinary(adapter,context,inputs)
