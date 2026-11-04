@@ -221,6 +221,7 @@ def install(gui):
                 for key,value in tuple(vars(module).items()):
                     if value is capture_original:setattr(module,key,capture)
     class ServiceOpportunity(BaseException):pass
+    class TimedOpportunity(BaseException):pass
     if not getattr(Adapter._run_auto_features,'_owner_task_flow',False):
         ordinary_features=Adapter._run_auto_features
         ordinary_run=Adapter.run
@@ -263,6 +264,10 @@ def install(gui):
                     progress.begin_work(adapter.mode)
                     from owner_quest_preflight import read_quest
                     read_quest(adapter,context,inputs)
+                    # A quest needs to walk to its monsters: fixed at 5m it sat on 0/12 for 18 minutes.
+                    # Going back to hunting restores the record through the sleep entry.
+                    from owner_boss_range import pending as range_open,loosen
+                    if range_open(adapter.project.root) is None:loosen(adapter,context,inputs)
                 while True:
                     context.checkpoint()
                     try:
@@ -280,6 +285,10 @@ def install(gui):
                         try:dispatch(adapter,context,ordinary_features)
                         finally:LOCAL.dispatching=False
                         # A fresh native runner starts its timers after services.
+                    except TimedOpportunity:
+                        # A job that leaves the quest returns through ResumeWork, as from a boss.
+                        from owner_timetable import idle_once
+                        idle_once(adapter,context,inputs)
             finally:LOCAL.quest_owner=old
         Adapter.run_main_quest=quest
         @wraps(ordinary_step)
@@ -292,6 +301,15 @@ def install(gui):
                 if not pending(adapter,context) and elapsed>=120:defer(adapter,context,inputs)
                 if pending(adapter,context) and elapsed>=20 and not getattr(inputs,'held',()):
                     context.checkpoint();raise ServiceOpportunity('현재 위치에서 부수 작업 처리')
+            # A long fight never reaches auto_move: the 07:10 dungeon was still waiting at 07:26.
+            if owner and state and state[1]=='quest_active' and state[2]>=started:
+                adapter,context,inputs=owner
+                now=time.monotonic()
+                if now-getattr(adapter,'_owner_last_time_check',-1e30)>=30 and not getattr(inputs,'held',()):
+                    adapter._owner_last_time_check=now
+                    from owner_timetable import planner
+                    if planner(adapter).due():
+                        context.checkpoint();raise TimedOpportunity('예약 시간이 된 작업 처리')
             return result
         BoundedMainQuestRunner.step=step
     handler=MotionLogs();gui.logger.addHandler(handler)
