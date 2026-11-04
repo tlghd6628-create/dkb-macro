@@ -29,8 +29,6 @@ TARGETS={
  'auto_challenge.secret_folktale.enabled':('전래동화 비경 24시간',DISPATCH),
  'auto_growth.spirit_training.enabled':('영기수련',DISPATCH),
 }
-HINTS={'비경·보스':'TEST는 실제로 실행합니다. 입장 시간·횟수를 씁니다. 레이드는 지정 단계에 실제로 1회 입장합니다. 보물찾기는 TEST 없음.',
-       '수련':'TEST는 실제로 실행합니다.'}
 # Log text that says the native run ended without doing its work.
 NOT_DONE=re.compile('건너뜀|보류|미완료|진입 불가|티켓 없음|생략|실패|미감지|미확인')
 
