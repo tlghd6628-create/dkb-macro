@@ -61,6 +61,19 @@ def parse_level(number_pages,header_pages):
     return next(iter(digits)) if len(digits)==1 and digits==labels else None
 
 
+def read_level(number,korean,frame):
+    """A one-digit level leaves the name's first glyph in the two-digit box, so '1' reads as '18'."""
+    header=korean.predict(resized(frame,(32,7,76,20)))
+    wide=number.predict(resized(frame,(53,9,12,15)))
+    level=parse_level(wide,header)
+    if level is not None:return level
+    # A strong two-digit reading contradicts the header: keep holding, never narrow past it.
+    if any(s>=.985 and re.fullmatch(r'\d{2}',t.strip()) for t,s in texts(wide)):return None
+    labels={int(m[1]) for t,s in texts(header) if s>=.88 for m in [re.search(r'레벨\s*(\d{1,2})(?!\d)',t)] if m}
+    if len(labels)!=1 or next(iter(labels))>=10:return None
+    return parse_level(number.predict(resized(frame,(53,9,8,15))),header)
+
+
 def parse_power(pages,minimum=.98):
     values=set()
     for text,score in texts(pages):
@@ -101,7 +114,34 @@ def read_inventory_power(engine,frame):
         alternate=engine.predict(cv2.resize(patch,None,fx=3,fy=3,interpolation=cv2.INTER_CUBIC))
         a,b=parse_power(original,.90),parse_power(alternate,.92)
         if a is not None and a==b:return a
-    return parse_power(engine.predict(power_image(frame)))
+    value=parse_power(engine.predict(power_image(frame)))
+    return value if value is not None else read_short_power(engine,frame)
+
+
+def power_digits_box(frame):
+    """Crop after the orange x icon: a short value leaves its tail in the fixed box."""
+    import numpy as np
+    part=frame[47:64,35:85]
+    r,g,b=(part[:,:,i].astype('float32') for i in range(3))
+    columns=((r>130)&(g>65)&(r>g*1.12)&(g>b*1.5)).any(axis=0)
+    ink=np.flatnonzero(columns)
+    if not len(ink):return None
+    gaps=np.flatnonzero(np.diff(ink)>1)
+    if not len(gaps):return None
+    start=35+int(ink[gaps[0]+1])-1
+    return (start,47,85-start,17)
+
+
+def read_short_power(engine,frame):
+    """Four- and five-digit power at a low level. Two resamplings must agree exactly."""
+    import cv2
+    box=power_digits_box(frame) if inventory_parts(frame)==(True,True) else None
+    if box is None:return None
+    x,y,w,h=box
+    patch=cv2.copyMakeBorder(frame[y:y+h,x:x+w],8,8,8,8,cv2.BORDER_CONSTANT,value=(40,40,40))
+    a=parse_power(engine.predict(cv2.resize(patch,None,fx=4,fy=4,interpolation=cv2.INTER_CUBIC)),.92)
+    b=parse_power(engine.predict(cv2.resize(patch,None,fx=3,fy=3,interpolation=cv2.INTER_LINEAR)),.92)
+    return a if a is not None and a==b else None
 
 
 class Progress(QuestMemory):
@@ -191,7 +231,7 @@ def observe_inventory(service,*,force=False):
         try:
             values=[]
             for frame in frames:
-                values.append((parse_level(number.predict(resized(frame,(53,9,12,15))),korean.predict(resized(frame,(32,7,76,20)))),read_inventory_power(number,frame)))
+                values.append((read_level(number,korean,frame),read_inventory_power(number,frame)))
             reply.append(values)
         except Exception as exc:reply.append(exc)
         finally:done.set()
