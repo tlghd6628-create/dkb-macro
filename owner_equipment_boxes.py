@@ -76,6 +76,14 @@ def story_dialogue(adapter,service):
     service.context.wait(.12)
     return seen(service.capture())
 
+def visit_interrupted(adapter,service):
+    """The panel could not open because a scene or a zone change took the screen. Spent nothing.
+    Five in a row is a real fault, so it stops the run as before."""
+    from owner_progression import inventory_parts
+    skips=getattr(adapter,'_owner_inventory_skips',0)+1;adapter._owner_inventory_skips=skips
+    if skips>=5:return False
+    return story_dialogue(adapter,service) or not any(inventory_parts(service.capture()))
+
 def native_items(items):
     """The native routine compares fixed list positions: 2 weapon, 3 armor, 4 accessory.
     A shorter list raises IndexError, so unused positions hold a name that is never a bag item."""
@@ -127,11 +135,12 @@ def install(gui):
         service=TownServices(adapter,context,inputs,inv.INVENTORY_USE_NAMES)
         try:
             if inv.open_inventory(service) is False:raise RuntimeError('상자 처리 전 장착 상태를 확인하지 못했습니다.')
-        except RuntimeError:
-            if not story_dialogue(adapter,service):raise
-            LOG.info('인벤토리 열기 중 대화 장면 시작 · 중단하지 않고 퀘스트로 복귀')
+        except RuntimeError as exc:
+            if not visit_interrupted(adapter,service):raise
+            LOG.info('인벤토리 방문 건너뜀 · 대화 장면 또는 지역 이동 · 퀘스트로 복귀 · %s',str(exc)[:40])
             adapter._owner_inventory_skip_generation=getattr(adapter,'_owner_inventory_skip_generation',0)+1
             return True
+        adapter._owner_inventory_skips=0
         first=service.capture();context.wait(.15);service.check();second=service.capture()
         worn=agree(first,second)
         rare_weapon=paired_rare_weapon(Path(adapter.project.root)/'profiles/DKB',first,second) if worn.get('무기') is True else None
