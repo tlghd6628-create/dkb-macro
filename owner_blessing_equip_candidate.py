@@ -132,6 +132,10 @@ def equip_selected(service,context,identity,order,*,settings_check,reader=read_c
         context.checkpoint();service.check();frame=service.capture()
         if callable(candidate_check) and candidate_check(frame) is not True:candidate_proven=False
         value=reader(root,frame)
+        # OCR splits the same title differently from frame to frame. Nothing is pressed here.
+        for _ in range(3):
+            if value is not None:break
+            context.wait(.2);context.checkpoint();service.check();frame=service.capture();value=reader(root,frame)
         if equip_hit(frame) is None or not compare_worn_mark(frame):
             from owner_gear_hold_capture_candidate import enqueue
             enqueue(service.adapter.project.root,'blessing-compare','장착 버튼=%s · 착용 표시=%s'%(equip_hit(frame) is not None,bool(compare_worn_mark(frame))),(frame,))

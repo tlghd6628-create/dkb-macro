@@ -123,7 +123,10 @@ class AwakeningObserver:
                 scores.append((row.get('index'),score))
             own=next((v for i,v in scores if i==self.ticket['index']),None)
             other=[v for i,v in scores if i!=self.ticket['index']]
-            if own is not None and other and own>=.80 and own-max(other)>=.30:return True
+            # A white-grade icon draws differently in the centre: .65 to .70 on real screens,
+            # still .43 clear of every other item. The lead is what tells items apart.
+            floor=.60 if self.ticket.get('grade')=='일반' else .80
+            if own is not None and other and own>=floor and own-max(other)>=.30:return True
         return False
 
     def _read(self,frame):
