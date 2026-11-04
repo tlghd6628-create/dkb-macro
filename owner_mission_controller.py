@@ -108,6 +108,8 @@ def release_functional_hold(book,key):
  row.pop('block');book.commit();return True
 
 STORY_RECHECK_SECONDS=300
+# Real minimap change at level 17: about 4 while standing with monsters around, 22 while walking.
+IDLE_MINIMAP_CHANGE=10;IDLE_SECONDS=120
 
 def pending_death_baselines(book):
  return [row for row in book.item.get('quests',{}).values() if row.get('block',{}).get('reason')=='death' and row['block'].get('baseline') is None and row.get('completed') is not True]
@@ -147,6 +149,20 @@ def defer_full_queue(book,power):
 
 def hunt_started(result):
  return result is True or result in ('HUNTING_RESUMED','HUNTING_STARTED')
+
+def restart_idle_quest(ui,idle):
+ """Auto-move can drop after a boss fight, and the native runner then only clicks empty ground.
+ A minimap unchanged for two minutes on the bare field presses the quest's own auto-progress again."""
+ import numpy as np
+ frame=ui.frame()
+ if getattr(frame,'shape',None)!=(479,897,3):return False
+ now=time.monotonic();crop=frame[18:100,12:95].mean(axis=2)
+ if idle.get('crop') is None or float(np.abs(crop-idle['crop']).mean())>IDLE_MINIMAP_CHANGE:
+  idle.update(crop=crop,at=now);return False
+ if now-idle['at']<IDLE_SECONDS or not ui.normal():return False
+ LOG.info('메인퀘 자리 정체 %d초 · 자동 진행 다시 누름',now-idle['at'])
+ ui.open('main_quest');ui.start_selected();idle.update(crop=None,at=now)
+ return True
 
 def finish_scene(adapter,context,inputs):
  """F1 during a quest scene: no panel can open until it ends. Skip it the way the start stage does."""
@@ -395,13 +411,13 @@ def run(adapter,context,inputs):
     runner=BoundedMainQuestRunner(StateROIs(profile,mode=adapter.mode),**deps)
     from project_adapter.reservations import QuestBossReservation
     boss_reservation=QuestBossReservation(adapter,runner)
-    started=time.monotonic();next_teleport=started+1;next_emote=started+1;next_guide=started+5;scene_changes=[];emote_failed_since=None
+    started=time.monotonic();next_teleport=started+1;next_emote=started+1;next_guide=started+5;idle_quest={};scene_changes=[];emote_failed_since=None
     while True:
      context.checkpoint()
      if time.monotonic()>=next_guide:
       next_guide=time.monotonic()+15
       from owner_guide_skill import run as run_guide_skill
-      if run_guide_skill(ui):
+      if run_guide_skill(ui) or (adapter.mode=='main_quest' and restart_idle_quest(ui,idle_quest)):
        runner=BoundedMainQuestRunner(StateROIs(profile,mode=adapter.mode),**deps)
        boss_reservation=QuestBossReservation(adapter,runner);scene_changes=[]
        LOCAL.active=(adapter,context,key,time.monotonic()+6)
