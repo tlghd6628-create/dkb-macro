@@ -882,6 +882,9 @@ def appointment(root,catalog_key,when,values=None):
     return (prefix+value.strftime('%m/%d %H:%M:%S') if value>when else '지연 · 현재 작업 종료 후')+(' · 랜덤 ±%d초'%spread if spread else '')
 
 def invoke(adapter,job,context,inputs):
+    # A story scene blocks every menu a job would open, so each job after it failed too.
+    from owner_mission_controller import finish_scene
+    finish_scene(adapter,context,inputs)
     if job.key in ('shop','shop_weekly_verify'):
         from owner_shop_runtime_candidate import dispatch_configured
         from owner_schedule_priority import LOCAL as priority
