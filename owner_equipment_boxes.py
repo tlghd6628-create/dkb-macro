@@ -136,7 +136,9 @@ def install(gui):
         # The native routine opens the inventory itself. Pressing its button on an open panel closes it.
         close_inventory(service);context.wait(.3)
         previous=(inv.INVENTORY_USE_ITEMS,inv.RARE_ARMOR_PRIORITY,inv.RARE_ACCESSORY_PRIORITY)
-        inv.INVENTORY_USE_ITEMS=items;inv.RARE_ARMOR_PRIORITY=armor;inv.RARE_ACCESSORY_PRIORITY=accessories
+        # The native routine reads three fixed positions, so a shorter list raises IndexError.
+        # Repeat allowed names rather than padding with a box this plan did not choose.
+        inv.INVENTORY_USE_ITEMS=(items*3)[:max(3,len(items))];inv.RARE_ARMOR_PRIORITY=armor;inv.RARE_ACCESSORY_PRIORITY=accessories
         try:return ordinary(adapter,context,inputs)
         finally:inv.INVENTORY_USE_ITEMS,inv.RARE_ARMOR_PRIORITY,inv.RARE_ACCESSORY_PRIORITY=previous
     @wraps(use)
