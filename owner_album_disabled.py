@@ -7,17 +7,30 @@ FLAGS=('auto_rewards.album.enabled','custom.auto_rewards.album.enabled')
 COMPLETE='버튼_전체매뉴_화첩_완성';CHECK='체크_전체매뉴_화첩'
 class AlbumBoundary(BaseException):pass
 class AlbumNothingLeft(BaseException):pass
-LOOKS_AGAIN='다른 빨점 재확인';MOST_LOOKS=2
+LOOKS_AGAIN='다른 빨점 재확인';MOST_LOOKS=2;WHOLE_SCREEN=(0,0,897,479)
 
 class NoDots(logging.Handler):
  """The original looks again for a dot it cannot place, and at 1366x768 did so for five minutes (17:27). A press or
- any other step logs something else in between, so looks in a row mean nothing is left to claim."""
+ any other step logs something else in between, so looks in a row mean nothing is left to claim. When the real pixels
+ can say so, the first look is enough; the count stays for screens they cannot speak for."""
  looks=0
+ def __init__(self,screen_clear=None):
+  super().__init__();self.screen_clear=screen_clear
  def emit(self,record):
   text=record.getMessage()
   if '화첩' not in text:return
   self.looks=self.looks+1 if LOOKS_AGAIN in text else 0
-  if self.looks>=MOST_LOOKS:raise AlbumNothingLeft()
+  if self.looks>=MOST_LOOKS or (self.looks and self.screen_clear is not None and self.screen_clear()):raise AlbumNothingLeft()
+
+def screen_clear(service):
+ """True only on the album screen, seen on real pixels, with no red dot anywhere on it. Anything else leaves it to the count."""
+ from owner_reward_visual_guard import notice_dots
+ try:
+  frame=service.capture()
+  if getattr(frame,'hi',None) is None or not service.detector.find(CHECK,frame,threshold=.95):return False
+  return not notice_dots(frame,WHOLE_SCREEN)
+ except Exception as exc:
+  LOG.debug('album dot read: %s',exc);return False
 
 def completion_hit(service,frame):
  if not service.detector.find(CHECK,frame,threshold=.95):return None
@@ -80,7 +93,7 @@ def install(gui):
   mode=Store(adapter.project.root,identity).read()['album']['mode']
   previous=getattr(LOCAL,'scope',None)
   scope={'adapter':adapter,'identity':identity,'mode':mode,'sent':False};LOCAL.scope=scope
-  watch=NoDots();LOG.addHandler(watch)
+  watch=NoDots(lambda:screen_clear(TownServices(adapter,context,inputs,[CHECK])));LOG.addHandler(watch)
   try:
    try:
     result=original(adapter,context,inputs)
