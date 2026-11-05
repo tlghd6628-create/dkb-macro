@@ -12,7 +12,9 @@ GROWTH,STYLE,ALBUM,BLESSING,PRESET='growth','style','album','blessing','preset'
 TREASURE='treasure'
 SHOP='shop';SHOP_KEY='owner_shop.enabled'
 WORN='worn';WORN_KEY='owner_worn.status'
+COUPON='coupon'
 TARGETS={
+ 'main_quest.first_coupon.enabled':('쿠폰 등록',COUPON),
  WORN_KEY:('착용 현재값 확인',WORN),
  SHOP_KEY:('잡화상점 구매',SHOP),
  'auto_schedule.boss_raid.skill_preset.enabled':('레이드 단일 덱 구성',PRESET),
@@ -225,12 +227,23 @@ def growth(adapter,context,inputs,key):
     if getattr(adapter,'_owner_growth_pending_hold',False):return '보류 · 실행 로그 확인'
     return result
 
+def coupon(adapter,context,inputs):
+    """The start's coupon step alone. Only codes with no record are entered."""
+    from owner_quest_preflight import read_power
+    from owner_coupons import identity_values
+    from owner_startup_receipts import initial_coupons,terminal_coupons
+    read_power(adapter,context,inputs)
+    if not initial_coupons(adapter,context,inputs):return '등록할 쿠폰 없음'
+    pending,complete=terminal_coupons(adapter.project.root,identity_values())
+    return '기록 %d개'%len(complete)+(' · 미완료 '+', '.join(sorted(pending)) if pending else '')
+
 def execute(adapter,context,inputs,key):
     from owner_timetable import LOCAL
     from owner_work_resume import ResumeWork
     kind=TARGETS[key][1];before=adapter.values;adapter.values=only(before,key)
     previous=getattr(LOCAL,'native_job',None);LOCAL.native_job=key
     try:
+        if kind==COUPON:return coupon(adapter,context,inputs)
         if kind==RAID:return raid_real(adapter,context,inputs)
         if kind==TREASURE:return treasure(adapter,context,inputs,key)
         if kind==SHOP:return shop(adapter,context,inputs)
