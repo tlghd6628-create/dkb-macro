@@ -6,6 +6,8 @@ import hashlib,json,logging,re,threading,time
 from owner_skill_goal import Pending,STORY,GATES,FINAL,catalog,requested_plan
 LOG=logging.getLogger('project_gui.DKB')
 ASSETS=Path(__file__).parent/'assets/skill-goal'
+# An ultimate is switched on with 활성화 where a skill goes on with 장착.
+ROW_PUT_ON=('장착','활성화');ULTIMATE_SLOT=(609,358,38,38)
 SLOTS=((492,420),(530,420),(568,420),(607,420),(645,420),(512,378),(550,378),(588,378))
 
 class ExactRowsCache:
@@ -686,12 +688,60 @@ class SkillUI:
             if signature==previous:return found
             previous=signature;self.drag((762,425),(762,117),skill_screen)
         raise Pending('보유 도술 목록 끝 확인 실패')
-    def find_skill(self,sid):
-        self.all_filter(False)
+    def _skill_info(self,sid):
+        """public['skills'] holds the ranked builds only; every skill is in all_skill_names."""
+        row=self.public['skills'].get(str(sid))
+        if row:return row
+        for name,row in self.public['all_skill_names'].items():
+            if row['id']==sid:return dict(row,name=name)
+        raise Pending('도술 목록에 없는 번호: %s'%sid)
+    def _reads_as(self,text,name):
+        """The title is for one row already chosen, and the game's small text is not always the catalog's spelling."""
+        from difflib import SequenceMatcher
+        return SequenceMatcher(None,clean(text),clean(name),autojunk=False).ratio()>=.7
+    def _nearest_skill(self,text):
+        """The one skill this reading is clearly closest to, or None. '내려픽기' is 내려찍기."""
+        from difflib import SequenceMatcher
+        text=clean(text)
+        if len(text)<2:return None
+        rank=sorted(((SequenceMatcher(None,text,clean(name),autojunk=False).ratio(),name) for name in self.public['all_skill_names']),reverse=True)
+        return rank[0][1] if rank[0][0]>=.7 and rank[0][0]-rank[1][0]>=.1 else None
+    def _row_by_near_name(self,sid):
+        name=self._skill_info(sid)['name']
+        for row in self._owner_last_rows_raw[2][0][-1]:
+            if row.get('score',0)>=.60 and self._nearest_skill(row['text'])==name:return dict(row,id=sid,name=name)
+        return None
+    def _row_by_icon(self,sid,rows):
+        """A name the reader missed. Rows sit on a fixed pitch and the icon is exact, so one read row finds the others."""
+        if not rows:return None
+        frame=self.frame();start=rows[0]['y'];pitch=45.6
+        for n in range(-9,10):
+            y=round(start+pitch*n)
+            if 95<=y<=425 and identify_icon(frame,(695,y-20,40,40))==sid:
+                return {'id':sid,'y':y,'name':self._skill_info(sid)['name'],'x':754,'score':0.}
+        return None
+    def find_skill(self,sid,owned_only=False):
+        self.all_filter(owned_only)
+        if owned_only:
+            # The style's own tab is a page or two instead of the whole list. Without it, the whole list still works.
+            try:self.click_word(self._skill_info(sid)['style'],(850,30,45,450),skill_screen,minimum=.80);self.context.wait(.4)
+            except Pending:pass
         for _ in range(3):self.drag((762,118),(762,424),skill_screen)
         previous=None
         for _ in range(24):
             rows=self.skill_rows();hit=next((r for r in rows if r['id']==sid),None)
+            if hit is None and owned_only:hit=self._row_by_near_name(sid) or self._row_by_icon(sid,rows)
+            if hit and owned_only:
+                icon=identify_icon(self.frame(),(695,hit['y']-20,40,40))
+                if icon is not None and icon!=sid:raise Pending('선택 도술 아이콘/이름 대조 실패: '+hit['name'])
+                self.click(754,hit['y'],skill_screen)
+                # A near-match only opens the row; the big title beside the deck has to name it.
+                for attempt in range(6):
+                    self.context.wait(.4)
+                    try:rows=self.rows((46,70,155,25))
+                    except Pending:continue
+                    if any(self._reads_as(r['text'],hit['name']) for r in rows if r.get('score',0)>=.80):return hit
+                raise Pending('선택 도술 이름 확인 필요: '+hit['name'])
             if hit:
                 if sid==59:
                     self._click_chain59_paired(hit)
@@ -722,8 +772,9 @@ class SkillUI:
                             return {'id':39,'name':'쇠뇌 사격','y':b}
             signature=tuple((r['id'],r['y']) for r in rows)
             if not rows or signature==previous:break
-            previous=signature;self.drag((762,425),(762,117),skill_screen)
-        raise Pending('도술 목록에서 찾지 못함: '+self.public['skills'][str(sid)]['name'])
+            # A long quick drag flings the list past whole rows; a held short one keeps rows of the page before.
+            previous=signature;self.drag((762,340),(762,140),skill_screen,hold=.3);self.context.wait(.3)
+        raise Pending('도술 목록에서 찾지 못함: '+self._skill_info(sid)['name'])
     def _click_chain59_paired(self,hit):
         """Use paired exact OCR+all-catalog image proof and recheck on click."""
         import cv2,numpy as np
@@ -1116,46 +1167,146 @@ class SkillUI:
                 names={n['id'] for name,n in self.public['all_skill_names'].items() for r in rows if r['score']>=.94 and clean(r['text'])==clean(name)}
                 if len(names)==1:result[i]=next(iter(names))
         return result
-    def equip(self,sid,index):
+    def equip(self,sid,index,owned_only=False):
         x,y=SLOTS[index]
         if self.current_slots({index})[index]==sid:return
-        row=self.find_skill(sid);row_box=(798,row['y']-15,35,30)
+        row=self.find_skill(sid,owned_only);row_box=(798,row['y']-15,35,30)
         row_proof=lambda f:skill_screen(f) and identify_icon(f,(695,row['y']-20,40,40))==sid
-        actions=[clean(r['text']) for r in self.rows(row_box) if r.get('score',0)>=.94 and clean(r.get('text','')) in ('해제','장착')]
+        # The word appears on the row a moment after it is picked, while the left panel slides.
+        for attempt in range(6):
+            actions=[clean(r['text']) for r in self.rows(row_box) if r.get('score',0)>=.94 and clean(r.get('text','')) in ('해제','장착')]
+            if len(actions)==1:break
+            self.context.wait(.3)
         if len(actions)!=1:raise Pending('선택한 도술의 장착 상태 확인 필요')
         if actions[0]=='해제':self.click_word('해제',row_box,row_proof,minimum=.94)
-        self.click(x,y,skill_screen);row=self.find_skill(sid)
+        self.click(x,y,skill_screen);row=self.find_skill(sid,owned_only)
         self.click_word('장착',(798,row['y']-15,35,30),
                         lambda f:skill_screen(f) and identify_icon(f,(695,row['y']-20,40,40))==sid,minimum=.94)
         self.wait(skill_screen)
-        self.context.wait(.12)
-        if self.current_slots({index})[index]!=sid:raise Pending('장착 도술 사후 확인 실패')
+        for attempt in range(6):
+            self.context.wait(.4)
+            if self.current_slots({index})[index]==sid:return
+        raise Pending('장착 도술 사후 확인 실패')
+    def _row_action(self):
+        """The word on the picked row, which is the only row showing one, with where it is.
+
+        It appears a moment after the pick, while the left panel slides. The list can also move, so the
+        whole column is read. Small text: 활성화 reads as 촬성화, so that word goes by its ending.
+        """
+        for attempt in range(8):
+            # Only this word has to agree across the two frames, not stray marks over the moving art.
+            self.rows_batch([((786,79,50,365),'korean',.80,'original',None,lambda a,b:True)])
+            def words(rows):
+                found=[]
+                for row in rows:
+                    text=clean(row.get('text',''))
+                    if row.get('score',0)<.80:continue
+                    word='비활성화' if text.startswith('비') and text.endswith('성화') else '활성화' if text.endswith('성화') else text if text in ('해제','장착') else None
+                    if word:found.append((word,row['x'],row['y']))
+                return found
+            first,second=(words(rows) for rows in self._owner_last_rows_raw[2][0])
+            if len(second)==1 and len(first)==1 and first[0][0]==second[0][0] and abs(first[0][2]-second[0][2])<=3:return second[0]
+            self.context.wait(.3)
+        return None
+    def wear(self,sid):
+        """Put a learned skill anywhere in the current deck.
+
+        Which slot it lands in is the game's choice: picking the list filter drops the slot selection, so
+        it fills the next open one. The cast order is set separately, so only being in the deck matters.
+        The row's word changing afterwards is the proof, and needs no icon match.
+        """
+        # Pressing 활성화 only plays a preview: the word stays, and the big slot shows what is set.
+        ultimate=self.public['all_skill_names'].get(self._skill_info(sid)['name'],{}).get('ultimate') is True
+        self.find_skill(sid,True)
+        # An ultimate's row keeps saying 활성화 while it sits in its own big slot, so that slot decides.
+        if ultimate and identify_icon(self.frame(),ULTIMATE_SLOT)==sid:return False
+        action=self._row_action()
+        if action is None:raise Pending('선택한 도술의 장착 상태 확인 필요')
+        if action[0] not in ROW_PUT_ON:return False
+        self.click(action[1],action[2],skill_screen)
+        self.wait(skill_screen)
+        for attempt in range(2):
+            if ultimate:
+                self.context.wait(.6)
+                if identify_icon(self.frame(),ULTIMATE_SLOT)==sid:return True
+                continue
+            action=self._row_action()
+            if action is not None and action[0] not in ROW_PUT_ON:return True
+            # The list moved or the pick dropped when the skill went in, so look the row up again.
+            self.find_skill(sid,True)
+        raise Pending('장착 도술 사후 확인 실패')
     def order_row(self):
+        return [sid for sid in self._order_slots() if sid is not None]
+    def _order_filled(self,desired):
+        """Columns nothing could name are filled from the wanted skills not seen yet.
+
+        Only those few are candidates, so even a poor reading tells them apart, and one left over needs none.
+        """
+        from difflib import SequenceMatcher
+        # '단 찌르기' is nearest to 찌르기 though the deck holds 삼단 찌르기; a name outside the deck is no reading.
+        slots=[sid if sid in desired else None for sid in self._order_slots()]
+        unseen=[sid for sid in desired if sid not in slots]
+        empty=[i for i,sid in enumerate(slots) if sid is None]
+        if len(empty)==len(unseen):
+            for i in list(empty):
+                text=clean(self._order_texts.get(i,''))
+                if not text or len(unseen)==1:continue
+                rank=sorted(((SequenceMatcher(None,text,clean(self._skill_info(sid)['name']),autojunk=False).ratio(),sid) for sid in unseen),reverse=True)
+                if rank[0][0]>=.3 and rank[0][0]-rank[1][0]>=.15:
+                    slots[i]=rank[0][1];unseen.remove(rank[0][1]);empty.remove(i)
+            if len(empty)==1 and len(unseen)==1:slots[empty[0]]=unseen[0]
+        return [sid for sid in slots if sid is not None]
+    def _order_slots(self):
         frame=self.frame();items=[]
         # Header icons are fixed 50px apart; 5~8 skills plus ultimate.
         for i in range(9):
             x=252+i*50
             if x>665:break
-            sid=identify_icon(frame,(x-19,82,38,41))
-            if sid is not None:items.append(sid)
+            items.append(identify_icon(frame,(x-19,82,38,41)))
+        # Several icons have no reference picture; each one has its name printed under it.
+        unknown=[i for i,sid in enumerate(items) if sid is None]
+        self._order_texts={}
+        if unknown:
+            self.rows_batch([((252+i*50-26,124,52,15),'korean',0,'original',None,lambda a,b:True) for i in unknown])
+            known=self.public['all_skill_names']
+            for i,pair in zip(unknown,self._owner_last_rows_raw[2]):
+                names={self._nearest_skill(r['text']) for rows in pair for r in rows if r.get('score',0)>=.60}-{None}
+                if len(names)==1:items[i]=known[names.pop()]['id']
+                self._order_texts[i]=''.join(str(r.get('text','')) for r in pair[-1])
+        # Columns past the deck's end have no icon and no name.
+        while items and items[-1] is None and self._order_column_empty(frame,len(items)-1):items.pop()
         return items
+    def _order_column_empty(self,frame,i):
+        x=252+i*50
+        return float(frame[85:120,x-15:x+15].std())<12
     def set_order(self,desired):
         self.click(176,459,skill_screen)
         self.word('사용 순서 설정',(360,39,180,25),minimum=.94)
         proof=lambda f:match(f,'order-title',(410,40,80,27),.96) is not None
-        current=self.order_row()
-        if set(current)!=set(desired):raise Pending('시전 순서 도술 목록 불일치')
+        current=self._order_filled(desired)
+        if set(current)!=set(desired):
+            LOG.info('시전 순서 목록 다름 · 화면=%s · 목표=%s',current,desired)
+            # Left open, this popup blocks the next run's start.
+            self.click(425,441,proof);self.wait(skill_screen)
+            raise Pending('시전 순서 도술 목록 불일치')
         for i,sid in enumerate(desired):
-            current=self.order_row()
+            current=self._order_filled(desired)
             if current[i]==sid:continue
             j=current.index(sid)
             self.drag((252+j*50,103),(252+i*50,103),proof)
-            if self.order_row()[:i+1]!=desired[:i+1]:raise Pending('도술 시전 순서 이동 확인 실패')
+            # The icons are still sliding right after the drop.
+            for attempt in range(6):
+                self.context.wait(.4)
+                if self._order_filled(desired)[:i+1]==desired[:i+1]:break
+            else:
+                LOG.info('시전 순서 이동 확인 실패 · 화면=%s · 목표=%s',self._order_filled(desired),desired)
+                self.click(425,441,proof);self.wait(skill_screen)  # left open, this popup blocks the next run's start
+                raise Pending('도술 시전 순서 이동 확인 실패')
         self.click(509,441,proof);self.wait(skill_screen)
         # Reopen and verify saved order, rather than trusting the save click.
         self.click(176,459,skill_screen)
         self.word('사용 순서 설정',(360,39,180,25),minimum=.94)
-        if self.order_row()!=desired:raise Pending('저장된 시전 순서 재확인 실패')
+        if self._order_filled(desired)!=desired:raise Pending('저장된 시전 순서 재확인 실패')
         self.click(425,441,proof);self.wait(skill_screen)
     def configure_both(self,ledger):
         raise Pending('이전 광역·단일 동시 설정은 사용하지 않습니다 · 광역 1번 경로 필요')

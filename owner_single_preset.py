@@ -7,6 +7,8 @@ import logging
 from pathlib import Path
 LOG=logging.getLogger('project_gui.DKB')
 
+SUBSTITUTES={'찌르기':'삼단 찌르기'}
+
 def _flag(adapter):return Path(adapter.project.root)/'settings/owner-preset-return.flag'
 
 def mark(adapter,on):
@@ -35,6 +37,9 @@ def resume(adapter,context,inputs):
 def configure(adapter,context,inputs):
     from owner_skill_ui import SkillUI
     from owner_skill_goal import Pending
+    # A half-built deck in a monster field killed the character while this menu was open (11-05 10:41).
+    if adapter.run_town_return(context,inputs) is False:raise Pending('단일 덱 구성 전 마을 복귀 미확인')
+    context.checkpoint()
     ui=SkillUI(adapter,context,inputs)
     # Stopped halfway, the game stays on this half-built deck: real power fell 151,740 to 123,852.
     mark(adapter,True)
@@ -44,16 +49,30 @@ def configure(adapter,context,inputs):
     order.insert(row['ultimate_at'],row['ultimate']['id'])
     ui.select_preset(2)
     context.checkpoint()
-    unlocked=ui.unlocked();placed=[];missing=[]
-    for index,sid in enumerate(slots):
+    placed=[];missing=[]
+    def wear_each(sid):
         context.checkpoint()
-        if index not in unlocked:missing.append(('잠긴 칸',index));continue
-        # The left panel slides when a slot or row is picked, so an early pair of reads disagrees.
-        for attempt in range(4):
-            try:ui.equip(sid,index);placed.append(sid);break
+        name=ui._skill_info(sid)['name']
+        # The left panel slides when a row is picked, so an early pair of reads disagrees.
+        for attempt in range(3):
+            try:
+                ui.wear(sid);placed.append(sid)
+                LOG.info('프리셋 2번 장착 · %s',name);return True
             except Pending as exc:
-                if attempt==3:missing.append((sid,str(exc)[:40]))
+                LOG.info('프리셋 2번 장착 재시도 · %s · %s',name,str(exc)[:60])
+                # Missing twice from the owned list means not learned; a third whole pass only costs time.
+                if attempt==1 and '찾지 못함' in str(exc):return False
                 context.wait(.8)
+        return False
+    for sid in slots+[row['ultimate']['id']]:
+        if wear_each(sid):continue
+        # Not learned on this character. Keeps the deck full; the skill is never bought here.
+        other=SUBSTITUTES.get(ui._skill_info(sid)['name'])
+        other=ui.public['all_skill_names'][other]['id'] if other else None
+        if other is not None and wear_each(other):
+            LOG.info('프리셋 2번 대체 · %s 미학습 · %s 사용',ui._skill_info(sid)['name'],ui._skill_info(other)['name'])
+            order=[other if s==sid else s for s in order];continue
+        missing.append(ui._skill_info(sid)['name'])
     if not missing:
         ui.set_order(order)
     ui.select_preset(1)
