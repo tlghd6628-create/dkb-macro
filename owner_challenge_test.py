@@ -205,9 +205,11 @@ def growth(adapter,context,inputs,key):
         else:del adapter.get_due_schedules
     if key=='auto_growth.equipment.enabled':
         # The growth list leaves out finished worn items, so the table is filled from their tooltips.
-        from owner_worn_stats import inspect_equipped,FULL_SECONDS
+        # A slot takes eight to ten seconds, and eleven took 190 s with the table already full. Only what is old or empty.
+        from owner_worn_stats import inspect_equipped,stale_slots,FULL_SECONDS
+        from owner_hunt_rules_candidate import configured_identity
         adapter._owner_worn_resume=None
-        inspect_equipped(adapter,context,inputs,max_seconds=FULL_SECONDS)
+        inspect_equipped(adapter,context,inputs,max_seconds=FULL_SECONDS,only=stale_slots(adapter.project.root,configured_identity(adapter.project.root)))
     if getattr(adapter,'_owner_growth_pending_hold',False):return '보류 · 실행 로그 확인'
     return result
 
