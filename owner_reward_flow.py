@@ -12,6 +12,7 @@ RECEIPT_WORDS=('보상받기','아이템획득');RECEIPT_AREAS=((600,150,170,30)
 BLANKS=((288,93),(286,19),(286,19))
 LIST_BOX=(165,125,130,265)
 BODY_TOP=204;BANNER_WAIT=1.5
+MISSION_DRAG=((459,240),(459,372));TAB_SETTLE=.8  # logical: the mission rows of an event tab, top to bottom
 CLAIMED,NOTHING,PARTIAL,FAILED='claimed','none','partial','failed'
 LABELS={CLAIMED:'수령 완료',NOTHING:'보상 없음',PARTIAL:'일부 미확인',FAILED:'실패'}
 EVIDENCE_LIMIT=60
@@ -106,6 +107,24 @@ class Flow:
             Image.fromarray(before).save(folder/'before.png');Image.fromarray(after).save(folder/'after.png')
             (folder/'reason.txt').write_text(reason+' · %s · (%d,%d)'%(self.key,x,y),encoding='utf-8');self.saved+=1
         except OSError:pass
+    def missions_to_top(self,inputs):
+        """Pull the open tab's mission list down to its top. A press that moves is a drag, so no row takes it."""
+        self.context.wait(TAB_SETTLE)
+        (x,y0),(_,y1)=MISSION_DRAG
+        for _ in range(2):
+            with inputs.transaction():
+                inputs.move(x,y0);self.context.wait(.05)
+                pressed=False
+                try:
+                    inputs.down('mouse','left');pressed=True;self.context.wait(.08)
+                    for n in range(1,13):
+                        inputs.move(x,round(y0+(y1-y0)*n/12));self.context.wait(.025)
+                    self.context.wait(.15)
+                finally:
+                    if pressed:inputs.up('mouse','left')
+            self.context.wait(.25)
+        self.baseline=None
+        LOG.info('이벤트 미션 목록 맨 위로')
     def finish(self,result,failed=False):
         try:self.settle_click(self.frame())
         except Exception:pass
@@ -189,7 +208,12 @@ class FlowInputs:
         flow.counts['blank_sent' if blank else 'clicks']+=1
         flow.baseline=frame
         if not blank and not leaving:flow.pending=(x,y,patch(frame,x,y),frame,time.monotonic())
-        return self._real.click(x,y,*a,**k)
+        result=self._real.click(x,y,*a,**k)
+        # A tab, on the left or a day above the rows: its mission list keeps where it was scrolled, and rows above
+        # the top are never seen (2일차 hid 30/30 and 200/200, 11-06). The native search reads only what shows.
+        if flow.key=='event' and not blank and not leaving and (x<LIST_BOX[0]+LIST_BOX[2] or y<BODY_TOP):
+            flow.missions_to_top(self._real)
+        return result
     def transaction(self,*a,**k):
         flow=self._flow;frame=flow.frame();x,y,w,h=LIST_BOX
         if flow.key=='event':

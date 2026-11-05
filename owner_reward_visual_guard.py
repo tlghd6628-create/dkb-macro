@@ -102,6 +102,65 @@ def short_of_points(frame,box):
     return need is not None and need>total
 
 
+PRIZE_X=(989,1025);PRIZE_COLUMN=(385,625);PRIZE_HALF=18;PRIZE_COLOUR=130;PRIZE_OPEN=.15
+# Real pixels: the bar of a mission row cut by the top of the list, and where its coin still shows.
+CUT_BAR=(475,343,370,14);CUT_COIN=(896,350);CUT_BRIGHT=140;RANGE_TOP=204
+
+
+def open_prizes(frame):
+    """Real places of point prizes already earned and not taken. Their own mark is too faint to find, but the numbers say
+    which are earned, and a taken one is dark with a tick: colour on .26 or more of it untaken, .07 or less taken (11-06)."""
+    real=getattr(frame,'hi',None)
+    if real is None:return []
+    import numpy as np,re
+    from owner_text import read_area,clean
+    real=np.asarray(real);x,y,w,h=POINT_TITLE
+    if not any('누적포인트' in clean(row['text']) for row in read_area(None,real[y:y+h,x:x+w],left=x,top=y)):return []
+    x,y,w,h=POINT_TOTAL;total=_digits(real[y:y+h,x:x+w],x,y)
+    if total is None:return []
+    x,w=POINT_COLUMN;top,bottom=PRIZE_COLUMN;found=[]
+    for row in read_area(None,real[top:bottom,x:x+w],left=x,top=top,scale=4,minimum=.8):
+        need=clean(row['text'])
+        if not re.fullmatch(r'\d{1,3}',need) or int(need)>total:continue
+        ry=row['ry'];icon=real[ry-PRIZE_HALF:ry+PRIZE_HALF,PRIZE_X[0]:PRIZE_X[1]]
+        if icon.size and float((icon.max(axis=2)>PRIZE_COLOUR).mean())>PRIZE_OPEN:found.append(((PRIZE_X[0]+PRIZE_X[1])//2,ry))
+    return found
+
+
+def cut_finished_row(frame):
+    """The coin of a finished, untaken mission row whose top the list cuts off, or None. Its dot is above the list, so
+    nothing else finds it, and the list keeps its scroll per tab (2일차, 11-06). Its bar reads N / N and is bright: 156
+    untaken, 123 once taken. The coin's lower half still takes the press."""
+    real=getattr(frame,'hi',None)
+    if real is None:return None
+    import numpy as np,re
+    from owner_text import read_area,clean
+    real=np.asarray(real);x,y,w,h=CUT_BAR;bar=real[y:y+h,x:x+w]
+    if not bar.size or float(np.median(bar.reshape(-1,3)[:,0]))<=CUT_BRIGHT:return None
+    for row in read_area(None,bar,left=x,top=y,scale=4,minimum=.6):
+        found=re.fullmatch(r'(\d+)/(\d+)',clean(row['text']).replace(' ',''))
+        if found and found[1]==found[2] and int(found[1])>0:return CUT_COIN
+    return None
+
+
+ADDED=[];ADDED_LIFE=5.0
+
+
+def add(box,check):
+    """A box this guard put into the native list, with what still has to read true before its press."""
+    import time
+    now=time.monotonic();ADDED[:]=[row for row in ADDED if now-row[0]<=ADDED_LIFE and row[1]!=box]+[(now,box,check)]
+
+
+def added_here(hit):
+    """The check for an added box this hit falls in, or None."""
+    import time
+    now=time.monotonic();x,y=hit[0],hit[1]
+    for seen,(x0,y0,x1,y1),check in reversed(ADDED):
+        if now-seen<=ADDED_LIFE and x0<=x<=x1 and y0<=y<=y1:return check
+    return None
+
+
 def notice_dots(frame,box=(305,204,420,182)):
     """Centres of real notification dots. Red art (a potion, a pattern inside a
     gold item) shares the colour but not this small round shape."""
@@ -173,6 +232,9 @@ def install():
     @wraps(original_recheck)
     def recheck(self,name,frame,hit,region=None,threshold=.9,radius=2):
         if region==native.REWARD_RANGE and (not opened(self,frame) or (name==native.DOT and not near_dot(frame,hit))):return None
+        # A prize or a day tab added below is not the yellow reward picture, so its own reading confirms it again.
+        still=added_here(hit)
+        if still is not None:return hit if opened(self,frame) and still(frame) else None
         return original_recheck(self,name,frame,hit,region,threshold,radius)
     @wraps(original_boxes)
     def boxes(self,frame,reward_name=None):
@@ -189,6 +251,17 @@ def install():
                     # The native click compares a region of exactly the image's size.
                     l,t=min(897-w,max(0,cx-w//2)),min(479-h,max(0,cy-h//2))
                     kept.append((native.REWARD,(l,t,l+w,t+h)))
+            def press(at,still):
+                # The native search crops inside its range, so a box never starts above it (an empty crop ended a
+                # run, 11-06 03:36). Its press is sent to the real place found, and the place is read again first.
+                from owner_hd import logical_of,pin_box
+                cx,cy=logical_of(*at,frame.layout)
+                l,t=min(897-w,max(0,cx-w//2)),min(479-h,max(RANGE_TOP,cy-h//2))
+                box=(l,t,l+w,t+h);pin_box(box,*at);add(box,still)
+                kept.append((native.REWARD,box))
+            for at in open_prizes(frame):press(at,lambda f,_at=at:_at in open_prizes(f))
+            cut=cut_finished_row(frame)
+            if cut and not kept:press(cut,lambda f:cut_finished_row(f) is not None)
         return kept
     find._owner_reward_visual_guard=True
     cls.find,cls.recheck_point,cls.boxes=find,recheck,boxes
