@@ -6,7 +6,7 @@ Unknown layouts and unverified item categories always hold.
 """
 from pathlib import Path
 from functools import lru_cache
-import base64,hashlib,json,re,time,math
+import base64,hashlib,json,logging,re,time,math
 import cv2,numpy as np
 from PIL import Image
 from owner_equipment_upgrade_candidate import Hold,Journal,run_once,confirm_category,confirm,SLOTS
@@ -109,6 +109,9 @@ def same_item(one,two):
   ia,ib=icon(a),icon(b)
   aligned=(_score(ia,ib)>=.97 or (_score(ia,ib[2:18,2:18])>=.97 and _score(ib,ia[2:18,2:18])>=.97))
   if x is None or y is None or not aligned:return False
+  # A name wider than the title box scrolls with no end, so two views can share too little to compare.
+  # The same icon on a clipped title is the same item (rare bracelet, 11-05: never equipped before this).
+  if a.get('title_edge') and b.get('title_edge') and _score(ia,ib)>=.97:return True
   if x.shape==y.shape:
    union=np.logical_or(x,y).sum()
    if union and np.logical_and(x,y).sum()/union>=.92:return True
@@ -719,7 +722,8 @@ def run_in_open_inventory(adapter,context,inputs):
     pages+=1;excluded=[];inventory,_=port._frame();continue
    return 'confirmed' if confirmed_count else ('visible_unknown_cells_held' if getattr(port,'unknown_cells_held',False) else 'no_more_visible_candidates')
   try:status=port.try_comparison()
-  except Hold:
+  except Hold as exc:
+   logging.getLogger('project_gui.DKB').info('장비 후보 건너뜀 · 칸=%s · %s',tuple(hit[2])[:2],exc)
    if port.journal.read()['pending'] is not None:raise Hold('장비 입력 결과 미확인 · 추가 조작 보류')
    if port.last is None:port.close_unresolved_known()
    else:port.close_comparison()
