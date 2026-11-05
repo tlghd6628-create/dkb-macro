@@ -436,12 +436,16 @@ class Port:
     nearby=[hit for hit in occupied if abs(hit[0]-green[0])<=38 and abs(hit[1]-green[1])<=38]
     if nearby:return min(nearby,key=lambda hit:(hit[0]-green[0])**2+(hit[1]-green[1])**2)
    return occupied[0] if occupied else None
-  a,_=self._frame();self.context.wait(.12);b,_=self._frame()
-  if equipment_tab_selected(a) and equipment_tab_selected(b):skipped_parts=self.cached_non_general_parts(a,b)
-  first=find(a);second=find(b,first[2] if first else None)
-  if inventory_parts(a)!=(True,True) or inventory_parts(b)!=(True,True):raise Hold('장비 인벤토리 화면 확인 필요')
-  if first is None and second is None:return None
-  if not first or first!=second:raise Hold('장착 후보 두 화면 확인 필요')
+  # A bag still settling after a tab change gives two different answers. Look again before giving up the visit.
+  for attempt in range(4):
+   a,_=self._frame();self.context.wait(.12);b,_=self._frame()
+   if equipment_tab_selected(a) and equipment_tab_selected(b):skipped_parts=self.cached_non_general_parts(a,b)
+   first=find(a);second=find(b,first[2] if first else None)
+   if inventory_parts(a)!=(True,True) or inventory_parts(b)!=(True,True):raise Hold('장비 인벤토리 화면 확인 필요')
+   if first is None and second is None:return None
+   if first and first==second:break
+   self.context.wait(.3)
+  else:raise Hold('장착 후보 두 화면 확인 필요 · %s · %s'%(first and first[2][:2],second and second[2][:2]))
   self.before_inventory=(a,b)
   final,_=self._frame()
   if find(final,second[2])!=second:raise Hold('장착 후보 선택 직전 변경')
