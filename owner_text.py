@@ -72,6 +72,26 @@ def _read_pixels(root,area,language,scale,bright):
     return digit_shapes(area,read,language)
 
 
+def clean_digits(area,scale):
+    """The game's digits alone, black on white, enlarged without blur. The panel's 5 on the forge read 25 and its gold 6
+    read 4 as they are; cleaned, 5, 6+, 4, 0 and 1+ read at about 1.0 on every look (pc1 film, 06:15)."""
+    import cv2
+    a=np.asarray(area).astype(np.int16)
+    r,g,b=a[...,0],a[...,1],a[...,2]
+    white=(a.min(2)>150)&(a.max(2)-a.min(2)<60)
+    gold=(r>170)&(g>120)&(b<130)&(r-b>60)
+    image=np.where((white|gold)[...,None],0,255).astype(np.uint8).repeat(3,2)
+    return cv2.resize(image,None,fx=scale,fy=scale,interpolation=cv2.INTER_NEAREST)
+
+
+def read_digits(root,area,scales=(2,3),minimum=.5):
+    """Number rows from the cleaned digits, the first scale that reads any; [] when none does."""
+    for scale in scales:
+        rows=read_area(root,clean_digits(area,scale),language='number',scale=1,minimum=minimum)
+        if any(re.search(r'\d',str(row['text'])) for row in rows):return rows
+    return []
+
+
 def digit_shapes(area,read,language):
     """The game font's 1 is a 7 without the slant, and the engine calls it 7 or nothing (owner_digit_shape). Each number
     read here has its 1s and 7s decided by the glyphs' own shape; a lone 1 the number reader missed is put back."""

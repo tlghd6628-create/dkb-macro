@@ -104,11 +104,15 @@ def blessing_kind(title):
 def real_read(real,hits=None):
  """Each row's number. `hits` are the rows' places from a frame of the same open tooltip: they do not move, and finding
  them again was a whole table read per frame."""
- from owner_text import clean,read_area
+ from owner_text import clean,read_area,read_digits
  hits=hits or real_table(real)
  if hits is None:return None
  result={}
  for field,(x,y,w,h) in hits.items():
+  # The digits alone, cleaned black on white, read steadily; the 1 that came back 7 here (05:10) included.
+  values=[clean(row['text']) for row in read_digits(None,real[max(0,y-2):y+h+2,max(0,x-10):x+w+10],minimum=.6)]
+  if len(values)==1 and re.fullmatch(r'0|[1-9][0-9]{0,2}',values[0]):
+   result[field]=int(values[0]);continue
   # A lone 1 in a tight crop often reads as nothing; with a little room around it, at a larger size, it reads (각성 1, 02:52).
   for area,scale in ((real[y:y+h,x:x+w],3),(real[max(0,y-2):y+h+2,max(0,x-10):x+w+10],4)):
    values=[clean(row['text']) for row in read_area(None,area,language='number',scale=scale,minimum=.6)]

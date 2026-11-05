@@ -82,6 +82,30 @@ def level_pair(left,right):
     return None
 
 
+def clean_pair(frame,root=None):
+    """(level, next) from the two sides read as cleaned digits (owner_text.read_digits), or None. With no reader to hand
+    (a test's fake one) the plain reads after it decide."""
+    real=getattr(frame,'hi',None)
+    if real is None or getattr(real,'ndim',np.ndim(real))!=3:return None
+    real=np.asarray(real);sides=[]
+    try:
+        for x,y,w,h in (BLESSING_LEVEL,BLESSING_NEXT):sides.append(text.read_digits(root,real[y:y+h,x:x+w]))
+    except (TypeError,OSError,RuntimeError,AttributeError):return None
+    return level_pair(*sides)
+
+
+def next_pair(left,right):
+    """(next-1, next) when the next step reads clearly and the left side says nothing against it. The left digit sits on
+    the moving forge light and its read came and went (4 at 1.0, nothing, .55, .63 on four looks, 05:53), so two looks
+    seldom agreed and enhancing stopped; the next step read 5 at .99 on all four. A left digit that reads otherwise
+    still stops it."""
+    b=_one_number(right)
+    if b is None or b<1:return None
+    seen=[int(x) for r in left if r['score']>=.3 for x in re.findall(r'\d+',str(r['text']))]
+    if seen and b-1 not in seen:return None
+    return b-1,b
+
+
 def lone_one_pair(frame,right):
     """(1, 2) when the left side is the font's lone 1 by its shape and the right reads 2: the engine reads that 1 as
     nothing, T or MT (귀걸이 1 >> 2, 05:10). Anything else stays unread."""
@@ -163,9 +187,11 @@ def read_blessing(root,frame):
     """(panel, None) or (None, reason), from one real frame. The panel holds no pixels, so two can be compared."""
     title=_any_size(root,frame,BLESSING_TITLE,blessing_title,'제목')
     if title is None:return None,'가호 제목 글자 미확인'
-    pair=level_pair(text.read(root,frame,BLESSING_LEVEL,scale=3),text.read(root,frame,BLESSING_NEXT,scale=3))
+    pair=clean_pair(frame,root)
+    if pair is None:pair=level_pair(text.read(root,frame,BLESSING_LEVEL,scale=3),text.read(root,frame,BLESSING_NEXT,scale=3))
     if pair is None:pair=level_pair(text.read(root,frame,BLESSING_LEVEL,scale=2),text.read(root,frame,BLESSING_NEXT,scale=2))
     if pair is None:pair=lone_one_pair(frame,text.read(root,frame,BLESSING_NEXT,scale=3))
+    if pair is None:pair=next_pair(text.read(root,frame,BLESSING_LEVEL,scale=3),text.read(root,frame,BLESSING_NEXT,scale=3))
     if pair is None:return None,'가호 강화 수치 글자 미확인'
     pill=text.read(root,frame,BLESSING_PILL,scale=3)
     word=only_word(pill,('강화','개방'))

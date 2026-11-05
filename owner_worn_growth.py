@@ -16,7 +16,7 @@ from owner_gear_intent_store_candidate import IntentStore
 from owner_gear_settings_candidate import Store
 from owner_gear_step_guard_candidate import Guard
 from owner_growth_reading import breakthrough_allowed,goal_state
-from owner_growth_words import (BLESSING_COUNT,BLESSING_LEVEL,BLESSING_NEXT,BLESSING_PILL,BLESSING_TITLE,counts,enough,level_pair,lit,lone_one_pair,only_word,pill_price)
+from owner_growth_words import (BLESSING_COUNT,BLESSING_LEVEL,BLESSING_NEXT,BLESSING_PILL,BLESSING_TITLE,clean_pair,counts,enough,level_pair,lit,lone_one_pair,next_pair,only_word,pill_price)
 from owner_hd import real_hit
 from owner_short_notice import shown as coins_short
 
@@ -85,12 +85,14 @@ def font_pair(left,right):
 def read_panel(root,frame):
     """The selected item's level and next step on the 강화 tab, from one real frame, or None."""
     if not title_words(root,frame):return None
+    pair=clean_pair(frame,root)
     left,right=text.read(root,frame,BLESSING_LEVEL,scale=3),text.read(root,frame,BLESSING_NEXT,scale=3)
-    pair=level_pair(left,right) or font_pair(left,right)
+    pair=pair or level_pair(left,right) or font_pair(left,right)
     if pair is None:
         left,right=text.read(root,frame,BLESSING_LEVEL,scale=2),text.read(root,frame,BLESSING_NEXT,scale=2)
         pair=level_pair(left,right) or font_pair(left,right)
     if pair is None:pair=lone_one_pair(frame,text.read(root,frame,BLESSING_NEXT,scale=3))
+    if pair is None:pair=next_pair(text.read(root,frame,BLESSING_LEVEL,scale=3),text.read(root,frame,BLESSING_NEXT,scale=3))
     if pair is None:return None
     pill=text.read(root,frame,BLESSING_PILL,scale=3);word=only_word(pill,('강화','개방'))
     have=have_enough(root,frame)
@@ -127,16 +129,20 @@ class EnhanceObserver:
     """The guard's two looks at the 강화 tab of the item the bag opened."""
     def __init__(self,service,context,identity,item,clock=time.monotonic):
         self.service=service;self.context=context;self.identity=identity;self.item=item;self.clock=clock
-        self.sequence=0;self.panel=None;self.root=Path(service.adapter.project.root)
+        self.sequence=0;self.panel=None;self.root=Path(service.adapter.project.root);self.last_diff=None
     def read_pair(self):
         looks=[];stamps=[]
         for _ in range(2):
             self.context.checkpoint();self.service.check();frame=self.service.capture()
             panel=read_panel(self.root,frame)
-            if panel is None:return {'screen_proof':False}
+            if panel is None:
+                self.last_diff='판독 없음';return {'screen_proof':False}
             looks.append(panel);stamps.append(self.clock());self.context.wait(.12)
         same=lambda panel:{k:v for k,v in panel.items() if k!='hit'}
-        if same(looks[0])!=same(looks[1]):return {'screen_proof':False}
+        if same(looks[0])!=same(looks[1]):
+            # Which part flickered, for the log when the guard holds.
+            self.last_diff={k:(looks[0].get(k),looks[1].get(k)) for k in same(looks[0]) if looks[0].get(k)!=looks[1].get(k)}
+            return {'screen_proof':False}
         self.panel=looks[1];obs=[]
         for stamp,panel in zip(stamps,looks):
             self.sequence+=1
@@ -260,15 +266,16 @@ class Route:
             self.check()
             try:status=guard.run_one(ENHANCE,targets,one)
             except worn.ReadAgain:status='hold_boundary_preinput'
-            if status in ('hold_screen_unverified','hold_observation','hold_boundary_preinput') and rereads<5:
-                rereads+=1;self.context.wait(.4);continue
+            # The press's flash and the level's redraw can last a few seconds; ten looks span about ten.
+            if status in ('hold_screen_unverified','hold_observation','hold_boundary_preinput') and rereads<10:
+                rereads+=1;self.context.wait(.5);continue
             if status!='pending_confirmation':
                 panel=observer.panel or {}
                 if status=='hold_policy' and goal_state(goal,panel.get('level',-1))=='below':
                     LOG.info('착용 %s 강화 불가 · 재료 부족 또는 버튼 꺼짐 · %s',item.slot,panel.get('word'))
                 elif status not in ('hold_policy',):
                     seen=read_panel(self.root,self.frame())
-                    LOG.info('착용 %s 강화 중단 · %s · 판독 %s',item.slot,status,{k:v for k,v in (seen or {}).items() if k!='hit'})
+                    LOG.info('착용 %s 강화 중단 · %s · 판독 %s · 흔들린 값 %s',item.slot,status,{k:v for k,v in (seen or {}).items() if k!='hit'},observer.last_diff)
                 item.done.add(ENHANCE);return
             rereads=0
             result='hold_result_unknown'

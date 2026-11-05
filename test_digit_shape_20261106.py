@@ -59,6 +59,17 @@ class EveryRead(unittest.TestCase):
         self.assertEqual(text.digit_shapes(draw(ZERO),[],'number'),[])
 
 
+class Next(unittest.TestCase):
+    def test_the_next_step_carries_an_unsteady_left_side(self):
+        from owner_growth_words import next_pair
+        right=[dict(text='5+',score=.99)]
+        self.assertEqual(next_pair([],right),(4,5))
+        self.assertEqual(next_pair([dict(text='4',score=.55)],right),(4,5))
+        self.assertIsNone(next_pair([dict(text='7',score=.6)],right))      # the left says otherwise: no read
+        self.assertIsNone(next_pair([],[dict(text='5+',score=.5)]))         # an unclear next step: no read
+        self.assertIsNone(next_pair([],[]))
+
+
 class Panel(unittest.TestCase):
     def test_one_to_two_reads_by_shape(self):
         from types import SimpleNamespace as NS

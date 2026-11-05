@@ -235,9 +235,13 @@ def mark_stale(adapter,slot):
 def tile_plus(service,place):
     """The +43 on a blessing tile, or 0 when none reads."""
     real=np.asarray(service.capture().hi);x,y=place
-    words=[text.clean(row['text']) for row in text.read_area(None,real[y+2:y+28,x-6:x+28],language='number',scale=3,minimum=.6)]
-    numbers=[int(found) for word in words for found in re.findall(r'\d{1,3}',word)]
-    return numbers[0] if len(numbers)==1 else 0
+    # +43 read as +4 in one crop (pc1 05:41). On pc1's blessing list this crop read +43, 30, +20, +14 and 10, all right;
+    # the others are tried after it.
+    for top,bottom,left,right in ((4,26,-2,30),(2,28,-6,28),(6,26,0,28)):
+        words=[text.clean(row['text']) for row in text.read_area(None,real[y+top:y+bottom,x+left:x+right],language='number',scale=3,minimum=.6)]
+        numbers=[int(found) for word in words for found in re.findall(r'\d{1,3}',word)]
+        if len(numbers)==1:return numbers[0]
+    return 0
 
 
 def blessings(adapter,service,context,choice,priorities=()):
