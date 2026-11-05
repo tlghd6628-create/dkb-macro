@@ -713,7 +713,7 @@ def run_in_open_inventory(adapter,context,inputs):
   initial=other;context.wait(.15);other,_=port._frame()
   if not equipment_tab_selected(initial) or not equipment_tab_selected(other):raise Hold('장비탭 전환 후 화면 확인 필요')
  inventory=other.copy()
- pages=0;reordered=0;confirmed_count=0;deadline=time.monotonic()+90
+ pages=0;reordered=0;confirmed_count=0;deadline=time.monotonic()+90;seen_cells={}
  for _ in range(160):
   context.checkpoint();service.check()
   if time.monotonic()>=deadline:return 'confirmed' if confirmed_count else 'equipment_scan_partial'
@@ -723,6 +723,12 @@ def run_in_open_inventory(adapter,context,inputs):
    if pages<8 and callable(scroll) and scroll():
     pages+=1;excluded=[];inventory,_=port._frame();continue
    return 'confirmed' if confirmed_count else ('visible_unknown_cells_held' if getattr(port,'unknown_cells_held',False) else 'no_more_visible_candidates')
+  # Row exclusions reset when the bag redraws, and the same unreadable cells were opened again until the
+  # 90 seconds ran out (12:41). Twice is enough for this visit.
+  seen_cells[tuple(hit[2])]=seen_cells.get(tuple(hit[2]),0)+1
+  if seen_cells[tuple(hit[2])]>2:
+   port.close_unresolved_known()
+   return 'confirmed' if confirmed_count else 'visible_unknown_cells_held'
   try:status=port.try_comparison()
   except Hold as exc:
    logging.getLogger('project_gui.DKB').info('장비 후보 건너뜀 · 칸=%s · %s',tuple(hit[2])[:2],exc)
