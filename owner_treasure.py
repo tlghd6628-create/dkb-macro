@@ -31,7 +31,7 @@ CASTLE_DONE='체크_보물찾기_타바로1_완료'
 FIRST_CARD_WORDS={'버튼_보물찾기_타바로_바로가기':'바로가기','체크_보물찾기_타바로_현위치':'현위치'}
 # The card you stand on has 현위치 where the others have 바로가기. Unseen, it was pressed for a move window that never
 # comes, and the visit ended on 이동 버튼 확인 시간 초과 with nothing found (other PC, 19:35).
-CURRENT_ICONS=('체크_보물찾기_현위치아이콘','체크_보물찾기_현위치아이콘2');CARD_ROW=(150,110,1216,50)
+CURRENT_ICONS=('체크_보물찾기_현위치아이콘','체크_보물찾기_현위치아이콘2');CARD_ROW=(150,110,1216,50);CARD_HALF=75
 GREEN_SPREAD=40;GREEN_PIXELS=20
 LIT_RATIO=1.5;CHOSEN_RATIO=1.15
 _running=[0]
@@ -127,6 +127,11 @@ def current_card(frame,region):
     return hits[0] if hits else None
 
 
+def on_current_card(frame,hit):
+    """Is this place on the card that says 현위치? Cards stand 157 logical pixels apart."""
+    return any(abs(row['x']-hit[0])<=CARD_HALF for row in text.find(text.read(None,frame,CARD_ROW),'현위치'))
+
+
 def word_answer(name,frame,region=None):
     """(answered, hit). Not answered means the picture still decides this one."""
     if name in CURRENT_ICONS and _on_screen(frame):return True,current_card(frame,region)
@@ -190,6 +195,17 @@ def install_words():
             if answered:return hit if hit is None or candidate_filter is None or candidate_filter(frame,hit) else None
         return ordinary(detector,name,frame,region,threshold,candidate_filter=candidate_filter)
     find._owner_treasure_words=True;RoiDetector.find=find
+    # Answering 현위치 was not enough: the entry presses above any green power digits, on this card too (other PC, 20:07).
+    # With no green here it takes the card as not enterable and goes on to the next one.
+    ordinary_green=native.green_power_hit
+    @wraps(ordinary_green)
+    def green_power_hit(detector,frame,region):
+        hit=ordinary_green(detector,frame,region)
+        if hit and _running[0] and _is_real(frame) and _on_screen(frame) and on_current_card(frame,hit):
+            LOG.info('보물찾기 현위치 카드 · 이동 입력 없음 · 다음 카드 확인')
+            return None
+        return hit
+    native.green_power_hit=green_power_hit
     native.completion_marker_hit=_on_real(native.completion_marker_hit,castle_done)
     native.selected_point_active=_on_real(native.selected_point_active,point_chosen)
     native.selected_point_confirmed=_on_real(native.selected_point_confirmed,point_chosen)
