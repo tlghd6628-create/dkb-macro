@@ -28,7 +28,7 @@ class Zones:
         if box==g.BLESSING_LEVEL:return [row(str(self.level),570,218)]
         if box==g.BLESSING_NEXT:return [row(str(self.next),625,218)] if self.next is not None else []
         if box==g.BLESSING_COUNT:return [row(self.count,594,645)] if self.count else []
-        if box==g.BLESSING_PILL:return [row(self.word,730,720),row(self.cost,626,720)] if self.word else []
+        if box in (g.BLESSING_PILL,g.ACTION_PILL):return [row(self.word,730,720),row(self.cost,626,720)] if self.word else []
         raise AssertionError(box)
 
 
@@ -231,14 +231,47 @@ class Order(WithRoute):
         self.assertEqual(reads['무기'],50);self.assertEqual(reads['반지'],50)
 
 class Blessings(WithRoute):
-    def test_each_slot_is_visited_and_a_miss_gets_one_more_turn(self):
+    def setUp(self):
+        super().setUp()
+        self.route.document=dict(self.DOCUMENT,blessings={key:{'enabled':True,'enhance':50,'breakthrough':1} for key in ('1번','2번','3번','4번','5번')})
+    def test_each_slot_is_read_and_a_miss_gets_one_more_turn(self):
         seen=[]
-        def visit(item,cap=None):
+        def read(item):
             seen.append(item.slot)
-            if item.slot!='가호3' or seen.count('가호3')>1:item.values={'enhance':49,'awaken':0}
-        self.route.visit=visit
+            if item.slot!='가호3' or seen.count('가호3')>1:item.values={'enhance':50,'opening':5,'awaken':1}
+            return True
+        self.route.read=read
         self.route.blessings()
         self.assertEqual(seen,['가호1','가호2','가호3','가호4','가호5','가호3'])
+    def test_only_what_is_short_is_visited(self):
+        values={'가호1':(40,0),'가호2':(50,1),'가호3':(50,0),'가호4':(50,1),'가호5':(50,1)};visited=[]
+        def read(item):
+            item.values={'enhance':values[item.slot][0],'opening':1,'awaken':values[item.slot][1]};return True
+        self.route.read=read;self.route.visit=lambda item,cap=None:visited.append(item.slot)
+        self.route.blessings()
+        self.assertEqual(visited,['가호1','가호3'])
+    def test_awakening_comes_before_enhancing(self):
+        item=self.item({'enhance':40,'opening':4,'awaken':0},slot='가호1',blessing=True)
+        self.assertEqual(self.route.need(item),g.AWAKEN)
+        item.done.add(g.AWAKEN);self.assertEqual(self.route.need(item),g.ENHANCE)
+    def test_the_goal_is_read_from_the_old_field(self):
+        self.assertEqual(self.route.goal(self.item({},slot='가호2',blessing=True))['awaken'],1)
+    def test_a_blessing_awakens_on_its_pieces_and_never_picks_a_tile(self):
+        self.route.side_tab=lambda kind:True;self.route.choose_material=lambda item:self.fail('picked a tile')
+        presses=[];self.service.click_hit=lambda hit:presses.append(hit)
+        item=self.item({'enhance':40,'opening':4,'awaken':0},slot='가호1',blessing=True)
+        zones=Zones(word='각성',cost='5,000',count='3/100')
+        with patch('owner_text.read',zones.read):
+            self.route.press_once(item,g.AWAKEN)
+        self.assertEqual(presses,[]);self.assertIn(g.AWAKEN,item.done)
+    def test_it_presses_once_with_its_pieces(self):
+        self.route.side_tab=lambda kind:True;self.route.after_result=lambda item,kind:None
+        presses=[];self.service.click_hit=lambda hit:presses.append(hit)
+        item=self.item({'enhance':40,'opening':4,'awaken':0},slot='가호1',blessing=True)
+        zones=Zones(word='각성',cost='5,000',count='101/100')
+        with patch('owner_text.read',zones.read):
+            self.route.press_once(item,g.AWAKEN)
+        self.assertEqual(len(presses),1);self.assertEqual(self.route.intents.pending()['before'].awakening,0)
     def test_reading_a_blessing_never_opens_the_bag(self):
         self.route.leave_growth=lambda:True;self.route.open_bag=lambda:self.fail('bag')
         with patch.object(g.worn,'settle_after_popup'),patch.object(g.worn,'inspect_real',return_value=False) as read:
@@ -274,12 +307,6 @@ class Visit(WithRoute):
     def test_nothing_to_do_opens_nothing(self):
         self.route.visit(self.item({'enhance':50,'breakthrough':3,'awaken':1}))
         self.assertEqual((self.enters,self.reads),(0,0))
-    def test_a_blessing_goes_straight_in(self):
-        item=self.item(None,slot='가호1',blessing=True);item.grade=None
-        def press(item,cap=None):item.done.add(g.ENHANCE)
-        self.route.press_enhance=press
-        self.route.visit(item)
-        self.assertEqual((self.enters,self.reads),(1,1))
     def test_no_coins_still_reads_the_final_numbers(self):
         item=self.item({'enhance':20,'breakthrough':3,'awaken':1})
         def press(item,cap=None):raise g.CoinsShort()

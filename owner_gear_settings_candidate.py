@@ -235,7 +235,8 @@ class GearSettings:
             current_value=lambda name:current_value(root,character,'individual',name,'awaken'))
         blessings=ttk.Frame(tabs,padding=8);tabs.add(blessings,text='가호')
         self.feature_switch(blessings,'blessings')
-        for col,label in enumerate(('장착 칸','사용','강화 목표','돌파 목표')):
+        # A blessing has no breakthrough in the game. Its second goal is awakening, saved under the old field's name.
+        for col,label in enumerate(('장착 칸','사용','강화 목표','각성 목표')):
             ttk.Label(blessings,text=label).grid(row=1,column=col,padx=5,sticky='w')
         self.blessing_vars={}
         for index,name in enumerate(BLESSINGS,start=2):

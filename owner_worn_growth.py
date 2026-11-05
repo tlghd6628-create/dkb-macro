@@ -26,6 +26,7 @@ GROWTH_BUTTON=(570,560,120,46) # real pixels of the details window's 성장
 LIST_COUNT=(1066,78,105,24);SECOND_TILE=(1150,146)  # the growth list: how many it shows, and the tile after the selected one
 RESULT_CLOSE=(400,640,560,100);RESULT_SECONDS=20
 BACK=(35,30)                   # real place of the growth screen's back arrow
+ACTION_PILL=(470,700,325,42)   # real pixels of the 돌파 or 각성 button and its price
 VISIT_SECONDS=300;ITEM_SECONDS=90;RESULT_READS=8;ROUNDS=8;LEVEL_STEP=3
 FRESH_SECONDS=8
 ENHANCE,BREAK,AWAKEN='enhance','breakthrough','awaken'
@@ -82,7 +83,8 @@ def read_panel(root,frame):
 def read_action(root,frame,word):
     """The 돌파 or 각성 button and its count, or None when the panel holds no item."""
     if not title_words(root,frame):return None
-    pill=text.read(root,frame,BLESSING_PILL,scale=3);row=only_word(pill,(word,),.8)
+    # Without 자동 선택 beside it the pill stands further left, its price with it.
+    pill=text.read(root,frame,ACTION_PILL,scale=3);row=only_word(pill,(word,),.8)
     if row is None:return None
     cost=pill_price(pill);have=enough(counts(text.read(root,frame,BLESSING_COUNT,scale=3)))
     return {'word':word,'cost':cost,'enough':have,'active':bool(lit(frame.hi,row) and have is True and type(cost) is int and cost>0),'hit':real_place(row)}
@@ -159,13 +161,16 @@ class Route:
         LOG.info('착용 %s 성장 화면 안 열림',item.slot);return False
     # ---- what the details say
     def goal(self,item):
-        section=self.document['blessings'] if item.blessing else self.document['grades']
-        return section.get(item.key)
+        if not item.blessing:return self.document['grades'].get(item.key)
+        # Saved under the old field's name: a blessing has awakening, not breakthrough.
+        row=self.document['blessings'].get(item.key)
+        return dict(row,awaken=row.get('breakthrough')) if isinstance(row,dict) else row
     def need(self,item):
         """The next thing this item is short of, by its own details. None when it has its goals or none of it can run."""
         goal=self.goal(item)
         if not isinstance(goal,dict) or goal.get('enabled') is not True:return None
-        kinds=(ENHANCE,) if item.blessing else (ENHANCE,BREAK,AWAKEN) if breakthrough_allowed() else (ENHANCE,AWAKEN)
+        # A blessing's awakening goes first: it takes its own pieces and a little coin, and the enhancing after it can run the coins out.
+        kinds=(AWAKEN,ENHANCE) if item.blessing else (ENHANCE,BREAK,AWAKEN) if breakthrough_allowed() else (ENHANCE,AWAKEN)
         for kind in kinds:
             if kind in item.done:continue
             value=item.values.get(kind)
@@ -261,7 +266,8 @@ class Route:
         action=read_action(self.root,self.frame(),LABEL[kind])
         if action is None:
             LOG.info('착용 %s %s 대상 아님',item.slot,LABEL[kind]);item.done.add(kind);return
-        if kind==AWAKEN and action['enough'] is False and self.choose_material(item):
+        # A blessing awakens on its own pieces; only an item picks a spare.
+        if kind==AWAKEN and not item.blessing and action['enough'] is False and self.choose_material(item):
             action=read_action(self.root,self.frame(),LABEL[kind]) or action
         if not action['active']:
             LOG.info('착용 %s %s 불가 · 재료 부족 또는 버튼 꺼짐',item.slot,LABEL[kind]);item.done.add(kind);return
@@ -331,8 +337,7 @@ class Route:
         the next step, at the end of every turn, one ended by no coins included."""
         for _ in range(ROUNDS):
             if time.monotonic()>=self.deadline:return
-            # A blessing's level is on its growth panel, so it goes straight in. An item's three numbers are already read.
-            kind=self.need(item) if item.values else ENHANCE if item.blessing else None
+            kind=self.need(item) if item.values else None
             if not kind or not self.enter(item):return
             item.pending_kind=kind
             try:pressed=self.work(item,cap)
@@ -370,9 +375,13 @@ class Route:
             for item in items:
                 self.check()
                 if time.monotonic()>=self.deadline:return
-                if not item.values:self.visit(item)
+                if not item.values:self.read(item)
         missed=[item.slot for item in items if not item.values]
         if missed:LOG.info('착용 가호 현재값 못 읽음 · 이번 차례 제외 · %s',', '.join(missed))
+        for item in items:
+            self.check()
+            if time.monotonic()>=self.deadline:return
+            if item.values and self.need(item):self.visit(item)
     def to_field(self):
         self.leave_growth();worn.leave_blessing_screen(self.service,self.context)
         worn.close_bag(self.service,self.context)
