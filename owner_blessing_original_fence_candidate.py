@@ -39,6 +39,19 @@ def _reward(original,should_fence):
     wrapped._owner_blessing_reward_fence=True
     return wrapped
 
+def _bound(original):
+    """On a real frame the owner's rule answers: any blessing without 귀속 stops 일괄 획득. The tile colours it replaces do not survive 1366."""
+    @wraps(original)
+    def wrapped(*args,**kwargs):
+        service=args[0] if args else None
+        capture=getattr(service,'capture',None)
+        if callable(capture) and getattr(capture(),'hi',None) is not None:
+            from owner_blessing_bound import skip_reason
+            return skip_reason(service)
+        return original(*args,**kwargs)
+    wrapped._owner_blessing_protection_fence=True
+    return wrapped
+
 def install(reward_module,market_module,*,should_fence,alias_modules=()):
     if not callable(should_fence):raise ValueError('가호 정책 확인기가 필요합니다')
     from owner_gear_native_install_candidate import _rebind_aliases
@@ -48,11 +61,20 @@ def install(reward_module,market_module,*,should_fence,alias_modules=()):
         _rebind_aliases(alias_modules,old,replacement)
     for name in ('_blessing_tradeable_candidates','_blessing_bulk_skip_reason'):
         old=getattr(reward_module,name)
-        if not getattr(old,'_owner_blessing_protection_fence',False):setattr(reward_module,name,_protected(old))
+        if not getattr(old,'_owner_blessing_protection_fence',False):
+            setattr(reward_module,name,_bound(_protected(old)) if name=='_blessing_bulk_skip_reason' else _protected(old))
     old=reward_module.run_blessing_rewards
     if not getattr(old,'_owner_blessing_reward_fence',False):
         replacement=_reward(old,should_fence);reward_module.run_blessing_rewards=replacement
         _rebind_aliases(alias_modules,old,replacement)
+
+def real_screen(adapter,context,inputs):
+    """Is the game window at 1366x768, where frames carry their real pixels? Sends nothing; False when it cannot tell."""
+    try:
+        from project_adapter.town_services import TownServices
+        from project_adapter import market_inventory
+        return getattr(TownServices(adapter,context,inputs,market_inventory.INVENTORY_USE_NAMES).capture(),'hi',None) is not None
+    except (OSError,ValueError,TypeError,RuntimeError,AttributeError,ImportError):return False
 
 def install_runtime(reward_module,market_module,identity_resolver,*,alias_modules=(),runner=None):
     """Run native rewards under the fence, then the separately guarded policy.
@@ -70,6 +92,11 @@ def install_runtime(reward_module,market_module,identity_resolver,*,alias_module
     @wraps(old)
     def combined(adapter,context,inputs,*args,**kwargs):
         adapter._owner_blessing_policy_outcome={'state':'not_run'}
+        if real_screen(adapter,context,inputs):
+            # At 1366x768 this job is the bulk claim alone; the original also equipped and summoned.
+            from owner_blessing_bound import claim
+            if claim(adapter,context,inputs) is True:
+                adapter._owner_blessing_policy_outcome={'state':'bulk_claim_only'};return True
         result=old(adapter,context,inputs,*args,**kwargs)
         # A false reward result is not proof that the equipment policy cannot
         # run. Its own entry point independently requires the ordinary field.
@@ -89,6 +116,12 @@ def install_runtime(reward_module,market_module,identity_resolver,*,alias_module
         setting=document['blessing_equip']
         if setting.get('enabled') is not True:
             adapter._owner_blessing_policy_outcome={'state':'disabled'};return result
+        if real_screen(adapter,context,inputs):
+            # Its screens are found by pictures cut at 897x479, and at 1366x768 it stopped the whole job (가호 메뉴 확인 필요).
+            # Nothing is equipped until it reads the real screen; the job itself goes on.
+            import logging
+            logging.getLogger('project_gui.DKB').info('가호 높은 등급 우선 장착 건너뜀 · 1366 화면 판독 준비 전 · 장착 변경 없음')
+            adapter._owner_blessing_policy_outcome={'state':'skipped_real_screen'};return result
         def current():return Store(adapter.project.root,identity).revision()==revision and identity_resolver(adapter)==identity
         if callable(runner):execute=runner
         else:

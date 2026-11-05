@@ -17,7 +17,7 @@ TARGETS={
  'main_quest.first_coupon.enabled':('쿠폰 등록',COUPON),
  WORN_KEY:('착용 현재값 확인',WORN),
  SHOP_KEY:('잡화상점 구매',SHOP),
- 'auto_rewards.blessing.enabled':('가호 소환·장착',BLESSING),
+ 'auto_rewards.blessing.enabled':('가호 일괄 획득',BLESSING),
  'auto_growth.equipment.enabled':('장비 성장',GROWTH),
  'auto_growth.blessing.enabled':('가호 성장',GROWTH),
  'auto_growth.energy.enabled':('기운 발현',GROWTH),
