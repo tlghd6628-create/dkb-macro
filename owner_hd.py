@@ -277,8 +277,9 @@ def real_hit(rx,ry):
     """A click hit that lands on exactly this real place, whichever screen map the current frame took. A bag over a busy
     field can take the map whose left side stands 34.6 px off, and a worn tile's click then went to the tile beside it (01:56)."""
     x,y=round(rx/F),round(ry/F)
-    with _lock:_pins.append((time.monotonic(),x-2,y-2,x+2,y+2,rx,ry))
-    return x,y,(x-6,y-5,x+7,y+6)
+    # A click lands anywhere inside the box it is given, so the whole box answers with this place.
+    with _lock:_pins.append((time.monotonic(),x-9,y-8,x+9,y+8,rx,ry))
+    return x,y,(x-3,y-3,x+4,y+4)
 
 
 def logical_of(rx,ry,layout=None):
