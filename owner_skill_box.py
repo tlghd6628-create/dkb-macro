@@ -13,9 +13,10 @@ from PIL import Image
 from owner_skill_goal import Pending
 LOG=logging.getLogger('project_gui.DKB')
 ROWS=(395,155,145,155);CLOSE=(510,106);DECIDE=(448,357)
+MANUALS=('절명','연타','강타','척살','저격','주술','파멸','강인','기동','기만','헌신','제압')
 
 
-@lru_cache(maxsize=2)
+@lru_cache(maxsize=4)
 def reference(name):
     return np.asarray(Image.open(Path(__file__).parent/'assets/skill-box'/(name+'.png')).convert('RGB'))
 
@@ -25,10 +26,10 @@ def on_dialog(frame):
     return float(cv2.matchTemplate(frame[100:130,400:500],reference('choice-title'),cv2.TM_CCOEFF_NORMED).max())>=.95
 
 
-def box_cell(frame):
+def box_cell(frame,asset='choice-box'):
     """Centre of the box in the bag grid, from the part of its tile the count never covers."""
     if getattr(frame,'shape',None)!=(479,897,3):return None
-    result=cv2.matchTemplate(frame[85:430,712:858],reference('choice-box'),cv2.TM_CCOEFF_NORMED)
+    result=cv2.matchTemplate(frame[85:430,712:858],reference(asset),cv2.TM_CCOEFF_NORMED)
     y,x=np.unravel_index(result.argmax(),result.shape)
     return (712+int(x)+14,85+int(y)+15) if float(result.max())>=.90 else None
 
@@ -67,6 +68,9 @@ def count(ui):
     """Boxes left, from the digit of the popup's '4개'. Whole, its 3 reads as 8 at .86; alone, as 3 at .70."""
     for attempt in range(6):
         try:
+            for row in ui.rows((480,118,48,40),pair_minimum=.8):
+                found=re.fullmatch(r'(\d+)\s*개',row['text'].strip())
+                if found and row['score']>=.9:return int(found[1])
             for row in ui.rows((482,140,14,18),language='number',pair_minimum=.6):
                 if re.fullmatch(r'[1-5]',row['text'].strip()) and row['score']>=.65:return int(row['text'])
         except Pending:pass
@@ -105,33 +109,50 @@ def _settle(journal,state,left):
     state['pending']=None;journal.save(state)
 
 
+def _detail(ui,cell,asset):
+    """Popup of this box, with its count."""
+    from owner_energy_box_detail_candidate import generic_box_detail
+    ui.click(cell[0],cell[1],lambda f:box_cell(f,asset)==cell)
+    return ui.wait(generic_box_detail,seconds=4),count(ui)
+
+
+def _open_dialog(ui,frame):
+    from owner_energy_box_detail_candidate import generic_box_detail
+    from owner_equipment_boxes import UNUSED_ITEM
+    button=ui.service.detector.find(UNUSED_ITEM,frame,threshold=.9)
+    if not button:raise Pending('선택 상자 열기 버튼 확인 필요')
+    ui.click(button[0],button[1],generic_box_detail)
+    ui.wait(on_dialog,seconds=4);ui.context.wait(.4)
+
+
+def _pick(ui,locate,name):
+    """Scroll to the row and select it; returns its height."""
+    for _ in range(12):
+        row=locate(ui.rows(ROWS,pair_minimum=.8))
+        if row:break
+        _scroll(ui)
+    else:raise Pending('선택 상자 목록에 없음: '+name)
+    y=row['y']
+    ui.click(445,y,on_dialog);ui.wait(lambda f:on_dialog(f) and row_selected(f,y),seconds=3)
+    return y
+
+
 def claim(ui,ledger,sid,name):
     """Take this skill's fragments from one box. Returns True once they were received."""
     from owner_coupon_box_candidate import CouponBoxJournal
     from owner_energy_box_detail_candidate import generic_box_detail
-    from owner_equipment_boxes import UNUSED_ITEM
     journal=CouponBoxJournal(ui.adapter.project.root,ledger.receipt_key);state=journal.read()
     if any(row.get('sid')==sid for row in state['receipts']):raise Pending('받은 도술 조각의 학습 행 확인 필요: '+name)
     try:
-        _open_bag(ui);frame=ui.frame();cell=box_cell(frame)
+        _open_bag(ui);cell=box_cell(ui.frame())
         if cell is None:
             if state['pending'] and state['pending']['boxes_before']==1:_settle(journal,state,0)
             raise Pending('도술 선택 상자 없음')
-        ui.click(cell[0],cell[1],lambda f:box_cell(f)==cell)
-        frame=ui.wait(generic_box_detail,seconds=4);left=count(ui)
+        frame,left=_detail(ui,cell,'choice-box')
         if state['pending']:_settle(journal,state,left)
-        if any(row.get('sid')==sid for row in state['receipts']):return True
-        button=ui.service.detector.find(UNUSED_ITEM,frame,threshold=.9)
-        if not button:raise Pending('도술 상자 열기 버튼 확인 필요')
-        ui.click(button[0],button[1],generic_box_detail)
-        ui.wait(on_dialog,seconds=4);ui.context.wait(.4)
-        for _ in range(12):
-            row=row_for(ui.rows(ROWS,pair_minimum=.8),name)
-            if row:break
-            _scroll(ui)
-        else:raise Pending('도술 상자 목록에 없음: '+name)
-        y=row['y']
-        ui.click(445,y,on_dialog);ui.wait(lambda f:on_dialog(f) and row_selected(f,y),seconds=3)
+        if any(row.get('sid')==sid for row in journal.read()['receipts']):return True
+        _open_dialog(ui,frame)
+        y=_pick(ui,lambda rows:row_for(rows,name),name)
         amount=[r for r in ui.rows((425,318,50,20),pair=False) if re.match(r'1\s*/',r['text'])]
         if not amount:raise Pending('도술 상자 수량 1개 확인 필요')
         state=journal.read()
@@ -153,4 +174,44 @@ def claim(ui,ledger,sid,name):
             ui.context.wait(3);_settle(journal,journal.read(),0)
         LOG.info('도술 조각 수령 확인 · %s',name)
         return True
+    finally:_close_bag(ui)
+
+
+def manual_row(rows,style):
+    """Row of a manual, by its place in the fixed order when its small two-letter style is misread."""
+    from owner_skill_ui import clean
+    rows=sorted(rows,key=lambda r:r['y']);place=MANUALS.index(style)
+    named=[(row,next((MANUALS.index(s) for s in MANUALS if clean(row['text']).startswith(clean(s))),None)) for row in rows]
+    for index,(row,found) in enumerate(named):
+        if found==place:return row
+    for index,(row,found) in enumerate(named):
+        if found is not None:
+            at=index+place-found
+            if 0<=at<len(rows) and named[at][1] is None and abs(rows[at]['y']-(row['y']+(place-found)*38))<=6:return rows[at]
+    return None
+
+
+def open_manuals(ui,ledger,style):
+    """All 강화 요령서 선택 첩 into the one chosen manual, in a single decide."""
+    from owner_coupon_box_candidate import CouponBoxJournal
+    if style not in MANUALS:return 'off'
+    journal=CouponBoxJournal(ui.adapter.project.root,'manual:'+ledger.receipt_key);state=journal.read()
+    try:
+        _open_bag(ui);cell=box_cell(ui.frame(),'manual-box')
+        if cell is None:
+            if state['pending']:_settle(journal,state,state['pending']['boxes_before']-1)
+            return 'none'
+        frame,left=_detail(ui,cell,'manual-box')
+        if state['pending']:_settle(journal,state,left)
+        _open_dialog(ui,frame)
+        y=_pick(ui,lambda rows:manual_row(rows,style),style)
+        ui.click(528,327,lambda f:on_dialog(f) and row_selected(f,y));ui.context.wait(.5)
+        amount=[r for r in ui.rows((425,318,50,20),pair=False) if re.fullmatch(r'%d\s*/\s*%d'%(left,left),r['text'].strip())]
+        if not amount:raise Pending('요령서 상자 수량 확인 필요')
+        state=journal.read()
+        state['pending']={'phase':'sent','sid':style,'name':style,'boxes_before':left,'all':True,'at':time.time()};journal.save(state)
+        ui.click(DECIDE[0],DECIDE[1],lambda f:on_dialog(f) and row_selected(f,y))
+        LOG.info('요령서 상자 사용 · %s · %d개',style,left)
+        ui.wait(lambda f:not on_dialog(f),seconds=5);ui.context.wait(4)
+        return 'sent'
     finally:_close_bag(ui)

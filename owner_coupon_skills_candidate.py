@@ -36,7 +36,8 @@ def process(adapter,context,inputs):
  if not fresh_character(adapter,context,progress) or progress.level<30:return 'identity_or_level_hold'
  scope=configured_identity(adapter.project.root);ledger=runtime_ledger(adapter,character)
  store=LearnedSkills(adapter.project.root,ledger.receipt_key)
- missing=[(sid,name) for sid,name in TARGETS if not store.known(name)]
+ from owner_starter_choice_candidate import chosen_skills
+ missing=[(sid,name) for sid,name in chosen_skills(adapter.project.root,scope) if not store.known(name)]
  if not missing:return 'already_learned'
  old=getattr(adapter,'_owner_coupon_skills_attempt',None)
  if old and old[0] is context and old[1]==ledger.receipt_key and 0<=time.monotonic()-old[2]<600:return 'retry_wait'

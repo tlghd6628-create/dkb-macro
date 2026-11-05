@@ -758,6 +758,10 @@ class SkillUI:
         """
         import cv2,numpy as np
         entry=self.public.get('skills',{}).get(str(sid))
+        if coupon and not entry:
+            # A skill picked for the fragment box may have no public image; its title still names it.
+            found=[n for n,v in self.public.get('all_skill_names',{}).items() if v.get('id')==sid]
+            if found:entry={'name':found[0],'style':self.public['all_skill_names'][found[0]].get('style')}
         if not entry:raise Pending('개별 도술 이미지가 없어 학습 보류')
         style=entry.get('style');name=entry.get('name')
         allowed=(style in ('파멸','강타') or sid in (84,68,89))
@@ -765,9 +769,12 @@ class SkillUI:
             allowed=(ledger.item.get('story_step')==1 and ledger.item.get('tutorial_required')=='쇠뇌 사격' and name=='쇠뇌 사격')
         elif coupon:
             from owner_progression import state
+            from owner_hunt_rules_candidate import configured_identity
+            from owner_starter_choice_candidate import chosen_skills
             progress=state(self.adapter)
             age=time.monotonic()-progress.observed
-            allowed=(sid in (84,68,89) and progress.character==getattr(ledger,'character',None)
+            picked=[row[0] for row in chosen_skills(self.adapter.project.root,configured_identity(self.adapter.project.root))]
+            allowed=(sid in picked and progress.character==getattr(ledger,'character',None)
                      and type(progress.level) is int and progress.level>=30
                      and 0<=age<=180)
         elif ledger.item.get('story_step')!=5:allowed=False
@@ -855,12 +862,15 @@ class SkillUI:
         self.click(754,hit['y'],skill_screen);self.context.wait(.6)
         if not self.title_is(sid,name):raise Pending('선택 도술 이름 확인 필요: '+name)
         self.click_word('배우기',(798,hit['y']-15,35,30),skill_screen,minimum=.94)
+        # Without a public image the selected title above is the proof, and the dialog only has to be this dialog.
+        if str(sid) in self.public.get('skills',{}):confirm=lambda f:learn_confirm_for(f,sid)
+        else:confirm=lambda f:match(f,'learn-confirm',(378,148,150,28),.96) is not None
         self.context.wait(.5);first=self.frame();self.context.wait(.12);second=self.frame()
-        if not learn_confirm_for(first,sid) or not learn_confirm_for(second,sid):
+        if not confirm(first) or not confirm(second):
             raise Pending('선택 도술과 개별 학습 확인창 불일치')
         intents[str(sid)]={'status':'intent','skill':name,'at':time.time()}
         ledger.event('individual_learning_intent',skill=sid,name=name)
-        self.click_word('확인',(430,290,112,55),lambda f:learn_confirm_for(f,sid),minimum=.94)
+        self.click_word('확인',(430,290,112,55),confirm,minimum=.94)
         self.context.wait(1.)
         # Only dismisses a screen that closes on any press; the learn is proved by the row going away.
         # Its effects keep moving, so two frames rarely agree here and one reading has to do.
