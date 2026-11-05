@@ -102,7 +102,8 @@ def parse_ratio(rows):
 def selected_quest_box(frame):
     import numpy as np
     if getattr(frame,'shape',None)!=(479,897,3):return None
-    mask=(frame[110:438,654:660].min(axis=2)>160).any(axis=1)
+    # A thin white rim loses brightness when the real screen is scaled down, and nothing else reaches this.
+    mask=(frame[110:438,654:660].min(axis=2)>(110 if getattr(frame,'hi',None) is not None else 160)).any(axis=1)
     edges=np.diff(np.r_[False,mask,False].astype(np.int8));starts=np.flatnonzero(edges==1);ends=np.flatnonzero(edges==-1)
     runs=[(int(a)+110,int(b)+110) for a,b in zip(starts,ends) if 16<=b-a<=55]
     if len(runs)!=1:return None

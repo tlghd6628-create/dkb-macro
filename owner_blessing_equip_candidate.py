@@ -196,8 +196,11 @@ def selected_filter(frame):
     for index,y in enumerate((78,110,141,173,204),1):
         hsv=cv2.cvtColor(frame[y-9:y+10,868:887],cv2.COLOR_RGB2HSV)
         gold=(hsv[:,:,0]>=5)&(hsv[:,:,0]<=30)&(hsv[:,:,1]>45)&(hsv[:,:,2]>70)
-        if int(gold.sum())>=100:selected.append(index)
-    return selected[0] if len(selected)==1 else None
+        selected.append((int(gold.sum()),index))
+    selected.sort(reverse=True)
+    # The chosen one stands out from the rest; a fixed count sits right between them on a scaled frame.
+    if selected[0][0]<100 or selected[1][0]>selected[0][0]*.7:return None
+    return selected[0][1]
 
 def _single_detail_controls(frame):
     if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3):return None
