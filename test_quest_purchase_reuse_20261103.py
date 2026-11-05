@@ -61,27 +61,31 @@ class Tests(unittest.TestCase):
  def run_execute(self,b,stage):
   with patch.object(q,'observe_stage',return_value=stage),patch('owner_progression.state',return_value=NS(character='char')),patch('owner_hunt_rules_candidate.configured_identity',return_value='scope'):
    return q.execute(self.ui,b,'q')
- def test_execute_calls_existing_purchase_without_enabling_optional_feature(self):
+ def test_potions_are_discarded_then_the_existing_purchase_runs(self):
   b=Book();calls=[]
   @contextmanager
   def watch(*args):yield {'buy_sent':True,'full':False}
   self.adapter.run_potion_purchase=lambda context,inputs:calls.append('existing')
-  with patch.object(q,'native_purchase_watch',watch):self.assertTrue(self.run_execute(b,{'stage':2,'done':0}))
-  self.assertEqual(calls,['existing']);self.assertFalse(self.adapter.values['common.potion_and_favorite.enabled'])
+  def discard(ui,guard):calls.append('discard');return ['231','89']
+  with patch.object(q,'native_purchase_watch',watch),patch.object(q,'discard_potions',discard):self.assertTrue(self.run_execute(b,{'stage':2,'done':0}))
+  self.assertEqual(calls,['discard','existing']);self.assertFalse(self.adapter.values['common.potion_and_favorite.enabled'])
   self.assertEqual(b.item['quests']['q']['quest_purchase']['phase'],'await_goal')
+  self.assertEqual(b.item['quests']['q']['quest_purchase']['discarded'],['231','89'])
   self.assertFalse(b.item['quests']['q']['completed'])
- def test_full_uses_three_then_retries_same_existing_purchase(self):
-  b=Book();calls=[]
-  @contextmanager
-  def watch(*args):yield {'buy_sent':True,'full':False}
-  def native(*a):
-   calls.append('existing')
-   if len(calls)==1:raise q.PotionFull()
+ def test_a_failed_discard_waits_and_buys_nothing(self):
+  b=Book();calls=[];b.defer=lambda *a,**k:calls.append('defer')
+  self.adapter.run_potion_purchase=lambda context,inputs:calls.append('existing')
+  def discard(ui,guard):raise q.Pending('no')
+  with patch.object(q,'discard_potions',discard):self.assertTrue(self.run_execute(b,{'stage':2,'done':0}))
+  self.assertEqual(calls,['defer'])
+ def test_still_full_after_discarding_waits(self):
+  b=Book();calls=[];b.defer=lambda *a,**k:calls.append('defer')
+  def native(*a):raise q.PotionFull()
   self.adapter.run_potion_purchase=native
-  def consume(ui,r,commit,guard):calls.append('use3');r['used']=3
-  with patch.object(q,'native_purchase_watch',watch),patch.object(q,'use_potions',consume):
-   self.assertTrue(self.run_execute(b,{'stage':2,'done':0}))
-  self.assertEqual(calls,['existing','use3','existing'])
+  @contextmanager
+  def watch(*args):yield {'buy_sent':False,'full':False}
+  with patch.object(q,'native_purchase_watch',watch),patch.object(q,'discard_potions',lambda ui,guard:[]):self.assertTrue(self.run_execute(b,{'stage':2,'done':0}))
+  self.assertEqual(calls,['defer'])
  def test_next_stage_confirms_only_purchase_not_chapter(self):
   b=Book();b.item['quests']['q']['quest_purchase']={'phase':'await_goal'}
   self.assertFalse(self.run_execute(b,{'stage':3,'done':None}))
