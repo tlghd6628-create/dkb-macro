@@ -100,8 +100,11 @@ def real_read(real,hits=None):
  if hits is None:return None
  result={}
  for field,(x,y,w,h) in hits.items():
-  values=[clean(row['text']) for row in read_area(None,real[y:y+h,x:x+w],language='number',scale=3,minimum=.6)]
-  if len(values)==1 and re.fullmatch(r'0|[1-9][0-9]{0,2}',values[0]):result[field]=int(values[0])
+  # A lone 1 in a tight crop often reads as nothing; with a little room around it, at a larger size, it reads (각성 1, 02:52).
+  for area,scale in ((real[y:y+h,x:x+w],3),(real[max(0,y-2):y+h+2,max(0,x-10):x+w+10],4)):
+   values=[clean(row['text']) for row in read_area(None,area,language='number',scale=scale,minimum=.6)]
+   if len(values)==1 and re.fullmatch(r'0|[1-9][0-9]{0,2}',values[0]):
+    result[field]=int(values[0]);break
  return result
 
 def table(frame):

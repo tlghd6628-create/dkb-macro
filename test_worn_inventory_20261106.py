@@ -89,6 +89,16 @@ class Belongs(unittest.TestCase):
   self.assertFalse(self.check('가호2',['반지'],'수정세공 반지'))
 
 
+class Numbers(unittest.TestCase):
+ def test_a_row_unread_in_the_tight_crop_gets_a_roomier_look(self):
+  places={'awaken':(690,499,45,26)}
+  with patch('owner_text.read_area',side_effect=[[],[dict(word('1',512))]]) as reader:
+   self.assertEqual(w.real_read(REAL,places),{'awaken':1})
+  self.assertEqual(reader.call_count,2)
+ def test_still_nothing_stays_unread(self):
+  with patch('owner_text.read_area',return_value=[]):self.assertEqual(w.real_read(REAL,{'awaken':(690,499,45,26)}),{})
+
+
 class Settled(unittest.TestCase):
  def run_reads(self,reads):
   values=iter(reads)

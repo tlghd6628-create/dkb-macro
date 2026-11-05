@@ -285,45 +285,53 @@ class Visit(WithRoute):
         self.route.read=self.read;self.route.enter=self.enter
     def read(self,item):self.reads+=1;return True
     def enter(self,item):self.enters+=1;return True
-    def test_what_cannot_run_moves_on_with_no_second_entry(self):
+    def test_what_cannot_run_moves_on_with_nothing_read_again(self):
         item=self.item({'enhance':50,'breakthrough':1,'awaken':0})
         seen=[]
         def once(item,kind):seen.append(kind);item.done.add(kind)
         self.route.press_once=once
         self.route.visit(item)
-        self.assertEqual(seen,[g.BREAK,g.AWAKEN]);self.assertEqual((self.enters,self.reads),(1,1))
-    def test_the_details_are_read_when_enhancing_ends(self):
+        self.assertEqual(seen,[g.BREAK,g.AWAKEN]);self.assertEqual((self.enters,self.reads),(1,0))
+    def test_the_details_are_read_when_enhancing_did_something(self):
         item=self.item({'enhance':20,'breakthrough':3,'awaken':1})
-        def press(item,cap=None):item.values['enhance']=50
+        def press(item,cap=None):item.changed=True;item.values['enhance']=50
         self.route.press_enhance=press
         self.route.visit(item)
         self.assertEqual((self.enters,self.reads),(1,1))
     def test_the_details_are_read_after_a_stage(self):
         item=self.item({'enhance':50,'breakthrough':3,'awaken':0})
-        def once(item,kind):item.values['awaken']=1
+        def once(item,kind):item.changed=True;item.values['awaken']=1
         self.route.press_once=once
         self.route.visit(item)
         self.assertEqual((self.enters,self.reads),(1,1))
     def test_nothing_to_do_opens_nothing(self):
         self.route.visit(self.item({'enhance':50,'breakthrough':3,'awaken':1}))
         self.assertEqual((self.enters,self.reads),(0,0))
-    def test_no_coins_still_reads_the_final_numbers(self):
+    def test_no_coins_on_the_first_press_reads_nothing(self):
         item=self.item({'enhance':20,'breakthrough':3,'awaken':1})
         def press(item,cap=None):raise g.CoinsShort()
+        self.route.press_enhance=press
+        with self.assertRaises(g.CoinsShort):self.route.visit(item)
+        self.assertEqual(self.reads,0)
+    def test_no_coins_after_some_steps_reads_where_it_stopped(self):
+        item=self.item({'enhance':20,'breakthrough':3,'awaken':1})
+        def press(item,cap=None):item.changed=True;raise g.CoinsShort()
         self.route.press_enhance=press
         with self.assertRaises(g.CoinsShort):self.route.visit(item)
         self.assertEqual(self.reads,1)
     def test_a_turn_of_the_grade_ends_at_its_cap(self):
         item=self.item({'enhance':20,'breakthrough':3,'awaken':1})
-        self.route.press_enhance=lambda item,cap=None:None
+        def press(item,cap=None):item.changed=True
+        self.route.press_enhance=press
         self.route.visit(item,23)
         self.assertEqual((self.enters,self.reads),(1,1))
     def test_rounds_are_bounded_when_nothing_rises(self):
         item=self.item({'enhance':50,'breakthrough':2,'awaken':1})
         presses=[]
-        self.route.press_once=lambda item,kind:presses.append(kind)
+        def once(item,kind):presses.append(kind);item.changed=True
+        self.route.press_once=once
         self.route.visit(item)
-        self.assertEqual(len(presses),g.ROUNDS)
+        self.assertEqual(len(presses),g.ROUNDS);self.assertEqual(self.reads,g.ROUNDS)
 
 class Enter(WithRoute):
     """성장 is pressed from the top of the details: the wheel never turns on the way in."""

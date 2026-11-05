@@ -93,7 +93,7 @@ def read_action(root,frame,word):
 class Item:
     """One worn tile: where it is, what it answers to in the settings, what its details last said."""
     def __init__(self,slot,blessing):
-        self.slot=slot;self.blessing=blessing;self.values=None;self.grade=None;self.title='';self.done=set()
+        self.slot=slot;self.blessing=blessing;self.values=None;self.grade=None;self.title='';self.done=set();self.changed=False
     @property
     def key(self):return self.slot[-1]+'번' if self.blessing else self.grade
     @property
@@ -254,6 +254,7 @@ class Route:
                 result=guard.reconcile(short_notice=lambda:coins_short(self.frame()))
                 if result!='hold_result_unknown':break
             if result=='short_of_coins':raise CoinsShort()
+            item.changed=True
             if result!='observed_progress':
                 # The details decide it on the next read of this item.
                 LOG.info('착용 %s 강화 결과 미확인 · 현재값으로 다시 판단',item.slot);return
@@ -297,6 +298,7 @@ class Route:
             LOG.info('착용 %s %s 안 누름 · %s',item.slot,LABEL[kind],status);item.done.add(kind);return
         LOG.info('착용 %s %s 입력 · 현재 %s',item.slot,LABEL[kind],item.values.get(kind))
         self.after_result(item,kind)
+        item.changed=True
     def after_result(self,item,kind):
         """Watch for the short-of-coins message, then close whatever result window the press brought up."""
         end=time.monotonic()+RESULT_SECONDS;quiet=0
@@ -339,11 +341,14 @@ class Route:
             if time.monotonic()>=self.deadline:return
             kind=self.need(item) if item.values else None
             if not kind or not self.enter(item):return
-            item.pending_kind=kind
+            item.pending_kind=kind;item.changed=False
             try:pressed=self.work(item,cap)
             except CoinsShort:
-                self.read(item);raise
-            self.read(item)
+                if item.changed:self.read(item)
+                raise
+            finally:self.leave_growth()
+            # Nothing done, nothing new to read: no materials go straight on to the next item.
+            if item.changed:self.read(item)
             if not pressed or (kind==ENHANCE and cap is not None):return
     def gear(self):
         from owner_equipment_boxes import SLOTS
