@@ -21,10 +21,23 @@ def _score(area,needle):
  values=cv2.matchTemplate(area,needle,cv2.TM_CCOEFF_NORMED)
  return float(np.where(np.isfinite(values),values,-1).max())
 
+def _badge(frame,x1,y1,x2,y2):
+ """A score for the worn E inside this box: real pixels where there are any, the small picture on an old frame."""
+ from owner_real_marks import real_of,worn_badge
+ real=real_of(frame)
+ if real is not None:return 1. if worn_badge(real,(x1,y1,x2-x1,y2-y1)) else 0.
+ return _score(frame[y1:y2,x1:x2],badge())
+
 def _ocr(engine,frame,box,*,minimum=.90):
  x,y,w,h=box;part=frame[y:y+h,x:x+w]
  if part.shape!=(h,w,3):raise Hold('장비 상세 영역 확인 필요')
- img=cv2.resize(part,None,fx=4,fy=4,interpolation=cv2.INTER_CUBIC)
+ from owner_real_marks import real_box,real_of
+ real=real_of(frame)
+ if real is not None:
+  # All tooltips sit in the middle of the screen, so they take its anchor. Twice the real size reads best.
+  rx,ry,rw,rh=real_box(box,rule='center')
+  img=cv2.copyMakeBorder(cv2.resize(real[ry:ry+rh,rx:rx+rw],None,fx=2,fy=2,interpolation=cv2.INTER_CUBIC),16,16,16,16,cv2.BORDER_CONSTANT,value=(40,40,40))
+ else:img=cv2.resize(part,None,fx=4,fy=4,interpolation=cv2.INTER_CUBIC)
  rows=[(str(t),float(s)) for p in engine.predict(img) for t,s in zip(p.get('rec_texts',()),p.get('rec_scores',())) if float(s)>=minimum]
  if not rows:raise Hold('장비 상세 글자 판독 필요')
  return ''.join(re.sub(r'\s+','',t) for t,_ in rows)
@@ -51,7 +64,7 @@ def _item_token(title,icon):
 def compare_frame(frame,engine):
  if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or frame.dtype!=np.uint8:raise Hold('장비 비교 화면 확인 필요')
  # Two distinct, known tooltip panes: E on the worn left, absent on candidate.
- worn=_score(frame[116:135,345:365],badge());candidate=_score(frame[116:135,500:520],badge())
+ worn=_badge(frame,345,116,365,135);candidate=_badge(frame,500,116,520,135)
  if candidate>=.90:raise Hold('착용 표시 확인 필요')
  grades=(_ocr(engine,frame,(311,130,33,23)),_ocr(engine,frame,(467,130,33,23)))
  kinds=(_part_name(engine,frame,(404,128,38,22)),_part_name(engine,frame,(559,128,39,22)))
@@ -70,7 +83,7 @@ def compare_frame(frame,engine):
 def worn_detail_frame(frame,engine):
  """Read the observed single equipped-weapon tooltip; no input."""
  if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or frame.dtype!=np.uint8:raise Hold('장착 장비 상세 확인 필요')
- if _score(frame[116:135,420:445],badge())<.96:raise Hold('장착 표시 확인 필요')
+ if _badge(frame,420,116,445,135)<.96:raise Hold('장착 표시 확인 필요')
  grade=_ocr(engine,frame,(390,130,35,23));kind=_part_name(engine,frame,(483,128,33,22));button=_ocr(engine,frame,(450,350,70,26))
  if grade not in ('일반','희귀','영웅') or kind not in PART_MAP or button!='장착해제':raise Hold('장착 부위·등급·버튼 확인 필요')
  return {'slot':PART_MAP[kind],'grade':grade,'item':_item_token(frame[97:115,390:502],frame[128:148,434:454].copy())}
@@ -84,7 +97,7 @@ def _part_name(engine,frame,box):
 def initial_candidate_frame(frame,engine):
  """Single un-worn tooltip; blank slot must be proved separately."""
  if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or frame.dtype!=np.uint8:raise Hold('초기 장비 상세 확인 필요')
- if _score(frame[116:135,420:445],badge())>=.90:raise Hold('이미 착용한 장비')
+ if _badge(frame,420,116,445,135)>=.90:raise Hold('이미 착용한 장비')
  grade=_ocr(engine,frame,(390,130,35,23));kind=_part_name(engine,frame,(483,128,33,22));button=_ocr(engine,frame,(450,350,70,26))
  if grade not in ('일반','희귀','영웅') or kind not in PART_MAP or button!='장착':raise Hold('초기 장비 부위·등급·장착 버튼 확인 필요')
  return {'slot':PART_MAP[kind],'candidate_grade':grade,
@@ -93,7 +106,7 @@ def initial_candidate_frame(frame,engine):
 
 def already_worn_frame(frame,engine):
  if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or frame.dtype!=np.uint8:return False
- if _score(frame[116:135,420:445],badge())<.96:return False
+ if _badge(frame,420,116,445,135)<.96:return False
  try:return _ocr(engine,frame,(450,350,70,26))=='장착해제'
  except Hold:return False
 
@@ -170,6 +183,9 @@ def comparison_shell(frame):
  from owner_energy_box_detail_candidate import asset
  from owner_progression import inventory_parts
  if getattr(frame,'shape',None)!=(479,897,3) or inventory_parts(frame)!=(True,True):return False
+ from owner_real_marks import close_at,real_of
+ real=real_of(frame)
+ if real is not None:return close_at(real,(424,99,16,13)) and close_at(real,(580,99,16,13))
  expected=asset('detail-close').min(axis=2)>190
  right=comparison_right_close()
  left_actual=frame[99:112,424:440].min(axis=2)>190;right_actual=frame[99:112,580:596].min(axis=2)>190
@@ -208,6 +224,9 @@ def single_shell(frame):
  from owner_energy_box_detail_candidate import asset
  from owner_progression import inventory_parts
  if getattr(frame,'shape',None)!=(479,897,3) or inventory_parts(frame)!=(True,True):return False
+ from owner_real_marks import close_at,real_of
+ real=real_of(frame)
+ if real is not None:return close_at(real,(502,99,16,13))
  actual=frame[99:112,502:518].min(axis=2)>190
  return bool(np.array_equal(actual,asset('detail-close').min(axis=2)>190) or np.array_equal(actual,comparison_right_close()))
 
@@ -231,7 +250,7 @@ def same_comparison_for_close(first,second):
  if not comparison_shell(first) or not comparison_shell(second):return False
  if not _same_white_anchors(first,second,((369,350,442,377),(526,350,599,377))):return False
  for frame in (first,second):
-  if _score(frame[116:135,345:365],badge())<.96 or _score(frame[116:135,500:520],badge())>=.90:return False
+  if _badge(frame,345,116,365,135)<.96 or _badge(frame,500,116,520,135)>=.90:return False
  try:
   proof={'current_item':_item_token(first[97:115,313:425],first[128:148,356:376].copy()),
          'candidate_item':_item_token(first[97:115,468:568],first[128:148,511:531].copy())}
@@ -298,6 +317,10 @@ def equipment_tab_selected(frame):
  from owner_progression import inventory_parts
  if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or frame.dtype!=np.uint8:return False
  if inventory_parts(frame)!=(True,True):return False
+ from owner_real_marks import lit_pixels,real_of
+ real=real_of(frame)
+ # The lit tab's icon against the one above it: the same comparison, at the real size.
+ if real is not None:return lit_pixels(real,(872,125,15,15))>lit_pixels(real,(872,96,15,15))*2+30
  gear=int((frame[125:140,872:887].min(axis=2)>170).sum())
  all_items=int((frame[96:111,872:887].min(axis=2)>170).sum())
  return gear>=50 and all_items<=10
@@ -306,12 +329,14 @@ def same_inventory_cell(first,second,bounds):
  x1,y1,x2,y2=bounds
  delta=np.abs(first[y1:y2,x1:x2].astype(np.int16)-second[y1:y2,x1:x2].astype(np.int16))
  if not delta.size:return False
- if float(delta.mean())<=.35:return True
+ # A frame scaled down from the real screen carries a little shimmer the old one did not: .5 on a still cell (11-05).
+ most=1.5 if getattr(first,'hi',None) is not None else .35
+ if float(delta.mean())<=most:return True
  a=first[y1+8:y1+24,x1+8:x1+24];b=second[y1+8:y1+24,x1+8:x1+24]
  if a.shape!=(16,16,3) or b.shape!=a.shape:return False
- if float(np.abs(a.astype(np.int16)-b.astype(np.int16)).mean())>.35:return False
+ if float(np.abs(a.astype(np.int16)-b.astype(np.int16)).mean())>most:return False
  border=np.abs(first[y1:y2,x1:x1+3].astype(np.int16)-second[y1:y2,x1:x1+3].astype(np.int16))
- return bool(border.size and float(border.mean())<=.35)
+ return bool(border.size and float(border.mean())<=most)
 
 def retain_rejected_cells(detector,first,second,excluded):
  """A change in an unseen cell cannot reset already rejected candidates.
@@ -440,7 +465,7 @@ class Port:
       if token.get('title_edge') and token['title_shape'][1]<32:raise Hold('장비 이름 스크롤 부분 확인 중')
     waiting_name=False;break
    except Hold:
-    if not all(_score(f[116:135,345:365],badge())>=.96 or comparison_shell(f) for f in (a,b)):break
+    if not all(_badge(f,345,116,365,135)>=.96 or comparison_shell(f) for f in (a,b)):break
     waiting_name=True
     self.context.wait(.12);a,t1=b,t2;b,t2=self._frame()
   if waiting_name:raise Hold('장비 이름 스크롤 확인 보류')
@@ -517,8 +542,8 @@ class Port:
   from owner_progression import inventory_parts
   def inventory_only(frame):
    return (inventory_parts(frame)==(True,True)
-           and _score(frame[116:135,345:365],badge())<.90
-           and _score(frame[116:135,420:445],badge())<.90
+           and _badge(frame,345,116,365,135)<.90
+           and _badge(frame,420,116,445,135)<.90
            and not same(frame,self.last[0]))
   self.context.wait(.2);after,_=self._frame();self.context.wait(.12);after2,_=self._frame()
   if not inventory_only(after) or not inventory_only(after2):raise Hold('장비 비교창 종료 후 인벤토리 상태 미확인')
@@ -541,14 +566,14 @@ class Port:
    if single(x) or single(y) or inventory_parts(x)!=(True,True) or inventory_parts(y)!=(True,True):raise Hold('장비창 종료 후 인벤토리 미확인')
    return 'inventory_restored'
   # The clicked cell opened nothing (an empty cell read as occupied after a scroll). Nothing to close.
-  if all(inventory_parts(f)==(True,True) and not close_mark(f) and not comparison_shell(f) and _score(f[116:135,345:365],badge())<.90 and _score(f[116:135,420:445],badge())<.90 for f in (a,b)):
+  if all(inventory_parts(f)==(True,True) and not close_mark(f) and not comparison_shell(f) and _badge(f,345,116,365,135)<.90 and _badge(f,420,116,445,135)<.90 for f in (a,b)):
    return 'inventory_restored'
   if not same_comparison_for_close(a,b):raise Hold('판독 불가 장비창 형태 확인 필요')
   for frame in (a,b):
-   worn_mark=_score(frame[116:135,345:365],badge())>=.96
+   worn_mark=_badge(frame,345,116,365,135)>=.96
    normal_shell=not worn_mark and comparison_shell(frame) and _ocr(self.engine,frame,(311,130,33,23))=='일반'
    if ((not worn_mark and not normal_shell) or
-       _score(frame[116:135,500:520],badge())>=.90 or
+       _badge(frame,500,116,520,135)>=.90 or
        _ocr(self.engine,frame,(370,350,72,26))!='장착해제' or
        _ocr(self.engine,frame,(526,350,72,26))!='장착'):
     raise Hold('판독 불가 장비창 종료 위치 확인 필요')
@@ -615,7 +640,7 @@ class Port:
    def same_worn(f):
     # Long names scroll, so the title cannot prove sameness here. Closing any worn detail through
     # its one X changes nothing, and the worn mark and 장착해제 button prove that is what is open.
-    try:return (single_shell(f) and _score(f[116:135,420:445],badge())>=.96
+    try:return (single_shell(f) and _badge(f,420,116,445,135)>=.96
       and _ocr(self.engine,f,(450,350,70,26))=='장착해제')
     except Hold:return False
    self.context.wait(.12);other,_=self._frame()

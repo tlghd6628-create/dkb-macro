@@ -15,6 +15,9 @@ def score(a,b):
 def close_mark(frame):
  """Exact X foreground survives the observed translucent backdrop change."""
  if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3):return False
+ from owner_real_marks import close_at,real_of
+ real=real_of(frame)
+ if real is not None:return close_at(real,(502,99,16,13))
  actual=frame[99:112,502:518];expected=asset('detail-close')
  if actual.shape!=expected.shape:return False
  ink=expected.min(axis=2)>190
@@ -120,6 +123,10 @@ def box_gone(frame):
  """The bag on show with neither a popup nor this box left in it: the last batch has no popup to read."""
  if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or inventory_parts(frame)!=(True,True):return False
  from owner_energy_choice_reader_candidate import layout_screen
+ from owner_real_marks import close_at,real_of
+ real=real_of(frame)
+ # Any window over the bag hides what is in it, so nothing can be said to be gone.
+ if real is not None and (close_at(real,(502,99,16,13)) or close_at(real,(424,99,16,13)) or close_at(real,(513,102,16,13))):return False
  return not generic_box_detail(frame) and not layout_screen(frame) and not box_candidates(frame)
 
 def left_shown(frame,left):

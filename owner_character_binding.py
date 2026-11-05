@@ -65,7 +65,10 @@ def same_name(seen,configured):
 
 
 def configured_name(root):
-    try:return json.loads((Path(root)/'settings/manager_identity.json').read_text(encoding='utf-8-sig')).get('character_name')
+    # game_name: the name on screen, where character_name is a label the records are already keyed by.
+    try:
+        identity=json.loads((Path(root)/'settings/manager_identity.json').read_text(encoding='utf-8-sig'))
+        return identity.get('game_name') or identity.get('character_name')
     except (OSError,ValueError,AttributeError):return None
 
 

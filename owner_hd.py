@@ -26,6 +26,7 @@ CELL=16
 GRID=(LOGICAL[1]//CELL+1,LOGICAL[0]//CELL+1)
 SIGNATURE=(48,27)
 SAME_SCREEN=.72
+SAME_SIDES=.85;BAG_SCREENS=('inventory','inv_','pc2_bag','pc2_box_detail');SIDE_COLUMNS=(11,37)  # of 48: x<316, x>=1062
 DEFAULT_SCREEN='field'
 STORE=Path(__file__).parent/'assets/hd'
 HIT_LIFE=5.0
@@ -165,7 +166,20 @@ def classify(real):
     tiny=signature_of(real)
     scores=[float(np.dot(l.signature,tiny)) for l in known]
     best=int(np.argmax(scores))
-    return known[best] if scores[best]>=SAME_SCREEN else default_layout()
+    if scores[best]>=SAME_SCREEN:return known[best]
+    # The bag opens over whatever scenery is there, which pulls the whole picture away from the measured one, and the
+    # field map then tears its panels apart. Its two opaque side panels stay the same.
+    sides=_side_panels(tiny)
+    close=[(scores[i],l) for i,l in enumerate(known) if l.name.startswith(BAG_SCREENS) and float(np.dot(_side_panels(l.signature),sides))>=SAME_SIDES]
+    return max(close,key=lambda pair:pair[0])[1] if close else default_layout()
+
+
+def _side_panels(tiny):
+    """A signature with only the bag's side panels left, normalized again."""
+    grid=np.asarray(tiny,np.float32).reshape(SIGNATURE[1],SIGNATURE[0])
+    part=np.concatenate((grid[:,:SIDE_COLUMNS[0]],grid[:,SIDE_COLUMNS[1]:]),axis=1).ravel()
+    part=part-part.mean();size=float(np.linalg.norm(part))
+    return part/size if size>1e-3 else part
 
 
 # ---- places

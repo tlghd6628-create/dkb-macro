@@ -4,9 +4,26 @@ import cv2
 import numpy as np
 
 
+CENTRE_ICON=(578,155,32,30)  # real pixels, inside the panel's frame
+
 class IconIdentity:
     def __init__(self,native,detector):
         self.native=native;self.detector=detector;self.pre=None;self.index=None;self.token=None;self.post_seen=False
+
+    def _same_on_real(self,real,old,index):
+        """The panel's icon against every tile before selection, at full size: the chosen tile leads by a wide margin.
+        Measured own .91 and the next .53 (hat, 11-05)."""
+        from owner_hd import real_box
+        x,y,w,h=CENTRE_ICON;needle=real[y:y+h,x:x+w];scores=[]
+        for row in self.pre_rows:
+            s=row['slot'];cx,cy,cw,ch=real_box((s['cell_x'],s['cell_y'],s['cell_w'],s['cell_h']),rule='right')
+            cell=old[cy:cy+ch,cx:cx+cw]
+            if cell.shape[0]<h or cell.shape[1]<w:return False
+            value=float(cv2.matchTemplate(cell,needle,cv2.TM_CCOEFF_NORMED).max())
+            if not np.isfinite(value):return False
+            scores.append((value,row['index']))
+        own=next((v for v,i in scores if i==index),None);others=[v for v,i in scores if i!=index]
+        return own is not None and bool(others) and own>=.75 and own-max(others)>=.25
 
     def __call__(self,frame,index,selected):
         if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or frame.dtype!=np.uint8:return None
@@ -42,6 +59,8 @@ class IconIdentity:
             a=self.pre[y:y+18,x:x+18];b=frame[y:y+18,x:x+18]
             if a.shape!=(18,18,3) or b.shape!=(18,18,3):return None
             if float(np.abs(a.astype(np.float32)-b.astype(np.float32)).mean())>2.0:return None
+        real=getattr(frame,'hi',None);old=getattr(self.pre,'hi',None)
+        if real is not None and old is not None:return self.token if self._same_on_real(np.asarray(real),np.asarray(old),index) else None
         # Compare the unmarked icon centre against every visible grid candidate;
         # border, E badge, and enhancement digits are outside these crops.
         # The selected icon is rendered on two observed pixel alignments.

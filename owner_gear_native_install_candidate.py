@@ -608,6 +608,8 @@ def _rebind_aliases(modules,old,new):
 
 
 def install(native_module,identity_resolver,readers_factory=None,*,clock=None,extra_module=None,extra_readers_factory=None,alias_modules=(),blessing_runner=None):
+    from owner_gear_levels import install_real_rows
+    install_real_rows(native_module)
     if not getattr(native_module.run_growth_equipment,'_owner_gear_native_candidate',False):
         original=native_module.run_growth_equipment
         guarded=wrap(original,identity_resolver,readers_factory,clock=clock,blessing_runner=blessing_runner)
