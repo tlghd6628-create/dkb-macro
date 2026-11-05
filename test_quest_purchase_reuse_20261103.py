@@ -73,6 +73,13 @@ class Tests(unittest.TestCase):
   self.assertEqual(b.item['quests']['q']['quest_purchase']['phase'],'await_goal')
   self.assertEqual(b.item['quests']['q']['quest_purchase']['discarded'],'231')
   self.assertFalse(b.item['quests']['q']['completed'])
+ def test_the_purchase_sees_the_switch_on_and_the_setting_stays_off(self):
+  b=Book();seen=[]
+  @contextmanager
+  def watch(*args):yield {'buy_sent':True,'full':False}
+  self.adapter.run_potion_purchase=lambda context,inputs:seen.append(self.adapter.values['common.potion_and_favorite.enabled'])
+  with patch.object(q,'native_purchase_watch',watch),patch.object(q,'discard_first_tier',lambda ui,guard:('1',None)),patch.object(q,'restore_first_tier',lambda ui,guard,slot:None):self.run_execute(b,{'stage':2,'done':0})
+  self.assertEqual(seen,[True]);self.assertFalse(self.adapter.values['common.potion_and_favorite.enabled'])
  def test_a_failed_slot_restore_keeps_the_purchase_result(self):
   b=Book()
   @contextmanager

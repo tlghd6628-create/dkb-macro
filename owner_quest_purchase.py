@@ -8,7 +8,7 @@ import logging,re,time
 import numpy as np
 from owner_skill_goal import Pending
 LOG=logging.getLogger('project_gui.DKB')
-NEEDED=3
+NEEDED=3;POTION_SWITCH='common.potion_and_favorite.enabled'
 # Real pixels on the 1366x768 screen.
 LIMIT_NAME=(75,108,200,22);LIMIT_ROW=(75,150,180,20)
 GOAL_COUNT=(790,262,85,20)  # the first objective's count, in the frame's own terms
@@ -105,6 +105,13 @@ def native_purchase_watch(adapter,context,ui,receipt,commit,guard):
  TownServices.button=button;limits.observed_full=full;limits.cached_full=cached
  try:yield evidence
  finally:TownServices.button=previous_button;limits.observed_full=previous_full;limits.cached_full=previous_cached
+
+@contextmanager
+def potion_switch_on(adapter):
+ """This story must buy even with 자동 물약구매 off, for this one call. The saved setting stays as it is."""
+ before=adapter.values;adapter.values=dict(before,**{POTION_SWITCH:True})
+ try:yield
+ finally:adapter.values=before
 
 def over_limit(ui):
  """(held, limit) from the shop's first row, 구매 가능 320/250, where two real frames agree. Or None."""
@@ -267,7 +274,7 @@ def execute(ui,book,key):
  adapter._owner_potion_full_at=-1e30
  guard();full=False
  try:
-  with native_purchase_watch(adapter,context,ui,receipt,book.commit,guard) as result:
+  with native_purchase_watch(adapter,context,ui,receipt,book.commit,guard) as result,potion_switch_on(adapter):
    LOG.info('퀘스트 필수 구매 · 기존 물약 전체 구매 경로 실행 · %s',row['title'])
    adapter.run_potion_purchase(context,ui.inputs)
  except PotionFull:
