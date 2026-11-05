@@ -3,7 +3,8 @@ from pathlib import Path
 import sys
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 import bootstrap,unittest
-from owner_starter_choice_candidate import whole_percent,percent_units,equal_display,ENERGIES
+from owner_starter_choice_candidate import whole_percent,ENERGIES
+from owner_energy_allocation_candidate import percent_units,equal_display
 
 
 class Whole(unittest.TestCase):
