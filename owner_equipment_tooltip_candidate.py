@@ -418,7 +418,7 @@ class Port:
    if not equipment_tab_selected(frame):raise Hold('장비탭이 변경되어 장착 후보 확인을 보류합니다')
    occupied=[]
    for state,hit in inventory_slots(self.service.detector,frame):
-    if tuple(hit[2]) in skipped or state=='empty':continue
+    if tuple(hit[2]) in skipped or state=='empty' or tuple(hit[2]) in getattr(self,'opened_cells',()):continue
     if state=='unknown':
      # An unreadable cell is neither empty nor a candidate. Preserve it
      # and inspect the other positively occupied cells on this visit.
@@ -447,10 +447,26 @@ class Port:
   if find(final,second[2])!=second:raise Hold('장착 후보 선택 직전 변경')
   self.context.checkpoint();self.service.check()
   if self.identity_guard() is not True:raise Hold('장비 후보 선택 전 캐릭터 변경')
+  # A selected tile becomes the game's own 장착 button, so a second press equips whatever is on it, with no check at
+  # all: a plain sword took the fan's place for -21,756 power (17:55). A tile is pressed once a visit, and never
+  # with a window open or the word on it.
+  if self.tile_armed(final,second):raise Hold('장착 후보 선택 전 상세창 또는 장착 표시 확인')
+  opened=getattr(self,'opened_cells',None)
+  if opened is None:opened=self.opened_cells=set()
+  if tuple(second[2]) in opened:raise Hold('이번 차례에 이미 연 칸')
+  opened.add(tuple(second[2]))
   self.service.click_hit(second)
   self.context.wait(.25)
   # Opening this screen is not proof of either item's grade or slot.
   return second
+ def tile_armed(self,frame,hit):
+  from owner_real_marks import close_at,real_box,real_of
+  real=real_of(frame)
+  if real is None:return False
+  if any(close_at(real,box) for box in ((502,99,16,13),(424,99,16,13),(580,99,16,13))):return True
+  from owner_text import clean,read_area
+  x1,y1,x2,y2=hit[2];x,y,w,h=real_box((x1,y1,x2-x1,y2-y1),rule='right')
+  return any('장착' in clean(row['text']) for row in read_area(self.service.adapter.project.root,real[y:y+h,x:x+w],minimum=.5))
  def read_pair(self):
   a,t1=self._frame();self.context.wait(.12);b,t2=self._frame()
   # A known marquee may be momentarily blank. Wait for actual name evidence;
