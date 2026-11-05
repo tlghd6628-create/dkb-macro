@@ -468,6 +468,9 @@ def _buy_one(adapter,context,inputs,item,shop):
  fingerprint=profile+' | '+progress.character;journal=_journal(root)
  probe=SkillUI(adapter,context,inputs)
  if not probe.normal():raise Hold('원격 상점 진입 전 일반 화면 확인 필요')
+ # Already at the floor: every item would stop for the same reason, after opening the shop to find that out.
+ from owner_coin_reserve import can_spend
+ if not can_spend(probe.frame(),'잡화상점'):return {'status':'reserve_reached','item':item}
  ui=open_remote(adapter,context,inputs) if shop=='remote' else _open_town_shop(adapter,context,inputs)
  ui._owner_shop_kind=shop
  adapter._owner_shop_entered=True

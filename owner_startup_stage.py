@@ -279,6 +279,20 @@ def install(gui):
                     finally:LOCAL.monitoring=True
                     continue
                 if initial==second=='unknown':
+                    from owner_start_menu import game_start_word
+                    start_at=game_start_word(second_frame)
+                    if start_at and game_start_word(first):
+                        start_key=(gui._owner_stage_epoch,'game-start')
+                        stage_attempts[start_key]=stage_attempts.get(start_key,0)+1
+                        if stage_attempts[start_key]>3:raise RuntimeError('게임 시작을 3회 눌러도 들어가지 못했습니다.')
+                        LOG.info('시작 화면 · 접속이 끊겨 게임 시작 입력')
+                        LOCAL.monitoring=False
+                        try:
+                            x,y=start_at;service.click_hit((x,y,(x-5,y-5,x+6,y+6)));context.wait(20)
+                        finally:LOCAL.monitoring=True
+                        unknown_since=None
+                        continue
+                if initial==second=='unknown':
                     # A guide can open a known full-screen menu after the start check already ran.
                     from owner_start_menu import kind as menu_kind,menu_panel,normalize as leave_menu
                     if (menu_kind(first) and menu_kind(first)==menu_kind(second_frame)) or (menu_panel(first) and menu_panel(second_frame)):

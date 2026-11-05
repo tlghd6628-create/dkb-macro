@@ -75,6 +75,16 @@ def title_menu(frame):
 WINDOW_TITLES=('이벤트',)
 WINDOW_AREA=(210,125,950,70)
 
+def game_start_word(frame):
+    """The place of 게임 시작 on the first screen, in 897x479 terms, or None. The game logs out after a long idle spell."""
+    if getattr(frame,'hi',None) is None:return None
+    import numpy as np
+    from owner_text import read_area,clean
+    from owner_hd import logical_of
+    rows=read_area(None,np.asarray(frame.hi)[585:635,500:870],left=500,top=585)
+    found=[r for r in rows if clean(r['text'])=='게임시작']
+    return logical_of(found[0]['rx'],found[0]['ry'],frame.layout) if len(found)==1 else None
+
 def word_window(frame):
  """(title, place of its X in 897x479 terms) of a known window, or None."""
  if getattr(frame,'hi',None) is None:return None
