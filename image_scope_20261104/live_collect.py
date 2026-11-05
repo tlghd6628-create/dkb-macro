@@ -10,8 +10,8 @@ from project_adapter import protected_assets
 from roi_runtime import RoiDetector
 import runtime_capture
 import owner_movement as m
-import owner_window_scale
-owner_window_scale.install()
+import owner_hd
+owner_hd.install()
 OUT=Path(__file__).parent/'live';OUT.mkdir(exist_ok=True)
 profile=bootstrap.A/'profiles/DKB'
 target=json.loads(protected_assets.read_text(profile/'config/authoring-targets.json',encoding='utf-8-sig'))['targets']['game']

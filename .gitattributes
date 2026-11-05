@@ -1,2 +1,5 @@
 # The apply tool compares exact bytes with the installed files. Never rewrite line endings.
 * -text
+# Both PCs add measured pictures and screens: keep both sides, the later line wins when read.
+assets/hd/index.jsonl merge=union
+assets/hd/layouts.jsonl merge=union

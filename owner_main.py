@@ -221,9 +221,9 @@ class MainPanel:
 
 
 def install(gui):
-    import owner_window_scale
-    owner_window_scale.install()
-    if hasattr(gui,'root'):gui.root.after(4000,lambda:owner_window_scale.keep_size(gui))
+    import owner_hd
+    owner_hd.install()
+    if hasattr(gui,'root'):gui.root.after(4000,lambda:owner_hd.keep_size(gui))
     if not getattr(gui,'_owner_quest_schema',False):
         model=gui.load_settings_model()
         if model.mode not in ('main_quest','sub_quest','auto_mode'):model.save('main_quest',model.values)
