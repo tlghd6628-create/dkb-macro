@@ -51,6 +51,43 @@ def close_at(real,box,rule='center'):
     return False
 
 
+@lru_cache(maxsize=1)
+def _map_merchant():
+    from PIL import Image
+    return np.asarray(Image.open(Path(__file__).parent/'assets/hud/map-merchant.png').convert('RGB'))
+
+
+def map_merchant(frame):
+    """The potion merchant anywhere on the map, as a hit in the old terms. The map centres on the character, so the
+    native fixed place only holds right after a return. Measured 1.0 and .89 selected, under .48 on other screens."""
+    import cv2
+    from owner_hd import logical_of
+    real=real_of(frame)
+    if real is None:return None
+    needle=_map_merchant();h,w=needle.shape[:2];x0,y0=60,60
+    _,score,_,pos=cv2.minMaxLoc(cv2.matchTemplate(real[y0:680,x0:1340],needle,cv2.TM_CCOEFF_NORMED))
+    if score<.8:return None
+    x,y=logical_of(x0+pos[0]+w//2,y0+pos[1]+h//2,getattr(frame,'layout',None))
+    return x,y,(x-8,y-8,x+9,y+9)
+
+
+def install_merchant():
+    """Native callers keep their retries: nothing on this map answers as it always has."""
+    from functools import wraps
+    from project_adapter.town_services import TownServices
+    ordinary=TownServices.merchant
+    if getattr(ordinary,'_owner_real_merchant',False):return
+
+    @wraps(ordinary)
+    def merchant(service):
+        frame=service.capture()
+        if real_of(frame) is None:return ordinary(service)
+        service.check()
+        return map_merchant(frame)
+    merchant._owner_real_merchant=True
+    TownServices.merchant=merchant
+
+
 def lit_pixels(real,box,rule='right',floor=170):
     x,y,w,h=real_box(box,rule=rule)
     return int((real[y:y+h,x:x+w].min(axis=2)>floor).sum())

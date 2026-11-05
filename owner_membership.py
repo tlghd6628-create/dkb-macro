@@ -236,6 +236,8 @@ def install(gui):
  if getattr(gui,'_owner_membership',False):return
  from project_adapter._entry import Adapter
  from project_adapter import town_services,mission_quests
+ from owner_real_marks import install_merchant
+ install_merchant()
  ordinary=Adapter.run_potion_purchase
  @wraps(ordinary)
  def potion(adapter,context,inputs):
