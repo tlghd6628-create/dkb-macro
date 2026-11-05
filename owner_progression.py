@@ -281,6 +281,8 @@ def observe_inventory(service,*,force=False):
     from owner_character_binding import observe as bind_character,name_head
     character=bind_character(service.adapter,character,level,name_head(frames[-1]))
     progress.accept(level,power,character)
+    # The same paired reading read_power takes, so box work right after a bag check need not open the panels again.
+    service.adapter._owner_progression_observation=(service.context,progress.observed,character)
     from owner_equipment_boxes import agree
     from owner_startup_receipts import Preparation
     try:Preparation(service.adapter.project.root,character).worn(agree(frames[0],frames[1]))
