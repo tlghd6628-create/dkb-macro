@@ -3,7 +3,7 @@ Usage: f1_watch.py start|watch SECONDS. Never sends F3: the run keeps going unle
 from pathlib import Path
 import sys,time,ctypes,os
 import win32gui,win32con
-LOG=Path(r'C:\Users\홍이\Downloads\도깨비의 세계\vendor\DKB_Auto\logs')/(time.strftime('%Y-%m-%d')+'.log')
+LOG=Path(os.environ.get('DKB_ROOT') or r'C:\Users\홍이\Downloads\도깨비의 세계')/'vendor/DKB_Auto/logs'/(time.strftime('%Y-%m-%d')+'.log')
 STATE=Path(__file__).parent/'f1'/'watch_offset.txt';STATE.parent.mkdir(exist_ok=True)
 user=ctypes.windll.user32
 mode,seconds=sys.argv[1],float(sys.argv[2])

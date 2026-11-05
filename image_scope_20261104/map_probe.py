@@ -1,5 +1,6 @@
 """Read-only: user's world-map screenshot against the original map templates. No game, no input."""
 from pathlib import Path
+import os
 import sys,json
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import bootstrap
@@ -8,7 +9,7 @@ from PIL import Image
 from project_adapter import protected_assets
 from roi_runtime import RoiDetector
 D=Path(__file__).resolve().parent
-shot=np.asarray(Image.open(r'C:\Users\홍이\Pictures\Screenshots\스크린샷 2026-11-04 111255.png').convert('RGB'))
+shot=np.asarray(Image.open(os.environ.get('DKB_MAP_SCREENSHOT') or r'C:\Users\홍이\Pictures\Screenshots\스크린샷 2026-11-04 111255.png').convert('RGB'))
 print('shot',shot.shape)
 profile=bootstrap.A/'profiles/DKB'
 target=json.loads(protected_assets.read_text(profile/'config/authoring-targets.json',encoding='utf-8-sig'))['targets']['game']

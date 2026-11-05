@@ -2,7 +2,7 @@
 from pathlib import Path
 import sys,time,ctypes,subprocess,os
 import win32gui,win32con
-R=Path(r'C:\Users\홍이\Downloads\도깨비의 세계');LOG=R/'vendor/DKB_Auto/logs'/(time.strftime('%Y-%m-%d')+'.log')
+R=Path(os.environ.get('DKB_ROOT') or r'C:\Users\홍이\Downloads\도깨비의 세계');LOG=R/'vendor/DKB_Auto/logs'/(time.strftime('%Y-%m-%d')+'.log')
 user=ctypes.windll.user32;user.SetProcessDPIAware()
 def tk(part):
     found=[]

@@ -1,7 +1,8 @@
 """View the saved event-flow frames from the 10:40 TEST at readable size."""
 from pathlib import Path
+import os
 from PIL import Image,ImageDraw
-A=Path(r'C:\Users\홍이\Downloads\도깨비의 세계\vendor\DKB_Auto\logs\scene-corpus\20261104')
+A=Path(os.environ.get('DKB_ROOT') or r'C:\Users\홍이\Downloads\도깨비의 세계')/'vendor/DKB_Auto/logs/scene-corpus/20261104'
 ds=sorted(p for p in A.iterdir() if p.is_dir() and '20261104T104013'<=p.name<='20261104T104056')
 W,H=598,320;cols=3;rows=(len(ds)+cols-1)//cols
 sheet=Image.new('RGB',(W*cols,H*rows))

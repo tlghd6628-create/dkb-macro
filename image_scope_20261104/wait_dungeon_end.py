@@ -1,7 +1,7 @@
 """Read only: wait for the running daily dungeon to reach its end, then print what the program logged."""
 from pathlib import Path
 import sys,time,os
-LOG=Path(r'C:\Users\홍이\Downloads\도깨비의 세계\vendor\DKB_Auto\logs')/(time.strftime('%Y-%m-%d')+'.log')
+LOG=Path(os.environ.get('DKB_ROOT') or r'C:\Users\홍이\Downloads\도깨비의 세계')/'vendor/DKB_Auto/logs'/(time.strftime('%Y-%m-%d')+'.log')
 offset=LOG.stat().st_size;end=time.time()+float(sys.argv[1])
 MARKS=('비경 잔여시간 없음 확인','비경 잔여시간 소진 확인','자동 동작 종료','상태: 정지')
 reason='timeout'
