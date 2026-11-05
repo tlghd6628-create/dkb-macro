@@ -87,6 +87,10 @@ def install(gui):
   from owner_character_binding import mismatch
   from owner_progression import state
   from owner_outcome import report,Outcome,WAITING,SENT_UNCONFIRMED
+  # First in the day's timetable, nobody has read the character yet, and the album waited 20 minutes for that (19:42).
+  if not state(adapter).character:
+   from owner_quest_preflight import read_power
+   read_power(adapter,context,inputs)
   if mismatch(adapter) or not state(adapter).character:
    report(adapter,'album',Outcome(WAITING,'캐릭터 확인 필요'));return True
   identity=configured_identity(adapter.project.root)
