@@ -109,9 +109,9 @@ def same_item(one,two):
   ia,ib=icon(a),icon(b)
   aligned=(_score(ia,ib)>=.97 or (_score(ia,ib[2:18,2:18])>=.97 and _score(ib,ia[2:18,2:18])>=.97))
   if x is None or y is None or not aligned:return False
-  # A name wider than the title box scrolls with no end, so two views can share too little to compare.
-  # The same icon on a clipped title is the same item (rare bracelet, 11-05: never equipped before this).
-  if a.get('title_edge') and b.get('title_edge') and _score(ia,ib)>=.97:return True
+  # A name wider than the title box scrolls, and the title edge does not always show it, so two views
+  # can share too little to compare. An identical icon is the same item (rare bracelet, 11-05: icon 1.00).
+  if x.shape!=y.shape and _score(ia,ib)>=.99:return True
   if x.shape==y.shape:
    union=np.logical_or(x,y).sum()
    if union and np.logical_and(x,y).sum()/union>=.92:return True
