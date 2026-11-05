@@ -27,8 +27,10 @@ REAL_NUMBER=(690,45,26)      # left edge, width and height of a row's number, be
 REAL_ROW_GAP=28              # rows of the growth preview stand this far apart
 REAL_TITLE=(565,155,215,32);REAL_GRADE=(575,205,70,60);REAL_TAB=(570,303,60,24);REAL_CLOSE=(782,171)
 WORDS={'강화':'enhance','개방':'opening','돌파':'breakthrough','각성':'awaken'}
-# The worn blessing tiles on the info panel, 1 to 5 from the left, always in the same place.
-BLESSING_SLOTS={'가호1':(15,294,25,27),'가호2':(51,294,25,27),'가호3':(87,294,25,27),'가호4':(122,294,25,27),'가호5':(158,294,25,27)}
+# The blessing screen: the full menu's 가호, the slot list 1 to 5 on the right, and the tile the worn one takes in that list.
+BLESSING_SLOTS=('가호1','가호2','가호3','가호4','가호5')
+REAL_MENU=(1330,32);REAL_MENU_BLESSING=(1190,145);REAL_BACK=(35,30);REAL_FILTER_X=1331;REAL_FILTER_Y={1:128,2:178,3:228,4:278,5:328};REAL_FIRST_TILE=(1092,152)
+REAL_DETAIL_BUTTONS=(565,560,240,46)  # the details window's 성장 and 장착 해제
 ALL_SLOTS=('무기','반지','팔찌','목걸이','귀걸이','갑옷','다리','신발','장갑','투구','허리띠',*BLESSING_SLOTS)
 WORN_TEST_SECONDS=240
 
@@ -184,29 +186,74 @@ def settled_read(service,context):
   result[field]=top[0][0]
  return result
 
+def on_blessing_screen(service):
+ from owner_text import shows_title
+ return shows_title(service.capture(),'가호') is True
+
+def close_bag(service,context):
+ """By its own X marks, at their real places."""
+ import owner_hd as hd
+ from owner_progression import inventory_parts
+ left,right=inventory_parts(service.capture())
+ if left:service.click_hit(hd.real_hit(295,28));context.wait(.5)
+ if right or left:service.click_hit(hd.real_hit(1344,85));context.wait(.5)
+
+def open_blessing_screen(service,context):
+ """From the field or the bag, by the full menu's 가호."""
+ import owner_hd as hd
+ if on_blessing_screen(service):return True
+ close_bag(service,context)
+ service.click_hit(hd.real_hit(*REAL_MENU));context.wait(1.5)
+ service.click_hit(hd.real_hit(*REAL_MENU_BLESSING))
+ for _ in range(20):
+  context.wait(.3);context.checkpoint();service.check()
+  if on_blessing_screen(service):
+   context.wait(1);return True
+ return False
+
+def leave_blessing_screen(service,context):
+ import owner_hd as hd
+ for _ in range(3):
+  context.checkpoint();service.check()
+  if not on_blessing_screen(service):return True
+  service.click_hit(hd.real_hit(*REAL_BACK));context.wait(1.2)
+ return not on_blessing_screen(service)
+
+def offers_unequip(frame):
+ """The details window's 장착 해제: only a worn item has it, so the first tile of a slot is proved worn without any E mark."""
+ from owner_text import clean,read
+ return any(clean(row['text'])=='장착해제' for row in read(None,frame,REAL_DETAIL_BUTTONS,scale=2,minimum=.6))
+
 def inspect_real(service,context,inputs,profile,character,slot,*,decide=None):
- """A worn tile's details at 1366x768: click its fixed place once, read, close with X. No E mark is read, so a spare can
- never answer for it. A second click on the same tile would take the item off, so a tile is never clicked twice.
+ """A worn item's details at 1366x768: click its place once, read, close with X. An item's tile is fixed on the bag's info
+ panel; a blessing is the first tile of its slot on the blessing screen. No E mark is read, so a spare can never answer for
+ either. A second click on the same tile would take the item off, so a tile is never clicked twice.
  decide(values,grade,title) runs with the window still open and always reads afresh; True means it left the window itself."""
  from owner_skill_ui import SkillUI
  from owner_mission_ui import MissionUI
  from owner_equipment_boxes import SLOTS
+ import owner_hd as hd
  adapter=service.adapter;blessing=slot in BLESSING_SLOTS
- x,y,w,h=BLESSING_SLOTS[slot] if blessing else SLOTS[slot]
  context.checkpoint();service.check();f=service.capture()
  if popup(f):raise RuntimeError('장비 상세창이 열린 채 시작 · 추가 입력 차단')
- # The bag can close by itself (a quest, a map change), and these places would then land on the field.
- from owner_progression import inventory_parts
- if inventory_parts(f)[0] is not True:
-  LOG.info('착용 %s 현재값 건너뜀 · 인벤토리 화면 미확인',slot);return False
  cache=getattr(adapter,'_owner_worn_stats_cache',None)
  if cache is None:cache={};adapter._owner_worn_stats_cache=cache
  token=(profile,character,slot);old=cache.get(token)
  if decide is None and old and time.monotonic()<old['after']:return False
+ if blessing:
+  if not open_blessing_screen(service,context):
+   LOG.info('착용 %s 현재값 건너뜀 · 가호 화면 안 열림',slot);return False
+  service.click_hit(hd.real_hit(REAL_FILTER_X,REAL_FILTER_Y[int(slot[-1])]));context.wait(1.2)
+  place=REAL_FIRST_TILE
+ else:
+  # The bag can close by itself (a quest, a map change), and these places would then land on the field.
+  from owner_progression import inventory_parts
+  if inventory_parts(f)[0] is not True:
+   LOG.info('착용 %s 현재값 건너뜀 · 인벤토리 화면 미확인',slot);return False
+  # The info panel keeps to the left edge, so a tile's real place is its logical one scaled, whatever map this frame took.
+  x,y,w,h=SLOTS[slot];place=(round((x+w/2)*hd.F),round((y+h/2)*hd.F))
  cache[token]={'after':time.monotonic()+120}
- import owner_hd as hd
- # The info panel keeps to the left edge, so a tile's real place is its logical one scaled, whatever map this frame took.
- service.click_hit(hd.real_hit(round((x+w/2)*hd.F),round((y+h/2)*hd.F)));opened=False;left=False
+ service.click_hit(hd.real_hit(*place));opened=False;left=False
  # Just after the bag opens a window can take several seconds.
  for _ in range(OPEN_LOOKS):
   context.wait(.2);context.checkpoint();service.check()
@@ -219,6 +266,8 @@ def inspect_real(service,context,inputs,profile,character,slot,*,decide=None):
   real=np.asarray(service.capture().hi);title,grade=real_heading(real)
   if not real_matches(real,slot,title):
    LOG.info('착용 %s 현재값 저장 안 함 · 상세창이 다른 장비 · %s',slot,title);return False
+  if blessing and not offers_unequip(service.capture()):
+   LOG.info('착용 %s 현재값 저장 안 함 · 첫 칸이 착용 가호가 아님 · %s',slot,title);return False
   MissionUI.wheel(ui,-1,10,at=(480,310),scene=popup)
   # Parked outside the window so no row lights up under the pointer. Nothing here presses its - or + buttons.
   with inputs.transaction():
@@ -459,5 +508,8 @@ def inspect_equipped(adapter,context,inputs,max_seconds=15,only=None):
  finally:
   context.checkpoint();service.check();f=service.capture()
   if popup(f):raise RuntimeError('장비 현재값 확인 후 상세창 종료 미확인')
-  if not initially_open and inventory_parts(f)==(True,True):close_inventory(service)
+  if getattr(f,'hi',None) is not None:
+   leave_blessing_screen(service,context)
+   if not initially_open:close_bag(service,context)
+  elif not initially_open and inventory_parts(f)==(True,True):close_inventory(service)
  return read

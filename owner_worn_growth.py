@@ -127,10 +127,7 @@ class Route:
             self.service.click_hit(real_hit(*BACK));self.context.wait(1.2)
         return not self.in_growth()
     def into_growth(self,item):
-        """From the open details window, by its own button. The window is scrolled, and a blessing's button hides until it scrolls back."""
-        from owner_mission_ui import MissionUI
-        from owner_skill_ui import SkillUI
-        MissionUI.wheel(SkillUI(self.adapter,self.context,self.inputs),1,10,at=(480,310),scene=worn.popup)
+        """From the open details window, by its own button."""
         for _ in range(5):
             row=only_word(text.read(None,self.frame(),GROWTH_BUTTON,scale=2),('성장',),.7)
             if row:break
@@ -171,7 +168,8 @@ class Route:
     def read(self,item,enter):
         """Open the details and read. With enter, go on to the growth screen if this item is short of something."""
         self.leave_growth()
-        if not self.open_bag():
+        # A blessing is read on the blessing screen, which inspect_real opens.
+        if not item.blessing and not self.open_bag():
             LOG.info('착용 %s 건너뜀 · 인벤토리 안 열림',item.slot);return None
         # The window just closed fades out, and a click into the fade is lost.
         worn.settle_after_popup(self.service,self.context)
@@ -332,6 +330,7 @@ class Route:
             for item in group:
                 if self.need(item):self.visit(item)
     def blessings(self):
+        # On the blessing screen, slot by slot. One that did not open gets one more turn after the others.
         items=[Item(slot,True) for slot in worn.BLESSING_SLOTS]
         for turn in range(2):
             for item in items:
@@ -340,6 +339,9 @@ class Route:
                 if not item.values:self.visit(item)
         missed=[item.slot for item in items if not item.values]
         if missed:LOG.info('착용 가호 현재값 못 읽음 · 이번 차례 제외 · %s',', '.join(missed))
+    def to_field(self):
+        self.leave_growth();worn.leave_blessing_screen(self.service,self.context)
+        worn.close_bag(self.service,self.context)
 
 
 def run(adapter,context,inputs):
@@ -348,8 +350,6 @@ def run(adapter,context,inputs):
     from project_adapter import market_inventory
     from owner_hunt_rules_candidate import configured_identity
     from owner_progression import state
-    from owner_equipment_boxes import close_inventory
-    from owner_progression import inventory_parts
     equipment=adapter.values.get('auto_growth.equipment.enabled') is True
     blessing=adapter.values.get('auto_growth.blessing.enabled') is True
     if not equipment and not blessing:return False
@@ -371,8 +371,7 @@ def run(adapter,context,inputs):
     except CoinsShort:
         LOG.info('성장 재화 부족 · 이번 차례 종료')
     finally:
-        context.checkpoint();route.leave_growth()
-        frame=service.capture()
-        if worn.popup(frame):service.click_hit(real_hit(*worn.REAL_CLOSE));context.wait(.5);frame=service.capture()
-        if inventory_parts(frame)[0] is True:close_inventory(service)
+        context.checkpoint()
+        if worn.popup(service.capture()):service.click_hit(real_hit(*worn.REAL_CLOSE));context.wait(.8)
+        route.to_field()
     return True

@@ -223,6 +223,22 @@ class Order(WithRoute):
         self.assertEqual(reads['무기'],50);self.assertEqual(reads['반지'],50)
 
 
+class Blessings(WithRoute):
+    def test_each_slot_is_visited_and_a_miss_gets_one_more_turn(self):
+        seen=[]
+        def visit(item,cap=None):
+            seen.append(item.slot)
+            if item.slot!='가호3' or seen.count('가호3')>1:item.values={'enhance':49,'awaken':0}
+        self.route.visit=visit
+        self.route.blessings()
+        self.assertEqual(seen,['가호1','가호2','가호3','가호4','가호5','가호3'])
+    def test_reading_a_blessing_never_opens_the_bag(self):
+        self.route.leave_growth=lambda:True;self.route.open_bag=lambda:self.fail('bag')
+        with patch.object(g.worn,'settle_after_popup'),patch.object(g.worn,'inspect_real',return_value=False) as read:
+            self.route.read(self.item({},slot='가호1',blessing=True),False)
+        self.assertEqual(read.call_args.args[5],'가호1')
+
+
 class Visit(WithRoute):
     def setUp(self):
         super().setUp();self.route.leave_growth=lambda:True;self.reads=0
