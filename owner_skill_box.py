@@ -199,26 +199,23 @@ def manual_row(rows,style):
 
 
 def open_manuals(ui,ledger,style):
-    """All 강화 요령서 선택 첩 into the one chosen manual, in a single decide."""
-    from owner_coupon_box_candidate import CouponBoxJournal
+    """All 강화 요령서 선택 첩 into the one chosen manual, in a single decide.
+
+    A repeat can only give more of the same manual, so no record guards it. The tile going away is the proof.
+    """
+    from owner_energy_box_detail_candidate import generic_box_detail
     if style not in MANUALS:return 'off'
-    journal=CouponBoxJournal(ui.adapter.project.root,'manual:'+ledger.receipt_key);state=journal.read()
     try:
         _open_bag(ui);cell=box_cell(ui.frame(),'manual-box')
-        if cell is None:
-            if state['pending']:_settle(journal,state,state['pending']['boxes_before']-1)
-            return 'none'
-        frame,left=_detail(ui,cell,'manual-box')
-        if state['pending']:_settle(journal,state,left)
-        _open_dialog(ui,frame)
+        if cell is None:return 'none'
+        ui.click(cell[0],cell[1],lambda f:box_cell(f,'manual-box')==cell)
+        _open_dialog(ui,ui.wait(generic_box_detail,seconds=4))
         y=_pick(ui,lambda rows:manual_row(rows,style),style)
         ui.click(528,327,lambda f:on_dialog(f) and row_selected(f,y));ui.context.wait(.5)
-        amount=[r for r in ui.rows((425,318,50,20),pair=False) if re.fullmatch(r'%d\s*/\s*%d'%(left,left),r['text'].strip())]
-        if not amount:raise Pending('요령서 상자 수량 확인 필요')
-        state=journal.read()
-        state['pending']={'phase':'sent','sid':style,'name':style,'boxes_before':left,'all':True,'at':time.time()};journal.save(state)
         ui.click(DECIDE[0],DECIDE[1],lambda f:on_dialog(f) and row_selected(f,y))
-        LOG.info('요령서 상자 사용 · %s · %d개',style,left)
+        LOG.info('요령서 상자 사용 · %s',style)
         ui.wait(lambda f:not on_dialog(f),seconds=5);ui.context.wait(4)
-        return 'sent'
+        frame=ui.frame()
+        if generic_box_detail(frame):return 'left'
+        return 'left' if box_cell(frame,'manual-box') else 'opened'
     finally:_close_bag(ui)
