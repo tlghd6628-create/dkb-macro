@@ -22,13 +22,11 @@ def resume(adapter,context,inputs):
     """On the field at the start of a run: back to preset 1 if the last run was stopped on another."""
     flag=_flag(adapter)
     if not flag.exists():return False
-    from owner_skill_ui import SkillUI
-    from owner_skill_goal import Pending
-    ui=SkillUI(adapter,context,inputs)
-    try:
-        ui.select_preset(1);context.checkpoint();ui.close_known()
-    except Pending as exc:
-        LOG.warning('프리셋 1번 복귀 보류 · %s',exc);return False
+    # The H menu works right on the field; the skill window would leave the character standing in a fight.
+    from owner_quick_preset import select
+    from project_adapter.town_services import TownServices
+    if not select(TownServices(adapter,context,inputs,[]),'A'):
+        LOG.warning('프리셋 1번 복귀 보류 · 다음 시작에 다시 시도');return False
     flag.unlink(missing_ok=True)
     text='이전 중지로 남은 프리셋을 1번으로 복귀'
     LOG.info(text,extra={'gui_message':text,'state_transition':True})

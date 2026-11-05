@@ -27,7 +27,7 @@ def add_fields(schema):
 def guarded(change,*args,**kwargs):
  """A preset that could not be changed must not cost the raid itself."""
  from biol_base.session import Cancelled
- try:change(*args,**kwargs);return True
+ try:return change(*args,**kwargs) is not False
  except Cancelled:raise
  except Exception:
   LOG.exception('레이드 스킬 프리셋 변경 실패 · 레이드는 계속 진행');return False
@@ -116,6 +116,8 @@ def install_on(flow_class,module,change):
 
 def install():
  from project_adapter import boss_raid
+ import owner_quick_preset
+ owner_quick_preset.install()
  from project_adapter.skill_preset import run_skill_preset
  install_on(boss_raid.RaidFlow,boss_raid,run_skill_preset)
  slow_matching(boss_raid.RaidFlow,boss_raid)
