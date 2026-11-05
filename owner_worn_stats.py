@@ -229,10 +229,14 @@ def inspect_real(service,context,inputs,profile,character,slot,*,decide=None):
  finally:
   context.checkpoint();service.check()
   if left:return
-  service.click_hit(hd.real_hit(*REAL_CLOSE))
-  for _ in range(10):
-   context.wait(.2);context.checkpoint();service.check()
-   if not popup(service.capture()):break
+  # The X can take a while, and a press can be lost. Pressing it again is safe; the tile is never pressed again.
+  for attempt in range(3):
+   service.click_hit(hd.real_hit(*REAL_CLOSE))
+   for _ in range(12):
+    context.wait(.2);context.checkpoint();service.check()
+    if not popup(service.capture()):break
+   else:continue
+   break
   else:raise RuntimeError('장비 상세창 종료 결과 미확인')
 
 def inspect_slot(service,context,inputs,profile,character,slot='무기'):

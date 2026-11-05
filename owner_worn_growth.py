@@ -118,6 +118,8 @@ class Route:
         from owner_progression import inventory_parts,open_inventory_by_key
         if inventory_parts(self.frame())[0] is True:return True
         open_inventory_by_key(self.service)
+        # A click on a tile just after the panel opens is lost.
+        self.context.wait(1.5)
         return inventory_parts(self.frame())[0] is True
     def leave_growth(self):
         for _ in range(3):
@@ -301,10 +303,14 @@ class Route:
     def gear(self):
         from owner_equipment_boxes import SLOTS
         items=[Item(slot,False) for slot in SLOTS]
-        for item in items:
-            self.check()
-            if self.read(item,False) is None:item.values=None
+        # A tile that did not open gets one more turn after the others: pressing it twice in a row could take the item off.
+        for turn in range(2):
+            for item in items:
+                self.check()
+                if not item.values:self.read(item,False)
         known=[item for item in items if item.values and item.grade]
+        missed=[item.slot for item in items if not item.values]
+        if missed:LOG.info('착용 장비 현재값 못 읽음 · 이번 차례 제외 · %s',', '.join(missed))
         # Stones are per grade: the lowest goes first and stops a little past the next lowest, so they spread.
         for grade in {item.grade for item in known}:
             group=[item for item in known if item.grade==grade]
@@ -318,10 +324,14 @@ class Route:
             for item in group:
                 if self.need(item):self.visit(item)
     def blessings(self):
-        for slot in worn.BLESSING_SLOTS:
-            self.check()
-            if time.monotonic()>=self.deadline:return
-            self.visit(Item(slot,True))
+        items=[Item(slot,True) for slot in worn.BLESSING_SLOTS]
+        for turn in range(2):
+            for item in items:
+                self.check()
+                if time.monotonic()>=self.deadline:return
+                if not item.values:self.visit(item)
+        missed=[item.slot for item in items if not item.values]
+        if missed:LOG.info('착용 가호 현재값 못 읽음 · 이번 차례 제외 · %s',', '.join(missed))
 
 
 def run(adapter,context,inputs):
