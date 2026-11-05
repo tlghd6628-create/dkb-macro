@@ -265,6 +265,15 @@ class MissionUI(SkillUI):
    from owner_story_groups import pick
    return pick(self,book,power)
   return self._pick_legacy(book,requested,power,fill=fill,reconcile_depth=reconcile_depth)
+ def to_list_top(self):
+  """A long list left at its end needs more than one sweep; a second scan used to read nothing."""
+  import hashlib
+  def view():return hashlib.sha256((self.frame()[100:436,70:490].min(axis=2)>145).tobytes()).hexdigest()
+  self.wheel(1,35);self.context.wait(.35);previous=view()
+  for _ in range(4):
+   self.wheel(1,35);self.context.wait(.35);current=view()
+   if current==previous:return
+   previous=current
  def _pick_legacy(self,book,requested,power,*,fill=False,reconcile_depth=0):
   active=book.item.get('active');modes=('main_quest','sub_quest') if requested=='main_quest' else ('sub_quest',)
   if requested=='sub_quest' and active and book.item['quests'][active]['mode']=='main_quest':book.item['active']=None;book.commit();active=None
@@ -291,7 +300,7 @@ class MissionUI(SkillUI):
     from owner_story_groups import pick
     return pick(self,book,power)
    if mode=='sub_quest' and not fill and book.batch_needs_fill(power):self._pick_legacy(book,'sub_quest',power,fill=True,reconcile_depth=reconcile_depth)
-   self.open(mode);self.wheel(1,35);last=None;still=0
+   self.open(mode);self.to_list_top();last=None;still=0
    capacity=accepted_quota(self) if fill else None
    for page in range(100):
     self.context.checkpoint();frame=self.frame()

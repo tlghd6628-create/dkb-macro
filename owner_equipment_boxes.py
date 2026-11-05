@@ -112,6 +112,11 @@ def energy_after_inventory(adapter,context,inputs,skip_before):
     if reason:
         LOG.info('기운 선택상자 보류 · %s',reason)
         return 'priority_hold'
+    # The bag check above reads the character but leaves no receipt, and then the claim quietly skipped (11-05).
+    from owner_progression import state
+    from owner_energy_box_runtime_candidate import fresh_character
+    from owner_quest_preflight import read_power
+    if not fresh_character(adapter,context,state(adapter)):read_power(adapter,context,inputs)
     from owner_energy_next_integration_candidate import attempt
     return attempt(adapter,context,inputs)
 
@@ -187,8 +192,7 @@ def install(gui):
         from owner_energy_box_runtime_candidate import Hold
         try:
             outcome=energy_after_inventory(adapter,context,inputs,skip_before)
-            if outcome not in ('disabled','character_unknown'):
-                LOG.info('기운 선택상자 · %s',outcome)
+            if outcome!='disabled':LOG.info('기운 선택상자 · %s',outcome)
         except Hold as exc:
             LOG.info('기운 선택상자 확인 보류 · %s',str(exc))
         return result
