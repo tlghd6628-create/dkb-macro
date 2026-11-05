@@ -59,14 +59,15 @@ def _map_merchant():
 
 def map_merchant(frame):
     """The potion merchant anywhere on the map, as a hit in the old terms. The map centres on the character, so the
-    native fixed place only holds right after a return. Measured 1.0 and .89 selected, under .48 on other screens."""
+    native fixed place only holds right after a return. Measured 1.0 and .89 selected, .795 under the map's rainy tint,
+    under .48 on other screens."""
     import cv2
     from owner_hd import logical_of
     real=real_of(frame)
     if real is None:return None
     needle=_map_merchant();h,w=needle.shape[:2];x0,y0=60,60
     _,score,_,pos=cv2.minMaxLoc(cv2.matchTemplate(real[y0:680,x0:1340],needle,cv2.TM_CCOEFF_NORMED))
-    if score<.8:return None
+    if score<.7:return None
     x,y=logical_of(x0+pos[0]+w//2,y0+pos[1]+h//2,getattr(frame,'layout',None))
     return x,y,(x-8,y-8,x+9,y+9)
 
