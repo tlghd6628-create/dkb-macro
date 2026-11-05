@@ -155,6 +155,13 @@ def accept_button(ui,frame):
  rows=[r for r in find_words(read(adapter.project.root,frame,word_box((675,432,200,40)),scale=3),'임무 수락') if r['score']>=.85]
  return (rows[0]['x'],rows[0]['y'],None,rows[0]['score']) if len(rows)==1 else None
 
+def auto_run_shown(ui,frame):
+ """자동 진행 where 임무 수락 would be: the selected step is already accepted."""
+ adapter=getattr(ui,'adapter',None)
+ if adapter is None or getattr(frame,'hi',None) is None:return False
+ from owner_text import read,word_box,find as find_words
+ return bool([r for r in find_words(read(adapter.project.root,frame,word_box((740,432,140,40)),scale=3),'자동 진행') if r['score']>=.85])
+
 def quota_words(ui,first):
  """수락한 임무 N/20 from the footer's real pixels, the same number on two frames."""
  adapter=getattr(ui,'adapter',None)
@@ -490,11 +497,13 @@ class Groups:
    self.ui.wheel(-1,2)
   raise Pending('선택 묶음의 현재 미완료 단계 확인 필요')
  def accept(self,key,before):
-  self.accept_clicked=False
+  self.accept_clicked=False;self.already_accepted=False
   if not self.select(key):return False
   def proof(f):return bool(quest_screen(f) and selected_quest_box(f) and accept_button(self.ui,f))
   f=self.ui.frame();button=accept_button(self.ui,f)
-  if not button:return False
+  if not button:
+   self.already_accepted=auto_run_shown(self.ui,f)
+   return False
   self.ui.context.wait(.12)
   if not proof(self.ui.frame()):return False
   self.accept_clicked=True;self.ui.click(button[0],button[1],proof)
@@ -641,6 +650,12 @@ class Groups:
      self.rejected.add(key)
      try:
       if self.accept(key,self.actual):self.actual+=1
+      # The list's accepted mark is a small picture that 1366x768 misses on some rows. Taken for not accepted, such a
+      # quest found no accept button and was passed over without a word: the potion story sat at 0/3 for hours.
+      elif getattr(self,'already_accepted',False) and group_eligible(self.book,key,self.power):
+       LOG.info('서사 수락 표시 미확인 · 자동 진행 버튼으로 수락 확인 · %s',self.book.item['quests'][key]['title'])
+       self.book.item['quests'][key]['accepted']=True
+       self.activate(key);return key
      except Pending as exc:
       if getattr(self,'accept_clicked',False):
        LOG.warning('수락 입력 후 실제 개수 확인 보류 · %s · %s',self.book.item['quests'][key]['title'],exc);raise

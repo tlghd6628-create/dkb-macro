@@ -10,6 +10,7 @@ LOG=logging.getLogger('project_gui.DKB')
 NEEDED=3
 # Real pixels on the 1366x768 screen.
 LIMIT_NAME=(75,108,200,22);LIMIT_ROW=(75,150,180,20);SLOT_COUNT=(562,722,44,24);SLOT_PRESS=(581,722)
+GOAL_COUNT=(790,262,85,20)  # the first objective's count, in the frame's own terms
 
 class PotionFull(BaseException):pass
 
@@ -29,13 +30,20 @@ def observe_stage(ui):
  # leaf. Reuse that ownership instead of re-OCRing its small title again.
  center=selected_center(ui.frame())
  if center is None:return None
- ui.rows((832,264,40,17),language='number',pair_minimum=.98)
- pair=getattr(ui,'_owner_last_rows_pair',None)
- def ratio(answer):
-  values={(int(m[1]),int(m[2])) for r in answer if r.get('score',0)>=.98
+ def ratio(answer,floor=.98):
+  values={(int(m[1]),int(m[2])) for r in answer if r.get('score',0)>=floor
           for m in [re.fullmatch(r'\s*(\d{1,2})\s*/\s*(\d{1,2})\s*',str(r.get('text','')))] if m}
   return next(iter(values)) if len(values)==1 else None
- values=[ratio(a) for a in pair[2]] if pair else []
+ if getattr(ui.frame(),'hi',None) is not None:
+  # The objective's count on the real screen, the same on two looks. The shrunken number never reached .98.
+  from owner_text import read,word_box
+  values=[]
+  for _ in range(2):
+   frame=ui.frame();values.append(ratio(read(ui.adapter.project.root,frame,word_box(GOAL_COUNT),scale=3),.85));ui.context.wait(.12)
+ else:
+  ui.rows((832,264,40,17),language='number',pair_minimum=.98)
+  pair=getattr(ui,'_owner_last_rows_pair',None)
+  values=[ratio(a) for a in pair[2]] if pair else []
  LOG.info('퀘스트 필수 구매 목표 대조 · 수량=%s',values)
  if len(values)!=2 or values[0] is None or values[0]!=values[1] or selected_center(ui.frame())!=center:return None
  done,total=values[0]
