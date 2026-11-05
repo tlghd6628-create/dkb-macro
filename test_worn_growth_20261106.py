@@ -32,6 +32,16 @@ class Zones:
         raise AssertionError(box)
 
 
+class FontPair(unittest.TestCase):
+    def pair(self,a,b):return g.font_pair([row(a)],[row(b)])
+    def test_the_right_side(self):self.assertEqual(self.pair('40','47+'),(40,41))
+    def test_the_left_side(self):self.assertEqual(self.pair('47','42'),(41,42))
+    def test_seven_that_are_really_seven(self):self.assertEqual(self.pair('47','48'),(47,48))
+    def test_nothing_fits(self):self.assertIsNone(self.pair('40','45'))
+    def test_two_ways_is_none(self):self.assertIsNone(g.font_pair([row('7')],[row('8'),row('2')]))
+    def test_unread_is_none(self):self.assertIsNone(g.font_pair([],[row('41')]))
+
+
 class Panel(unittest.TestCase):
     def read(self,zones,gold=True):
         with patch('owner_text.read',zones.read):return g.read_panel(None,frame(gold))
@@ -210,10 +220,8 @@ class Order(WithRoute):
     def test_the_lowest_of_a_grade_goes_first_up_to_a_little_past_the_next(self):
         reads={'무기':10,'반지':20}
         seen=[]
-        def read(item,enter):
-            if not enter:
-                item.values=dict(enhance=reads.get(item.slot,50),breakthrough=3,awaken=1);item.grade='희귀';return False
-            return False
+        def read(item):
+            item.values=dict(enhance=reads.get(item.slot,50),breakthrough=3,awaken=1);item.grade='희귀';return True
         def visit(item,cap=None):
             seen.append((item.slot,cap));item.values['enhance']=min(50,cap if cap else 50);reads[item.slot]=item.values['enhance']
         self.route.read=read;self.route.visit=visit
@@ -221,7 +229,6 @@ class Order(WithRoute):
         self.route.gear()
         self.assertEqual(seen[0],('무기',23))
         self.assertEqual(reads['무기'],50);self.assertEqual(reads['반지'],50)
-
 
 class Blessings(WithRoute):
     def test_each_slot_is_visited_and_a_miss_gets_one_more_turn(self):
@@ -233,39 +240,117 @@ class Blessings(WithRoute):
         self.route.blessings()
         self.assertEqual(seen,['가호1','가호2','가호3','가호4','가호5','가호3'])
     def test_reading_a_blessing_never_opens_the_bag(self):
-        self.route.leave_growth=lambda:True;self.route.open_bag=lambda:self.fail('bag')
+        self.route.leave_growth=lambda:True;self.route.open_bag=lambda:True
         with patch.object(g.worn,'settle_after_popup'),patch.object(g.worn,'inspect_real',return_value=False) as read:
-            self.route.read(self.item({},slot='가호1',blessing=True),False)
+            self.route.read(self.item({},slot='가호1',blessing=True))
         self.assertEqual(read.call_args.args[5],'가호1')
 
 
 class Visit(WithRoute):
     def setUp(self):
-        super().setUp();self.route.leave_growth=lambda:True;self.reads=0
-        def read(item,enter):
-            self.reads+=1
-            return self.route.need(item)
-        self.route.read=read
-    def test_what_cannot_run_moves_on_with_nothing_read_twice(self):
+        super().setUp();self.route.leave_growth=lambda:True;self.reads=0;self.enters=0
+        self.route.read=self.read;self.route.enter=self.enter
+    def read(self,item):self.reads+=1;return True
+    def enter(self,item):self.enters+=1;return True
+    def test_what_cannot_run_moves_on_with_no_second_entry(self):
         item=self.item({'enhance':50,'breakthrough':1,'awaken':0})
         seen=[]
         def once(item,kind):seen.append(kind);item.done.add(kind)
         self.route.press_once=once
         self.route.visit(item)
-        self.assertEqual(seen,[g.BREAK,g.AWAKEN]);self.assertEqual(self.reads,1)
-    def test_a_press_reads_the_details_again(self):
+        self.assertEqual(seen,[g.BREAK,g.AWAKEN]);self.assertEqual((self.enters,self.reads),(1,0))
+    def test_a_stage_is_read_again_from_the_details(self):
         item=self.item({'enhance':50,'breakthrough':3,'awaken':0})
-        def once(item,kind):item.values['awaken']=1
+        def once(item,kind):item.stage_pressed=True;item.values['awaken']=1
         self.route.press_once=once
         self.route.visit(item)
-        self.assertEqual(self.reads,2)
+        self.assertEqual((self.enters,self.reads),(1,1))
+    def test_enhancing_never_reopens_the_details(self):
+        item=self.item({'enhance':20,'breakthrough':3,'awaken':1})
+        def press(item,cap=None):item.values['enhance']=50
+        self.route.press_enhance=press
+        self.route.visit(item)
+        self.assertEqual(self.reads,0)
+    def test_nothing_to_do_opens_nothing(self):
+        self.route.visit(self.item({'enhance':50,'breakthrough':3,'awaken':1}))
+        self.assertEqual((self.enters,self.reads),(0,0))
+    def test_a_blessing_goes_straight_in(self):
+        item=self.item(None,slot='가호1',blessing=True);item.grade=None
+        def press(item,cap=None):item.done.add(g.ENHANCE)
+        self.route.press_enhance=press
+        self.route.visit(item)
+        self.assertEqual((self.enters,self.reads),(1,0))
+    def test_no_coins_ends_with_the_screen_left(self):
+        left=[];self.route.leave_growth=lambda:left.append(1)
+        item=self.item({'enhance':20,'breakthrough':3,'awaken':1})
+        def press(item,cap=None):raise g.CoinsShort()
+        self.route.press_enhance=press
+        with self.assertRaises(g.CoinsShort):self.route.visit(item)
+        self.assertEqual(left,[1])
+    def test_a_turn_of_the_grade_ends_at_its_cap(self):
+        item=self.item({'enhance':20,'breakthrough':3,'awaken':1})
+        self.route.press_enhance=lambda item,cap=None:None
+        self.route.visit(item,23)
+        self.assertEqual(self.enters,1)
     def test_rounds_are_bounded_when_nothing_rises(self):
         item=self.item({'enhance':50,'breakthrough':2,'awaken':1})
         presses=[]
-        self.route.press_once=lambda item,kind:presses.append(kind)
+        def once(item,kind):presses.append(kind);item.stage_pressed=True
+        self.route.press_once=once
         self.route.visit(item)
         self.assertEqual(len(presses),g.ROUNDS)
 
+
+class Enter(WithRoute):
+    """성장 is pressed from the top of the details: the wheel never turns on the way in."""
+    def run_enter(self,*,heading=('토끼가호장식2','일반'),growth=True):
+        self.route.leave_growth=lambda:True;self.route.open_bag=lambda:True;closed=[]
+        self.route.into_growth=lambda item:growth
+        item=self.item(None,slot='반지');item.grade=None
+        with patch.object(g.worn,'settle_after_popup'),patch.object(g.worn,'open_tile',return_value=True),patch.object(g.worn,'tile_heading',return_value=heading),\
+             patch.object(g.worn,'close_details',side_effect=lambda *a:closed.append(1)),patch('owner_mission_ui.MissionUI.wheel',side_effect=AssertionError('scrolled')):
+            return self.route.enter(item),closed,item
+    def test_in_with_no_scroll(self):
+        entered,closed,item=self.run_enter()
+        self.assertTrue(entered);self.assertEqual(closed,[]);self.assertEqual(item.grade,'일반')
+    def test_another_items_window_closes(self):
+        entered,closed,_=self.run_enter(heading=None)
+        self.assertFalse(entered);self.assertEqual(closed,[1])
+    def test_no_growth_screen_closes(self):
+        entered,closed,_=self.run_enter(growth=False)
+        self.assertFalse(entered);self.assertEqual(closed,[1])
+
+
+class Publish(WithRoute):
+    """Where enhancing stops, the left of 42 >> 43 goes into the table."""
+    def rows(self):
+        import owner_growth_current as current
+        return current,self.adapter.project.root
+    def test_a_blessing_keeps_its_kind_and_takes_the_level(self):
+        current,root=self.rows()
+        current.observe_blessing(root,'identity','3번','도깨비','희귀',{'enhance':23,'opening':2,'awaken':0})
+        self.route.publish_level(self.item({'enhance':23},slot='가호3',blessing=True),30)
+        self.assertEqual(current.blessing_rows(root,'identity')[2],('3번','도깨비','희귀','30','2','0'))
+    def test_an_item_keeps_its_other_numbers(self):
+        current,root=self.rows()
+        current.observe(root,{'character':'identity','item_identity':'worn-slot:무기','slot':'무기','grade':'희귀','enhancement':41,'opening':4,'breakthrough':3,'awakening':1,'verified_fields':['enhancement','opening','breakthrough','awakening']})
+        item=self.item({'enhance':41,'breakthrough':3,'awaken':1})
+        self.route.publish_level(item,42)
+        self.assertEqual(current.equipped_rows(root,'identity')[0],('무기','희귀','42','4','3','1'))
+        self.assertEqual(item.values['enhance'],42)
+    def test_a_turn_that_ends_on_no_material_shows_where_it_stopped(self):
+        self.zones=Zones(level=42,next_level=43,count='1/6');self.service.click_hit=lambda hit:self.fail('pressed')
+        item=self.item({'enhance':42,'breakthrough':3,'awaken':1});seen=[]
+        self.route.publish_level=lambda item,level:seen.append(level)
+        with patch('owner_text.read',self.zones.read):self.route.press_enhance(item)
+        self.assertEqual(seen,[42])
+    def test_a_turn_that_ends_on_no_coins_shows_where_it_stopped(self):
+        self.zones=Zones(level=42,next_level=43);short=[];seen=[]
+        self.service.click_hit=lambda hit:short.append(1)
+        self.route.publish_level=lambda item,level:seen.append(level)
+        with patch('owner_text.read',self.zones.read),patch.object(g,'coins_short',side_effect=lambda f:bool(short)):
+            with self.assertRaises(g.CoinsShort):self.route.press_enhance(self.item({'enhance':42,'breakthrough':3,'awaken':1}))
+        self.assertEqual(seen,[42])
 
 class Stand(unittest.TestCase):
     def test_the_old_list_route_stands_aside_after_this_route(self):

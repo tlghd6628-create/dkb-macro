@@ -224,6 +224,49 @@ def offers_unequip(frame):
  from owner_text import clean,read
  return any(clean(row['text'])=='장착해제' for row in read(None,frame,REAL_DETAIL_BUTTONS,scale=2,minimum=.6))
 
+def open_tile(service,context,slot):
+ """Click a worn item's place once and wait for its details. False leaves nothing open."""
+ from owner_equipment_boxes import SLOTS
+ import owner_hd as hd
+ if slot in BLESSING_SLOTS:
+  if not open_blessing_screen(service,context):
+   LOG.info('착용 %s 건너뜀 · 가호 화면 안 열림',slot);return False
+  service.click_hit(hd.real_hit(REAL_FILTER_X,REAL_FILTER_Y[int(slot[-1])]));context.wait(1.2)
+  place=REAL_FIRST_TILE
+ else:
+  # The bag can close by itself (a quest, a map change), and these places would then land on the field.
+  from owner_progression import inventory_parts
+  if inventory_parts(service.capture())[0] is not True:
+   LOG.info('착용 %s 건너뜀 · 인벤토리 화면 미확인',slot);return False
+  # The info panel keeps to the left edge, so a tile's real place is its logical one scaled, whatever map this frame took.
+  x,y,w,h=SLOTS[slot];place=(round((x+w/2)*hd.F),round((y+h/2)*hd.F))
+ service.click_hit(hd.real_hit(*place))
+ # Just after the bag opens a window can take several seconds.
+ for _ in range(OPEN_LOOKS):
+  context.wait(.2);context.checkpoint();service.check()
+  if popup(service.capture()):return True
+ LOG.info('착용 %s 건너뜀 · 상세창 안 열림',slot);return False
+
+def tile_heading(service,context,slot):
+ """(title, grade) when the open window is this slot's worn item, else None."""
+ context.wait(.3)
+ real=np.asarray(service.capture().hi);title,grade=real_heading(real)
+ if not real_matches(real,slot,title):
+  LOG.info('착용 %s 진행 안 함 · 상세창이 다른 장비 · %s',slot,title);return None
+ if slot in BLESSING_SLOTS and not offers_unequip(service.capture()):
+  LOG.info('착용 %s 진행 안 함 · 첫 칸이 착용 가호가 아님 · %s',slot,title);return None
+ return title,grade
+
+def close_details(service,context):
+ import owner_hd as hd
+ # The X can take a while, and a press can be lost. Pressing it again is safe; the tile is never pressed again.
+ for attempt in range(3):
+  service.click_hit(hd.real_hit(*REAL_CLOSE))
+  for _ in range(12):
+   context.wait(.2);context.checkpoint();service.check()
+   if not popup(service.capture()):return
+ raise RuntimeError('장비 상세창 종료 결과 미확인')
+
 def inspect_real(service,context,inputs,profile,character,slot,*,decide=None):
  """A worn item's details at 1366x768: click its place once, read, close with X. An item's tile is fixed on the bag's info
  panel; a blessing is the first tile of its slot on the blessing screen. No E mark is read, so a spare can never answer for
@@ -231,43 +274,21 @@ def inspect_real(service,context,inputs,profile,character,slot,*,decide=None):
  decide(values,grade,title) runs with the window still open and always reads afresh; True means it left the window itself."""
  from owner_skill_ui import SkillUI
  from owner_mission_ui import MissionUI
- from owner_equipment_boxes import SLOTS
- import owner_hd as hd
  adapter=service.adapter;blessing=slot in BLESSING_SLOTS
- context.checkpoint();service.check();f=service.capture()
- if popup(f):raise RuntimeError('장비 상세창이 열린 채 시작 · 추가 입력 차단')
+ context.checkpoint();service.check()
+ if popup(service.capture()):raise RuntimeError('장비 상세창이 열린 채 시작 · 추가 입력 차단')
  cache=getattr(adapter,'_owner_worn_stats_cache',None)
  if cache is None:cache={};adapter._owner_worn_stats_cache=cache
  token=(profile,character,slot);old=cache.get(token)
  if decide is None and old and time.monotonic()<old['after']:return False
- if blessing:
-  if not open_blessing_screen(service,context):
-   LOG.info('착용 %s 현재값 건너뜀 · 가호 화면 안 열림',slot);return False
-  service.click_hit(hd.real_hit(REAL_FILTER_X,REAL_FILTER_Y[int(slot[-1])]));context.wait(1.2)
-  place=REAL_FIRST_TILE
- else:
-  # The bag can close by itself (a quest, a map change), and these places would then land on the field.
-  from owner_progression import inventory_parts
-  if inventory_parts(f)[0] is not True:
-   LOG.info('착용 %s 현재값 건너뜀 · 인벤토리 화면 미확인',slot);return False
-  # The info panel keeps to the left edge, so a tile's real place is its logical one scaled, whatever map this frame took.
-  x,y,w,h=SLOTS[slot];place=(round((x+w/2)*hd.F),round((y+h/2)*hd.F))
  cache[token]={'after':time.monotonic()+120}
- service.click_hit(hd.real_hit(*place));opened=False;left=False
- # Just after the bag opens a window can take several seconds.
- for _ in range(OPEN_LOOKS):
-  context.wait(.2);context.checkpoint();service.check()
-  if popup(service.capture()):opened=True;break
- if not opened:
-  LOG.info('착용 %s 현재값 건너뜀 · 상세창 안 열림',slot);return False
+ if not open_tile(service,context,slot):return False
+ left=False
  ui=SkillUI(adapter,context,inputs)
  try:
-  context.wait(.3)
-  real=np.asarray(service.capture().hi);title,grade=real_heading(real)
-  if not real_matches(real,slot,title):
-   LOG.info('착용 %s 현재값 저장 안 함 · 상세창이 다른 장비 · %s',slot,title);return False
-  if blessing and not offers_unequip(service.capture()):
-   LOG.info('착용 %s 현재값 저장 안 함 · 첫 칸이 착용 가호가 아님 · %s',slot,title);return False
+  heading=tile_heading(service,context,slot)
+  if heading is None:return False
+  title,grade=heading
   MissionUI.wheel(ui,-1,10,at=(480,310),scene=popup)
   # Parked outside the window so no row lights up under the pointer. Nothing here presses its - or + buttons.
   with inputs.transaction():
@@ -302,16 +323,7 @@ def inspect_real(service,context,inputs,profile,character,slot,*,decide=None):
   return True
  finally:
   context.checkpoint();service.check()
-  # The X can take a while, and a press can be lost. Pressing it again is safe; the tile is never pressed again.
-  for attempt in range(0 if left else 3):
-   service.click_hit(hd.real_hit(*REAL_CLOSE))
-   for _ in range(12):
-    context.wait(.2);context.checkpoint();service.check()
-    if not popup(service.capture()):break
-   else:continue
-   break
-  else:
-   if not left:raise RuntimeError('장비 상세창 종료 결과 미확인')
+  if not left:close_details(service,context)
 
 def inspect_slot(service,context,inputs,profile,character,slot='무기'):
  """One short, guarded tooltip inspection during an existing inventory visit.
