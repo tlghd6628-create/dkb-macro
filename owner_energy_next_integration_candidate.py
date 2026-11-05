@@ -64,7 +64,7 @@ def attempt(adapter,context,inputs):
      return 'confirmed'
    try:
     done=run_batched(port,journal,choices,guard=guard,
-                     validated_targets=set(READERS),max_batches=3,max_seconds=90)
+                     validated_targets=set(READERS),max_batches=3,max_seconds=120)
    except (Hold,OSError,ValueError,TypeError) as exc:
     # A failed cleanup below replaces this reason, and it was the only record of what went wrong.
     LOG.info('기운 선택상자 중단 사유 · %s',exc);raise

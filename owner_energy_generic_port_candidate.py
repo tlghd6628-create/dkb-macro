@@ -76,6 +76,8 @@ class GenericPort(Port):
    if not pair:raise Hold('선택 기운 재확인 필요')
    state=pair[0]
   # Even an exact desired quantity needs independently fresh two-frame proof.
+  # The name is checked before and after the steps; between them it cost 2 s a press and ran out the 90 s.
+  self._stepping=True
   for _ in range(1000):
    if guard() is not True:raise Hold('캐릭터 또는 설정 변경')
    if state.get('selected')!=name or state.get('available_count')!=total:raise Hold('선택 기운 또는 잔량 변경')
@@ -101,6 +103,7 @@ class GenericPort(Port):
    if not pair:raise Hold('수량 변경 결과 재확인 필요 · %s에서 %s 기대'%(current,expected))
    state=pair[0]
   else:raise Hold('수량 조절 한도 초과')
+  self._stepping=False
   final=self.pair(read_pair)
   if not final or final[0].get('selected')!=name or final[0].get('quantity')!=quantity or final[0].get('available_count')!=total:raise Hold('묶음 확정 직전 수량 확인 필요')
   self.last_target=name;self.expected_boxes_before=total;self.expected_quantity=quantity
@@ -128,10 +131,10 @@ class GenericPort(Port):
   x=reference['x']
   return same_dimmed_text(reference['name'],frame[9:25,x:x+33],reference['anchor'],frame[11:23,34:53])
  def pair(self,reader):
-  if not getattr(self,'evidence_identity',None):return super().pair(reader)
+  if getattr(self,'_stepping',False) or not getattr(self,'evidence_identity',None):return super().pair(reader)
   return super().pair(lambda a,b:reader(a,b) if self.same_character(a) and self.same_character(b) else None)
  def click(self,x,y,guard,predicate,on_sent=None):
-  if not getattr(self,'evidence_identity',None):return super().click(x,y,guard,predicate,on_sent=on_sent)
+  if getattr(self,'_stepping',False) or not getattr(self,'evidence_identity',None):return super().click(x,y,guard,predicate,on_sent=on_sent)
   def proved(frame):
    same=self.same_character(frame);screen=bool(predicate(frame))
    if not (same and screen):LOG.info('상자 입력 전 확인 실패 · 캐릭터=%s · 화면=%s',same,screen)
