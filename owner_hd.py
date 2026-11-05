@@ -273,6 +273,14 @@ def to_real_point(x,y,layout=None):
     return min(REAL[0]-1,max(0,round(x*F+shift))),min(REAL[1]-1,max(0,round(y*F)))
 
 
+def real_hit(rx,ry):
+    """A click hit that lands on exactly this real place, whichever screen map the current frame took. A bag over a busy
+    field can take the map whose left side stands 34.6 px off, and a worn tile's click then went to the tile beside it (01:56)."""
+    x,y=round(rx/F),round(ry/F)
+    with _lock:_pins.append((time.monotonic(),x-2,y-2,x+2,y+2,rx,ry))
+    return x,y,(x-6,y-5,x+7,y+6)
+
+
 def logical_of(rx,ry,layout=None):
     """The place in 897x479 terms for a real place something was read at. A click there lands back on it."""
     layout=layout or _current or default_layout();y=ry/F

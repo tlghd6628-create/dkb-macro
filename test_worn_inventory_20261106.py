@@ -12,6 +12,8 @@ import owner_growth_current as current
 
 def word(text,y):return dict(text=text,score=.9,rx=620,ry=y,bounds=(600,y-9,640,y+9))
 REAL=np.zeros((768,1366,3),np.uint8)
+import owner_hd
+CLOSE=owner_hd.real_hit(*w.REAL_CLOSE)[:2]
 
 
 class Table(unittest.TestCase):
@@ -95,7 +97,7 @@ class Inspect(unittest.TestCase):
   self.dir=tempfile.TemporaryDirectory();self.addCleanup(self.dir.cleanup)
   self.root=Path(self.dir.name);self.clicks=[];self.open=False;self.opens=True
   def click_hit(hit):
-   self.clicks.append(hit[:2]);self.open=self.opens and hit[:2]!=(510,106)
+   self.clicks.append(hit[:2]);self.open=self.opens and hit[:2]!=CLOSE
   self.service=NS(adapter=NS(project=NS(root=self.root)),check=lambda:None,capture=lambda:NS(hi=REAL),click_hit=click_hit)
   self.context=NS(checkpoint=lambda:None,wait=lambda s:None)
   from contextlib import contextmanager
@@ -111,7 +113,7 @@ class Inspect(unittest.TestCase):
  def test_a_blessing_is_saved_by_its_place(self):
   self.assertIs(self.run_slot('가호2'),True)
   self.assertEqual(current.blessing_rows(self.root,'profile')[1],('2번','토끼','일반','20','2','0'))
-  self.assertEqual(self.clicks[0],(63,307));self.assertEqual(self.clicks[-1],(510,106));self.assertEqual(len(self.clicks),2)
+  self.assertEqual(self.clicks[0],(64,308));self.assertEqual(self.clicks[-1],CLOSE);self.assertEqual(len(self.clicks),2)
  def test_an_item_is_saved_by_its_slot(self):
   self.assertIs(self.run_slot('무기',values={'enhance':50,'opening':5,'breakthrough':3,'awaken':1},heading=('바람물결은선','희귀')),True)
   self.assertEqual(current.equipped_rows(self.root,'profile')[0],('무기','희귀','50','5','3','1'))
@@ -127,12 +129,12 @@ class Inspect(unittest.TestCase):
   self.service.adapter._owner_worn_stats_cache={}
   with patch.object(w,'settled_read',return_value=None):pass
   self.assertIs(self.run_slot('가호2',values={}),False)
-  self.assertEqual(current.blessing_rows(self.root,'profile')[1][1],'미확인');self.assertEqual(self.clicks[-1],(510,106))
+  self.assertEqual(current.blessing_rows(self.root,'profile')[1][1],'미확인');self.assertEqual(self.clicks[-1],CLOSE)
  matches=True
  def test_a_window_of_another_tile_saves_nothing_and_closes(self):
   self.matches=False
   self.assertIs(self.run_slot('가호2'),False)
-  self.assertEqual(current.blessing_rows(self.root,'profile')[1][1],'미확인');self.assertEqual(self.clicks[-1],(510,106))
+  self.assertEqual(current.blessing_rows(self.root,'profile')[1][1],'미확인');self.assertEqual(self.clicks[-1],CLOSE)
  def test_an_unknown_kind_saves_nothing(self):
   self.assertIs(self.run_slot('가호1',heading=('호랑이가호장식1','희귀')),False)
   self.assertEqual(current.blessing_rows(self.root,'profile')[0][1],'미확인')

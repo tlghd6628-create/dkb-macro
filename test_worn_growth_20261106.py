@@ -196,10 +196,10 @@ class Once(WithRoute):
 
 class Material(WithRoute):
     def choose(self,rows):
-        with patch('owner_text.read',return_value=rows),patch('owner_hd.logical_of',return_value=(700,90)):
+        with patch('owner_text.read',return_value=rows):
             return self.route.choose_material(self.item({'enhance':50,'awaken':0})),self.clicks
     def test_a_second_tile_is_the_spare(self):
-        chosen,clicks=self.choose([row('2')]);self.assertTrue(chosen);self.assertEqual(clicks[0][:2],(700,90))
+        chosen,clicks=self.choose([row('2')]);self.assertTrue(chosen);self.assertEqual(clicks[0][:2],g.real_hit(*g.SECOND_TILE)[:2])
     def test_the_item_alone_has_no_spare(self):
         chosen,clicks=self.choose([row('1')]);self.assertFalse(chosen);self.assertEqual(clicks,[])
     def test_an_unread_count_presses_nothing(self):

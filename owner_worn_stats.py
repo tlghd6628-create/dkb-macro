@@ -25,7 +25,7 @@ def label(field):
 REAL_ROWS=(565,335,235,250)  # the tooltip's rows, in real pixels. A blessing's sit lower than an item's.
 REAL_NUMBER=(690,45,26)      # left edge, width and height of a row's number, between its - and + buttons
 REAL_ROW_GAP=28              # rows of the growth preview stand this far apart
-REAL_TITLE=(565,155,215,32);REAL_GRADE=(575,205,70,60);REAL_TAB=(570,303,60,24)
+REAL_TITLE=(565,155,215,32);REAL_GRADE=(575,205,70,60);REAL_TAB=(570,303,60,24);REAL_CLOSE=(782,171)
 WORDS={'강화':'enhance','개방':'opening','돌파':'breakthrough','각성':'awaken'}
 # The worn blessing tiles on the info panel, 1 to 5 from the left, always in the same place.
 BLESSING_SLOTS={'가호1':(15,294,25,27),'가호2':(51,294,25,27),'가호3':(87,294,25,27),'가호4':(122,294,25,27),'가호5':(158,294,25,27)}
@@ -180,7 +180,9 @@ def inspect_real(service,context,inputs,profile,character,slot,*,decide=None):
  token=(profile,character,slot);old=cache.get(token)
  if decide is None and old and time.monotonic()<old['after']:return False
  cache[token]={'after':time.monotonic()+120}
- service.click_hit((x+w//2,y+h//2,(x,y,x+w,y+h)));opened=False;left=False
+ import owner_hd as hd
+ # The info panel keeps to the left edge, so a tile's real place is its logical one scaled, whatever map this frame took.
+ service.click_hit(hd.real_hit(round((x+w/2)*hd.F),round((y+h/2)*hd.F)));opened=False;left=False
  # Just after the bag opens a window can take several seconds.
  for _ in range(OPEN_LOOKS):
   context.wait(.2);context.checkpoint();service.check()
@@ -227,7 +229,7 @@ def inspect_real(service,context,inputs,profile,character,slot,*,decide=None):
  finally:
   context.checkpoint();service.check()
   if left:return
-  service.click_hit((510,106,(503,99,518,113)))
+  service.click_hit(hd.real_hit(*REAL_CLOSE))
   for _ in range(10):
    context.wait(.2);context.checkpoint();service.check()
    if not popup(service.capture()):break
