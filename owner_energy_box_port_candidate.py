@@ -175,7 +175,8 @@ class Port:
   selected=bool(layout_screen(frame))
   if selected:
    self.click(534,115,lambda:True,lambda f:bool(layout_screen(f)))
-   self.view='inventory';frame=self.service.capture()
+   # The dialog fades back into the box popup; reading at once saw neither and blocked the next job.
+   self.view='inventory';self.context.wait(.8);frame=self.service.capture()
   if generic_box_detail(frame):
    self.click(510,106,lambda:True,generic_box_detail)
    self.view='inventory';frame=self.service.capture()

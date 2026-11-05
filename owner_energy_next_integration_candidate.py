@@ -62,8 +62,12 @@ def attempt(adapter,context,inputs):
      outcome.update(state='confirmed',remaining=remaining,
                     needs_recheck=bool(choices['energies'] and remaining>0),retry_after_seconds=60)
      return 'confirmed'
-   done=run_batched(port,journal,choices,guard=guard,
-                    validated_targets=set(READERS),max_batches=3,max_seconds=90)
+   try:
+    done=run_batched(port,journal,choices,guard=guard,
+                     validated_targets=set(READERS),max_batches=3,max_seconds=90)
+   except (Hold,OSError,ValueError,TypeError) as exc:
+    # A failed cleanup below replaces this reason, and it was the only record of what went wrong.
+    LOG.info('기운 선택상자 중단 사유 · %s',exc);raise
    outcome['confirmed'].extend(done);outcome['state']='confirmed' if done else 'no_claim'
    latest=journal.read();last=latest['receipts'][-1] if latest['receipts'] else {}
    remaining=last.get('boxes_after')
