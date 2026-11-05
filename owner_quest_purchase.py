@@ -140,7 +140,7 @@ def execute(ui,book,key):
    adapter._owner_restore_story_once=False
    return True
   receipt.update(phase='not_purchased');book.commit()
-  # The town merchant shows 구매 불가 while the bag holds over the limit (821/250, 11-05), and a story that asks
+  # The town merchant shows 구매 불가 while the bag holds over the limit (320/250, 11-05), and a story that asks
   # for a purchase then repeated until the run ended. It waits; every other story goes on. The quest stays open.
   LOG.info('퀘스트 필수 구매 불가 · 물약 한도 초과 · 이 서사 보류 후 다음 서사 진행 · %s',row['title'])
   book.defer(key,'condition',detail='물약 구매 한도 초과 · 구매 조건 대기')
