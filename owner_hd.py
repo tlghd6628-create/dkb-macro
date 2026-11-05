@@ -448,6 +448,10 @@ def match_real(image,needle,method,ordinary,scorer=None):
     logical_y=np.clip(np.round((top+ys)/F-box[1]).astype(int),0,rows-1)
     logical_x=np.clip(np.round((left+xs-shift)/F-box[0]).astype(int),0,cols-1)
     np.maximum.at(answer,(logical_y,logical_x),scores[ys,xs].astype(np.float32))
+    if float(answer.max())<.85:
+        # Not where the cut says. A button's words can still be there: a window moved it, or it looks a little different.
+        by_words=match_words(image,needle,source,real)
+        if by_words is not None and float(by_words.max())>0:return by_words
     _remember_hits(answer,box,np.asarray(needle).shape,shift)
     return answer
 
@@ -476,7 +480,7 @@ def match_words(image,needle,source,real):
     wanted=row['words']
     from difflib import SequenceMatcher
     # The table's own reading can be a letter off (전래등화), so close counts, one word against one word.
-    near=[r for r in rows if wanted in owner_text.clean(r['text']) or SequenceMatcher(None,owner_text.clean(r['text']),wanted).ratio()>=.75]
+    near=[r for r in rows if owner_text.clean(r['text'])==wanted or (not row.get('exact') and (wanted in owner_text.clean(r['text']) or SequenceMatcher(None,owner_text.clean(r['text']),wanted).ratio()>=.75))]
     rows_out=max(1,image.shape[0]-array.shape[0]+1);cols=max(1,image.shape[1]-array.shape[1]+1)
     answer=np.full((rows_out,cols),-1.,np.float32)
     if len(near)!=1:return answer
