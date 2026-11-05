@@ -40,7 +40,9 @@ def layouts(frame):
    values=[_score(sample,asset(name+suffix)) for name in FILES]
    # The bigger art scores alike across colours, so the colour distance tells them apart. A selected row brightens: 14.4 against 18.8.
    gaps=[float(np.abs(sample.astype('int16')-asset(name+suffix).astype('int16')).mean()) for name in FILES]
-   apart=values[i]-max(values[:i]+values[i+1:])>=.10 or (suffix=='-v2' and min(gaps[:i]+gaps[i+1:])-gaps[i]>=2.5)
+   # The selected row pulses, so its colour cannot be held to that margin; the other three still are.
+   lit=suffix=='-v2' and float(frame[y:y+3,363:535].min(axis=2).mean())>=100
+   apart=lit or values[i]-max(values[:i]+values[i+1:])>=.10 or (suffix=='-v2' and min(gaps[:i]+gaps[i+1:])-gaps[i]>=2.5)
    if values[i]<.96 or not apart:ok=False;break
   if ok:matched.append((offset,rows))
  return matched
