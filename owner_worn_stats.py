@@ -22,20 +22,57 @@ def yield_readonly_if_interrupted(service,context,inputs,slot,ui=None):
 def label(field):
  return np.asarray(Image.open(Path(__file__).parent/'assets/worn-stats'/(field+'.png')).convert('RGB'))
 
-REAL_ROWS=(565,335,235,190)  # the tooltip's rows, in real pixels
+REAL_ROWS=(565,335,235,250)  # the tooltip's rows, in real pixels. A blessing's sit lower than an item's.
 REAL_NUMBER=(690,45,26)      # left edge, width and height of a row's number, between its - and + buttons
+REAL_ROW_GAP=28              # rows of the growth preview stand this far apart
+REAL_TITLE=(565,155,215,32);REAL_GRADE=(575,205,70,60);REAL_TAB=(570,303,60,24)
 WORDS={'강화':'enhance','개방':'opening','돌파':'breakthrough','각성':'awaken'}
+# The worn blessing tiles on the info panel, 1 to 5 from the left, always in the same place.
+BLESSING_SLOTS={'가호1':(15,294,25,27),'가호2':(51,294,25,27),'가호3':(87,294,25,27),'가호4':(122,294,25,27),'가호5':(158,294,25,27)}
+ALL_SLOTS=('무기','반지','팔찌','목걸이','귀걸이','갑옷','다리','신발','장갑','투구','허리띠',*BLESSING_SLOTS)
+WORN_TEST_SECONDS=240
 
 def real_table(real):
  """The rows by their words, in real pixels. Label pictures shrunk from 1366 score around .89 either side of the bar,
- and three slots of eleven came back unread (18:23)."""
+ and three slots of eleven came back unread (18:23). 강화 and 각성 prove the table; the rows between stand at a fixed
+ spacing, so a word read badly (돌파 came back 들파) still has its number read."""
  from owner_text import clean,read_area
  x,y,w,h=REAL_ROWS
  hits={}
- for row in read_area(None,real[y:y+h,x:x+w],left=x,top=y,minimum=.8):
+ for row in read_area(None,real[y:y+h,x:x+w],left=x,top=y,minimum=.5):
   field=WORDS.get(clean(row['text']))
-  if field:hits[field]=(REAL_NUMBER[0],row['ry']-REAL_NUMBER[2]//2,REAL_NUMBER[1],REAL_NUMBER[2])
- return {field:hits[field] for field in FIELDS if field in hits} if 'enhance' in hits and 'awaken' in hits else None
+  if field:hits[field]=row['ry']
+ if 'enhance' not in hits or 'awaken' not in hits:return None
+ rows=round((hits['awaken']-hits['enhance'])/REAL_ROW_GAP)
+ names={2:('enhance','opening','awaken'),3:('enhance','opening','breakthrough','awaken')}.get(rows)
+ if names is None or abs(hits['awaken']-hits['enhance']-rows*REAL_ROW_GAP)>4:return None
+ return {field:(REAL_NUMBER[0],hits['enhance']+index*REAL_ROW_GAP-REAL_NUMBER[2]//2,REAL_NUMBER[1],REAL_NUMBER[2]) for index,field in enumerate(names)}
+
+def real_popup(real):
+ """The details window is open: its 정보 tab, the same on an item and a blessing. It has no E to read."""
+ from owner_text import clean,read_area
+ x,y,w,h=REAL_TAB
+ return any(clean(row['text'])=='정보' for row in read_area(None,real[y:y+h,x:x+w],minimum=.6))
+
+def real_heading(real):
+ """(title, grade) of the open details window. The grade is one of the words, or None."""
+ from owner_text import clean,read_area
+ x,y,w,h=REAL_TITLE
+ title=''.join(clean(row['text']) for row in read_area(None,real[y:y+h,x:x+w],minimum=.5))
+ x,y,w,h=REAL_GRADE
+ words=[clean(row['text']) for row in read_area(None,real[y:y+h,x:x+w],minimum=.6)]
+ grades=[grade for grade in ('일반','희귀','영웅','전설') if grade in words]
+ return title,grades[0] if len(grades)==1 else None
+
+def blessing_kind(title):
+ """도깨비 from 도깨비 가호 장식1 (귀속). The place on the panel gives the slot, so its digit is not needed here."""
+ from difflib import SequenceMatcher
+ from owner_growth_words import NAMES
+ head=re.split(r'[가갓][호혹후]',title)[0]
+ for name in NAMES:
+  if name in head:return name
+ scored=sorted(((SequenceMatcher(None,head,name).ratio(),name) for name in NAMES),reverse=True)
+ return scored[0][1] if head and scored[0][0]>=.5 and scored[0][0]>scored[1][0] else None
 
 def real_read(real,hits=None):
  """Each row's number. `hits` are the rows' places from a frame of the same open tooltip: they do not move, and finding
@@ -85,11 +122,89 @@ def read(frame,engine,hits=None):
 
 def popup(frame):
  if getattr(frame,'shape',None)!=(479,897,3):return False
+ if getattr(frame,'hi',None) is not None:return real_popup(np.asarray(frame.hi))
  from owner_progression import inventory_parts
  from owner_energy_box_detail_candidate import close_mark
  from owner_equipment_tooltip_candidate import _badge
  return bool(inventory_parts(frame)==(True,True) and close_mark(frame)
              and _badge(frame,420,116,445,135)>=.96)
+
+READ_TRIES=6
+
+def settled_read(service,context):
+ """The numbers once two looks in a row agree. The list slides after the wheel and the 1 can read 7 while it does (23:54)."""
+ last=None
+ for _ in range(READ_TRIES):
+  context.checkpoint();service.check();real=np.asarray(service.capture().hi);hits=real_table(real)
+  now=real_read(real,hits) if hits else None
+  if now and len(now)==len(hits) and now==last:return now
+  last=now;context.wait(.25)
+ return None
+
+def inspect_real(service,context,inputs,profile,character,slot):
+ """A worn tile's details at 1366x768: click its fixed place once, read, close with X. No E mark is read, so a spare can
+ never answer for it. A second click on the same tile would take the item off, so a tile is never clicked twice."""
+ from owner_skill_ui import SkillUI
+ from owner_mission_ui import MissionUI
+ from owner_equipment_boxes import SLOTS
+ adapter=service.adapter;blessing=slot in BLESSING_SLOTS
+ x,y,w,h=BLESSING_SLOTS[slot] if blessing else SLOTS[slot]
+ context.checkpoint();service.check();f=service.capture()
+ if popup(f):raise RuntimeError('장비 상세창이 열린 채 시작 · 추가 입력 차단')
+ # The bag can close by itself (a quest, a map change), and these places would then land on the field.
+ from owner_progression import inventory_parts
+ if inventory_parts(f)[0] is not True:
+  LOG.info('착용 %s 현재값 건너뜀 · 인벤토리 화면 미확인',slot);return False
+ cache=getattr(adapter,'_owner_worn_stats_cache',None)
+ if cache is None:cache={};adapter._owner_worn_stats_cache=cache
+ token=(profile,character,slot);old=cache.get(token)
+ if old and time.monotonic()<old['after']:return False
+ cache[token]={'after':time.monotonic()+120}
+ service.click_hit((x+w//2,y+h//2,(x,y,x+w,y+h)));opened=False
+ for _ in range(10):
+  context.wait(.2);context.checkpoint();service.check()
+  if popup(service.capture()):opened=True;break
+ if not opened:
+  LOG.info('착용 %s 현재값 건너뜀 · 상세창 안 열림',slot);return False
+ ui=SkillUI(adapter,context,inputs)
+ try:
+  title,grade=real_heading(np.asarray(service.capture().hi))
+  MissionUI.wheel(ui,-1,10,at=(480,310),scene=popup)
+  # Parked outside the window so no row lights up under the pointer. Nothing here presses its - or + buttons.
+  with inputs.transaction():
+   context.checkpoint();inputs._guard_target();inputs.move(550,110)
+  context.wait(.25)
+  values=settled_read(service,context)
+  if not values:
+   LOG.info('착용 %s 현재값 미확인 · 재시도 대기',slot);return False
+  if grade is None:
+   LOG.info('착용 %s 등급 미확인 · 현재값 저장 보류 · %s',slot,title);return False
+  if blessing:
+   from owner_growth_current import observe_blessing
+   kind=blessing_kind(title)
+   if kind is None:
+    LOG.info('착용 %s 종류 미확인 · 현재값 저장 보류 · %s',slot,title);return False
+   number=slot[-1]
+   if not observe_blessing(adapter.project.root,profile,number+'번',kind,grade,values):return False
+   LOG.info('착용 %s 현재값 확인 · %s · %s · 강화 %s · 개방 %s · 각성 %s',slot,kind,grade,values['enhance'],values.get('opening','미확인'),values['awaken'])
+  else:
+   from owner_growth_current import observe
+   if grade not in ('일반','희귀','영웅'):
+    LOG.info('착용 %s 등급 미확인 · 현재값 저장 보류 · %s',slot,grade);return False
+   fields={'enhance':'enhancement','opening':'opening','breakthrough':'breakthrough','awaken':'awakening'}
+   row={'character':profile,'item_identity':'worn-slot:'+slot,'slot':slot,'grade':grade,'verified_fields':[fields[k] for k in values],
+        'replace_values':True,'source':'paired_equipped_tooltip_display_only'}
+   row.update({fields[k]:v for k,v in values.items()})
+   if not observe(adapter.project.root,row):return False
+   LOG.info('착용 %s 현재값 확인 · 강화 %s · 개방 %s · 돌파 %s · 각성 %s',slot,values['enhance'],values.get('opening','미확인'),values.get('breakthrough','미확인'),values['awaken'])
+  cache[token]={'after':time.monotonic()+1200};return True
+ finally:
+  context.checkpoint();service.check()
+  service.click_hit((510,106,(503,99,518,113)))
+  for _ in range(10):
+   context.wait(.2);context.checkpoint();service.check()
+   if not popup(service.capture()):break
+  else:raise RuntimeError('장비 상세창 종료 결과 미확인')
 
 def inspect_slot(service,context,inputs,profile,character,slot='무기'):
  """One short, guarded tooltip inspection during an existing inventory visit.
@@ -104,8 +219,11 @@ def inspect_slot(service,context,inputs,profile,character,slot='무기'):
  from owner_skill_ui import SkillUI
  from tools.ocr_support import get_paddle_engine
  adapter=service.adapter
+ if slot not in SLOTS and slot not in BLESSING_SLOTS:return False
+ context.checkpoint();service.check();a=service.capture()
+ if getattr(a,'hi',None) is not None:return inspect_real(service,context,inputs,profile,character,slot)
  if slot not in SLOTS:return False
- context.checkpoint();service.check();a=service.capture();context.wait(.12);b=service.capture()
+ context.wait(.12);b=service.capture()
  if unavailable_frame(a) and unavailable_frame(b):raise ReadOnlyViewUnavailable(slot)
  # Each skip says why: a silent False here hid ten of the eleven slots (11-04).
  if inventory_parts(a)!=(True,True) or inventory_parts(b)!=(True,True):
@@ -211,12 +329,17 @@ def stale_slots(root,profile,now=None):
  from owner_equipment_boxes import SLOTS
  from owner_growth_current import display_snapshot
  now=time.time() if now is None else now
- rows=[row for row in display_snapshot(root,profile)['equipment'].values() if isinstance(row,dict)]
+ snapshot=display_snapshot(root,profile)
+ rows=[row for row in snapshot['equipment'].values() if isinstance(row,dict)]
  fresh=set()
  for row in rows:
   values=row.get('values',{})
   if row.get('slot') in SLOTS and all(field in values for field in FIELDS if field!='breakthrough') and now-row.get('at_epoch',0)<STALE_SECONDS:fresh.add(row['slot'])
- return [slot for slot in SLOTS if slot not in fresh]
+ for slot in BLESSING_SLOTS:
+  row=snapshot['values']['blessings'].get(slot[-1]+'번',{})
+  values=row.get('values',{})
+  if row.get('kind') and 'enhance' in values and 'awaken' in values and now-row.get('field_at',{}).get('awaken',0)<STALE_SECONDS:fresh.add(slot)
+ return [slot for slot in (*SLOTS,*BLESSING_SLOTS) if slot not in fresh]
 
 def refresh_when_stale(adapter,context,inputs):
  """Once per start at the hunting spot, so the table shows real values whatever is switched on."""
@@ -261,9 +384,10 @@ def inspect_equipped(adapter,context,inputs,max_seconds=15,only=None):
  if open_inventory_by_key(service) is False:return
  end=time.monotonic()+max_seconds
  resume=getattr(adapter,'_owner_worn_resume',None)
- slots=[slot for slot in SLOTS if only is None or slot in only]
+ slots=[slot for slot in (*SLOTS,*BLESSING_SLOTS) if only is None or slot in only]
  if resume and resume[:2]==(profile,progress.character) and resume[2] in slots:
   slots=slots[slots.index(resume[2]):]
+ read=[]
  try:
   for slot in slots:
    context.checkpoint()
@@ -272,9 +396,10 @@ def inspect_equipped(adapter,context,inputs,max_seconds=15,only=None):
     raise RuntimeError('장비 현재값 확인 중 캐릭터 변경 · 입력 차단')
    adapter._owner_worn_resume=(profile,progress.character,slot)
    settle_after_popup(service,context)
-   inspect_slot(service,context,inputs,profile,progress.character,slot)
+   if inspect_slot(service,context,inputs,profile,progress.character,slot) is True:read.append(slot)
   else:adapter._owner_worn_resume=None
  finally:
   context.checkpoint();service.check();f=service.capture()
   if popup(f):raise RuntimeError('장비 현재값 확인 후 상세창 종료 미확인')
   if not initially_open and inventory_parts(f)==(True,True):close_inventory(service)
+ return read
