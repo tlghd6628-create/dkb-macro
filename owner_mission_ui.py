@@ -122,6 +122,11 @@ def accepted_quota(ui):
   if m and row['score']>=.99 and 0<=int(m[1])<=20:values.add(int(m[1]))
  return next(iter(values)) if len(values)==1 else None
 
+def side_story_gate(text):
+ """The side story a main step is waiting on, named in its objective: 외전 '기묘리의 방랑 도사' 완료하기."""
+ found=re.search(r"외전\s*['‘\"]?\s*([^'’\"]+?)\s*['’\"]?\s*완료",text)
+ return normalize(found[1]) if found else None
+
 class MissionUI(SkillUI):
  def __init__(self,adapter,context,inputs):
   super().__init__(adapter,context,inputs)
@@ -231,6 +236,9 @@ class MissionUI(SkillUI):
   found=re.search(r'(\[[^\]]+\][^\n]+?)\s*임무.*완료',text)
   if found:prereq=normalize(found[1])
   has_prereq=any(s in clean(text) for s in ('선행','임무완료후','임무를완료'))
+  # '[4장] 쉬어가는 길' only asks for a side story to be finished; AUTO on it stood still for minutes.
+  side=side_story_gate(text)
+  if side:has_prereq=True;prereq=side
   gated=required is not None and (power is None or power<required)
   objective=clean(text).split('실행조건')[0].split('완료보상')[0].replace('임무목표','')
   objective=re.sub(r'[0-9,]+/[0-9,]+','',objective)
