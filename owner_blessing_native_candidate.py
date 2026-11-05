@@ -12,6 +12,7 @@ from owner_gear_decision_candidate import Observation
 from owner_gear_intent_store_candidate import IntentStore
 from owner_gear_settings_candidate import Store
 from owner_gear_step_guard_candidate import Guard
+from owner_short_notice import shown as coins_short
 
 _cursor={}
 LOG=logging.getLogger('project_gui.DKB')
@@ -446,7 +447,8 @@ def run_blessing(service,context,identity,targets,*,slot_reader=read_slot_title,
                 result='hold_result_unknown'
                 for attempt in range(RESULT_READS):
                     current()
-                    result=Guard(context,intents,lambda:observer.read_pair(False),fresh_seconds=proof_seconds(b)).reconcile(before_complete=current_check)
+                    result=Guard(context,intents,lambda:observer.read_pair(False),fresh_seconds=proof_seconds(b)).reconcile(before_complete=current_check,short_notice=lambda:coins_short(service.capture()))
+                    if result=='short_of_coins':logging.getLogger('project_gui.DKB').info('가호 강화 재화 부족 · 이번 차례 종료')
                     if result!='hold_result_unknown':break
                     if attempt<RESULT_READS-1:context.wait(.35)
                 return result

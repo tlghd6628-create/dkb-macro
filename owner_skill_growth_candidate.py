@@ -684,9 +684,23 @@ class StyleGrowth:
                     intents[name]['status']='aborted_before_input';self.ledger.event('style_growth_aborted',style=name)
                 raise
             self.ui.context.wait(.5)
-            rows,_=self._style_rows(name);newrow,new=named_row(rows,name)
-            if new!=current+1 or not all(selected(f,newrow['y']) for f in self.ui._owner_last_rows_pair[0]):
-                raise Pending(name+' 도술 강화 후 수치 재확인 필요')
+            from owner_short_notice import shown
+            def out_of_coins():
+                if not shown(self.ui.frame()):return None
+                intents[name].update(status='short_of_coins',after=current)
+                self.ledger.event('style_growth_short',style=name,before=current)
+                return {'status':'short_of_coins','style':name,'level':current}
+            short=out_of_coins()
+            if short:return short
+            # Reading the rows gives the message the moment it needs, if it was not up yet.
+            try:
+                rows,_=self._style_rows(name);newrow,new=named_row(rows,name)
+                if new!=current+1 or not all(selected(f,newrow['y']) for f in self.ui._owner_last_rows_pair[0]):
+                    raise Pending(name+' 도술 강화 후 수치 재확인 필요')
+            except Pending:
+                short=out_of_coins()
+                if short:return short
+                raise
             # A confirmed step redraws the emblem (18:37 real hold). The list row just
             # proved +1 on this selected style, so the next settled read learns it again.
             bindings=getattr(self.ui,'_owner_style_bindings',None)
@@ -729,6 +743,7 @@ def run_configured(ui,ledger,document,guard,*,max_steps=5,observe=None,include_i
                 breakthrough=row.get('breakthrough',0) if breakthrough_allowed() else 0
                 result=worker.run(name,row['enhance'],max_steps=max_steps,breakthrough_target=breakthrough)
                 statuses.append(result)
+                if result.get('status')=='short_of_coins':return statuses
                 if breakthrough>0 and result.get('level',0)>=50:
                     statuses.append(SkillUpgrade(SkillUpgradePort(ui,guard),ledger,guard,observe).run(
                         name,'breakthrough',breakthrough,max_steps=max_steps))

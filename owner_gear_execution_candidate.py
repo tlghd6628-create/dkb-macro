@@ -61,9 +61,9 @@ def run_configured_step(service,context,root,character,kind,read_pair,verify_fin
     except FinalUnverified:return 'hold_final_preinput'
 
 
-def reconcile_configured_step(context,root,character,read_pair,*,clock=None,before_complete=None):
+def reconcile_configured_step(context,root,character,read_pair,*,clock=None,before_complete=None,short_notice=None):
     if not isinstance(character,str) or not character.strip():return 'hold_identity'
     if not callable(read_pair):return 'hold_missing_observer'
     path=Store(root,character).path.with_name(Store(root,character).path.stem+'-intent.json')
     options={} if clock is None else {'clock':clock}
-    return Guard(context,IntentStore(path),read_pair,**options).reconcile(before_complete=before_complete)
+    return Guard(context,IntentStore(path),read_pair,**options).reconcile(before_complete=before_complete,short_notice=short_notice)

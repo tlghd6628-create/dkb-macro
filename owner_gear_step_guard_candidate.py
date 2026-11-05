@@ -108,13 +108,18 @@ class Guard:
                 # Only a record not marked sent is provably before any click.
                 self.store.abort_prepared('최종 판독 또는 클릭 전 중단')
 
-    def reconcile(self,*,before_complete=None):
+    def reconcile(self,*,before_complete=None,short_notice=None):
         self._worker_check()
         with self.lock:
             saved=self.store.pending()
             if saved is None:return 'nothing_pending'
             if saved.get('phase')=='prepared':
                 self.store.abort_prepared('이전 실행의 입력 전 준비 기록');return 'preinput_aborted'
+            # The game said the press had no coins behind it: nothing changed, and that is the answer.
+            if callable(short_notice) and short_notice() is True:
+                self._worker_check()
+                self.store.complete('short_of_coins')
+                return 'short_of_coins'
             data=self.read_pair()
             if not isinstance(data,dict) or data.get('screen_proof') is not True:return 'hold_result_unknown'
             if not self._fresh(data.get('first'),data.get('second')):return 'hold_result_unknown'

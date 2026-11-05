@@ -216,6 +216,11 @@ def run_energy(service,context,identity,targets,*,text_reader=read_text,settings
             # The pot animation hides the panel, and it may not have begun yet.
             from owner_growth_reading import RESULT_SETTLE_SECONDS
             context.wait(RESULT_SETTLE_SECONDS)
+            from owner_short_notice import shown
+            if shown(service.capture()):
+                intents.complete('short_of_coins')
+                logging.getLogger('project_gui.DKB').info('기운 재화 부족 · 이번 차례 종료')
+                return False
             if not settle_pending(observer,intents,context,attempts=6):return False
     return False
 

@@ -59,7 +59,7 @@ class Tests(unittest.TestCase):
         from owner_gear_settings_candidate import Store
         a=self.frame('blessing_list_1.jpg');b=self.frame('blessing_list_2.jpg')
         c=self.frame('blessing_rabbit_slot1_1.jpg');d=self.frame('blessing_rabbit_slot1_2.jpg')
-        s=Service([a,a,b,c,d,c,d,c,c,d,c,d]);original=s.detector;identity='fake-blessing-allow';blessing._cursor[identity]=1
+        s=Service([a,a,b,c,d,c,d,c,c,c,d,c,d]);original=s.detector;identity='fake-blessing-allow';blessing._cursor[identity]=1
         with tempfile.TemporaryDirectory(dir=os.getcwd()) as temp:
             root=Path(temp);config=root/'profiles/DKB/ocr_regions.json';config.parent.mkdir(parents=True)
             config.write_bytes((bootstrap.A/'profiles/DKB/ocr_regions.json').read_bytes());s.adapter.project.root=root
