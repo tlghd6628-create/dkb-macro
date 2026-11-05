@@ -137,6 +137,17 @@ def install(native,aliases=()):
             adapter._owner_disassembly_outcome={'state':'not_attempted','reason':reason,'verified':False}
             LOG.info('자동 기능 보류 · 장비 분해 · %s',reason);return True
         desired=tuple(label in grades for code,label in GRADES)
+        from project_adapter.town_services import TownServices
+        from project_adapter import market_inventory
+        try:real_screen=getattr(TownServices(adapter,context,inputs,market_inventory.INVENTORY_USE_NAMES).capture(),'hi',None) is not None
+        except (AttributeError,TypeError):real_screen=False
+        if real_screen:
+            # At 1366x768 the original's grade pictures never match: the dialog is read by its own words and colours.
+            from owner_disassembly_real import run as real_run
+            adapter._owner_disassembly_outcome=real_run(adapter,context,inputs,desired)
+            state=adapter._owner_disassembly_outcome['state']
+            if state=='confirmed':LOG.info('장비 분해 완료 · %s',', '.join(grades),extra={'gui_message':'장비 분해 완료 · '+', '.join(grades),'state_transition':True})
+            return state!='sent_unconfirmed'
         scope=SimpleNamespace(adapter=adapter,context=context,desired=desired,commit=False,confirm=False,hold=None,proof=False,proof_first=None)
         LOCAL.scope=scope
         log_filter=OptionalConfirmLog();LOG.addFilter(log_filter)

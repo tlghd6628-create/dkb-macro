@@ -37,7 +37,8 @@ class UI(Base):
   # The rest are on the 비경·보스 and 수련 pages: test_challenge_test_20261104.
   from owner_challenge_test import TARGETS as CHALLENGES
   from owner_settings_layout import GROWTH_SWITCHES
-  self.assertEqual(len(buttons),len(TARGETS)+len(set(CHALLENGES)&{item['id'] for item,_ in console.native.controls})+len(GROWTH_SWITCHES))
+  # Owner rows with their own TEST: the shop, the worn tables (2), the higher-grade equips (2) and 가호 소환.
+  self.assertEqual(len(buttons),len(TARGETS)+len(set(CHALLENGES)&{item['id'] for item,_ in console.native.controls})+len(GROWTH_SWITCHES)+1+2+2+1)
   self.assertEqual(set(TARGETS),set(TARGETS)&self.visible('보상·정리'))
   self.assertTrue(all(str(w.cget('style'))=='DkbTest.TButton' for w in buttons))
  def test_grade_choices_persist_and_legend_is_absent(self):
@@ -142,7 +143,8 @@ class Runtime(unittest.TestCase):
   key='auto_register.market.enabled';adapter=Adapter({key:False,'auto_register.market.bag.enabled':True,'auto_rewards.mail.enabled':True})
   self.assertTrue(execute(adapter,self.context(),Mock(),key))
   self.assertEqual(adapter.calls[0][1],{key:True,'auto_register.market.bag.enabled':True,'auto_rewards.mail.enabled':False})
-  with self.assertRaisesRegex(RuntimeError,'기존 실행 경로 없음'):execute(adapter,self.context(),Mock(),'auto_rewards.training_log.enabled')
+  # 도사 수행록 has its own path now (owner_reward_cycle.run_training_log); its TEST reaches it.
+  self.assertEqual(PATHS['auto_rewards.training_log.enabled'],('adapter','run_training_log'))
  def test_running_paused_preparing_and_double_requests_do_not_create_inputs(self):
   for state in ('running','paused'):
    session=Session(lambda:None,Mock(),Mock());session.state=state
