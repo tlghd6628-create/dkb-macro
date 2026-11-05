@@ -1,7 +1,7 @@
 """Opt-in generic 1/N selection port, separate from frozen recovery build."""
 from owner_energy_box_port_candidate import Port
 from owner_energy_box_detail_candidate import detail,detail_screen,generic_box_detail,box_candidates,stable_box_candidates
-from owner_energy_choice_reader_candidate import read_pair,read_open_pair,layout_screen,layout_variant,asset,_score
+from owner_energy_choice_reader_candidate import read_pair,read_open_pair,layout_screen,layout_variant,rows_of,asset,_score
 from owner_energy_box_runtime_candidate import Hold
 
 class GenericPort(Port):
@@ -69,7 +69,7 @@ class GenericPort(Port):
   state=pair[0]
   if state.get('selected')!=name:
    index=('생명','여명','몽환','홍염').index(name);offset=layout_variant(self._last_pair[1])
-   self.click(450,(152,188,224,260)[index]+17+offset,guard,lambda f:read_open_pair(f,f.copy())==state)
+   self.click(450,rows_of(self._last_pair[1])[index]+17+offset,guard,lambda f:read_open_pair(f,f.copy())==state)
    pair=self.wait_pair(read_pair)
    if not pair:raise Hold('선택 기운 재확인 필요')
    state=pair[0]
@@ -168,7 +168,7 @@ class GenericPort(Port):
   self.view='selection';state=pair[0];total=state.get('available_count')
   if state.get('quantity')!=1 or type(total) is not int or total<1 or (known is not None and known!=total):raise Hold('1개와 현재 상자 개수 확인 필요')
   if state.get('selected')!=name:
-   index=('생명','여명','몽환','홍염').index(name);y=(152,188,224,260)[index]+17
+   index=('생명','여명','몽환','홍염').index(name);y=rows_of(self._last_pair[1])[index]+17
    self.click(450,y,guard,lambda f:read_open_pair(f,f.copy())==state)
    pair=self.wait_pair(read_pair)
    if not pair:raise Hold('선택 기운 재확인 필요')

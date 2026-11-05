@@ -20,9 +20,13 @@ def close_mark(frame):
  ink=expected.min(axis=2)>190
  return bool(ink.sum()>=8 and np.array_equal(actual.min(axis=2)>190,ink))
 
+def choices_shown(frame):
+ """The four essences. The row sits 4 higher in the current game (seen 11-05)."""
+ return score(frame[236:263,383:513],asset('choices-detail'))>=.97 or score(frame[232:259,383:513],asset('choices-detail-v2'))>=.97
+
 def detail_screen(frame):
  if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or inventory_parts(frame)!=(True,True):return None
- if score(frame[236:263,383:513],asset('choices-detail'))<.97:return None
+ if not choices_shown(frame):return None
  if score(frame[352:374,404:493],asset('open'))<.97:return None
  return True
 
@@ -75,7 +79,7 @@ def evidence_detail(frame):
  """Read detail when a transient click overlay covers its open button."""
  if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or inventory_parts(frame)!=(True,True):return None
  if not close_mark(frame):return None
- if score(frame[236:263,383:513],asset('choices-detail'))<.97:return None
+ if not choices_shown(frame):return None
  return count(frame)
 
 def box_candidates(frame):
