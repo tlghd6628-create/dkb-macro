@@ -154,6 +154,10 @@ class Controller:
                 self.active=True
                 def one_adapter():
                     from operating_policy import PolicyAdapter
+                    # Put the ordinary factory back only here: the worker can call
+                    # this after start() has returned, and a factory restored any
+                    # earlier makes the TEST button start the whole macro.
+                    session.adapter_factory=factory
                     outer=factory()
                     if not isinstance(outer,PolicyAdapter):
                         outer.close()
@@ -162,9 +166,7 @@ class Controller:
                     # policy, Stop/Pause and error handling around the delegate.
                     outer.adapter=OneAction(outer.adapter,key,ready,self.events)
                     return outer
-                session.adapter_factory=one_adapter
-                try:session.start()
-                finally:session.adapter_factory=factory
+                one_shot(self,session,factory,one_adapter)
             result.set('실행 중');gui.root.after(100,lambda:self.poll(result))
             return True
         except Exception as exc:
@@ -180,9 +182,26 @@ class Controller:
             self.events.put((text,None));self.gui.root.after(100,lambda:self.poll(result));return
         state=self.gui.session.snapshot()
         if state.get('error'):text='실패 · '+str(state['error'])
+        restore(self,self.gui.session)
         self.active=False
         try:result.set(text)
         except tk.TclError:pass
+
+
+def one_shot(runner,session,factory,one_adapter):
+    """Install a TEST factory that the worker takes once. Call under session.lock."""
+    runner.factory,runner.one_adapter=factory,one_adapter
+    session.adapter_factory=one_adapter
+    try:session.start()
+    except BaseException:
+        session.adapter_factory=factory;raise
+
+
+def restore(runner,session):
+    """A worker that ended before taking the TEST factory must not leave it for the next F1."""
+    if getattr(runner,'one_adapter',None) is not None and session.adapter_factory is runner.one_adapter:
+        session.adapter_factory=runner.factory
+    runner.one_adapter=None
 
 
 def controller(gui):

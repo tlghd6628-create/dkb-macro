@@ -115,6 +115,29 @@ class Runtime(unittest.TestCase):
   self.assertIs(session.adapter_factory,factory);self.assertFalse(controller.active)
   self.assertTrue(adapter.closed);inputs.close.assert_called_once()
   self.assertEqual(len(adapter.calls),1)
+ def test_a_worker_that_builds_late_still_runs_the_test_not_the_macro(self):
+  """Seen live on pc1: the worker asked for its adapter after start() returned and ran the whole macro."""
+  adapter=Adapter({MASTER:False});inputs=Mock();factory=Mock(return_value=self.wrapped(adapter))
+  session=Session(lambda:None,factory,lambda backend,context:inputs);late=threading.Event()
+  original_start=session.start;started=threading.Event()
+  def start():
+   # Like the OCR-readiness start: the real start, and its factory call, come after start() returned.
+   def later():late.wait(2);original_start();started.set()
+   threading.Thread(target=later,daemon=True).start()
+  session.start=start
+  gui=S(session=session,root=S(after=Mock()),closed=threading.Event(),preparation_gate=Mock(),game_window=S(require_ready=Mock()))
+  controller=Controller(gui);result=Mock()
+  with patch('owner_reward_action_test.prepare'),patch('project_adapter.market_inventory.run_equipment_disassembly',side_effect=lambda adapter,c,i:adapter.record('run_equipment_disassembly',c,i)):
+   self.assertTrue(controller.start(MASTER,result,None));late.set();self.assertTrue(started.wait(2))
+   session.worker.join(2);controller.poll(result)
+  self.assertEqual([name for name,_ in adapter.calls],['run_equipment_disassembly'])
+  self.assertIs(session.adapter_factory,factory);self.assertFalse(controller.active)
+ def test_a_worker_that_never_took_the_test_factory_leaves_the_ordinary_one(self):
+  session=Session(lambda:None,Mock(),Mock());session.start=lambda:None
+  gui=S(session=session,root=S(after=Mock()),closed=threading.Event(),preparation_gate=Mock(),game_window=S(require_ready=Mock()))
+  factory=session.adapter_factory;controller=Controller(gui);result=Mock()
+  self.assertTrue(controller.start(MASTER,result,None));self.assertIsNot(session.adapter_factory,factory)
+  controller.poll(result);self.assertIs(session.adapter_factory,factory)
  def test_market_keeps_its_selected_item_filters_and_training_is_not_fake_success(self):
   key='auto_register.market.enabled';adapter=Adapter({key:False,'auto_register.market.bag.enabled':True,'auto_rewards.mail.enabled':True})
   self.assertTrue(execute(adapter,self.context(),Mock(),key))

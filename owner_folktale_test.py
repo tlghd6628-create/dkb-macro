@@ -84,15 +84,15 @@ def start(gui,result):
             ready=getattr(gui,'_owner_ocr_readiness',None)
             runner.active=True
             def one_adapter():
+                session.adapter_factory=factory  # restored only when the worker takes it
                 outer=factory()
                 if not isinstance(outer,PolicyAdapter):
                     outer.close()
                     raise RuntimeError('기존 실행 정책 연결 확인 필요 · 입력 없음')
                 outer.adapter=OneRun(outer.adapter,ready,runner.events)
                 return outer
-            session.adapter_factory=one_adapter
-            try:session.start()
-            finally:session.adapter_factory=factory
+            from owner_reward_action_test import one_shot
+            one_shot(runner,session,factory,one_adapter)
         result.set('실행 중');gui.root.after(100,lambda:runner.poll(result))
         return True
     except Exception as exc:

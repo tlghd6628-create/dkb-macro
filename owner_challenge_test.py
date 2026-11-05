@@ -309,10 +309,8 @@ def start(gui,key,result):
                     raise RuntimeError('기존 실행 정책 연결 확인 필요 · 입력 없음')
                 outer.adapter=OneRun(outer.adapter,key,ready,runner.events)
                 return outer
-            session.adapter_factory=one_adapter
-            try:session.start()
-            except BaseException:
-                session.adapter_factory=factory;raise
+            from owner_reward_action_test import one_shot
+            one_shot(runner,session,factory,one_adapter)
         result.set('실행 중');gui.root.after(100,lambda:runner.poll(result))
         return True
     except Exception as exc:
