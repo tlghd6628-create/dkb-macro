@@ -46,6 +46,24 @@ def title_words(root,frame):
     return ''.join(text.clean(row['text']) for row in text.read(root,frame,BLESSING_TITLE,scale=2,minimum=.5))
 
 
+def have_enough(root,frame):
+    """True, False, or None when unread. The 0 of 0/1 can read as a letter at one size and clearly at the other (팔찌, 11-06)."""
+    for scale in (3,2):
+        pairs=counts(text.read(root,frame,BLESSING_COUNT,scale=scale))
+        if pairs:return enough(pairs)
+    return None
+
+
+def list_count(frame):
+    """How many tiles the growth list says it holds, or None. A lone digit reads best with room around it, at a larger size."""
+    x,y,w,h=LIST_COUNT
+    for box,scale in (((x,y,w,h),3),((x,y-3,w,h+6),4),((x,y,w,h),2)):
+        shown=[text.clean(r['text']) for r in text.read(None,frame,box,scale=scale,minimum=.5)]
+        shown=[word for word in shown if word.isdigit()]
+        if len(shown)==1:return int(shown[0])
+    return None
+
+
 def font_pair(left,right):
     """40 >> 41 read as 40 >> 47: the font's 1 reads 7. The two sides are one apart, so that settles it when exactly one way of
     swapping 7 for 1 makes them so. Anything else stays unread."""
@@ -74,7 +92,7 @@ def read_panel(root,frame):
         pair=level_pair(left,right) or font_pair(left,right)
     if pair is None:return None
     pill=text.read(root,frame,BLESSING_PILL,scale=3);word=only_word(pill,('강화','개방'))
-    have=enough(counts(text.read(root,frame,BLESSING_COUNT,scale=3)))
+    have=have_enough(root,frame)
     opening=bool(word) and text.clean(word['text'])=='개방'
     # A step that opens the next tier can show no counter, but a count that is short stays short.
     material=have is not False if opening else have is True
@@ -90,7 +108,7 @@ def read_action(root,frame,word):
     # Without 자동 선택 beside it the pill stands further left, its price with it.
     pill=text.read(root,frame,ACTION_PILL,scale=3);row=only_word(pill,(word,),.8)
     if row is None:return None
-    cost=pill_price(pill);have=enough(counts(text.read(root,frame,BLESSING_COUNT,scale=3)))
+    cost=pill_price(pill);have=have_enough(root,frame)
     return {'word':word,'cost':cost,'enough':have,'active':bool(lit(frame.hi,row) and have is True and type(cost) is int and cost>0),'hit':real_place(row)}
 
 
@@ -321,9 +339,10 @@ class Route:
             else:quiet=0
     def choose_material(self,item):
         """The list under an item on the 각성 tab holds it and the spares the game accepts: 강화되지 않은 동일한 장비. The next tile is one."""
-        rows=text.read(None,self.frame(),LIST_COUNT,scale=3)
-        shown=[int(text.clean(r['text'])) for r in rows if text.clean(r['text']).isdigit()]
-        if len(shown)!=1 or shown[0]<2:
+        shown=list_count(self.frame())
+        if shown is None:
+            LOG.info('착용 %s 각성 재료 목록 수 미확인',item.slot);return False
+        if shown<2:
             LOG.info('착용 %s 각성 재료 없음 · 동일 장비 없음',item.slot);return False
         self.service.click_hit(real_hit(*SECOND_TILE));self.context.wait(1)
         return True
