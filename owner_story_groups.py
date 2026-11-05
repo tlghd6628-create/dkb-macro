@@ -126,7 +126,10 @@ def row_words(ui,frame):
 
 def row_title(words,y):
  """The title on the row at this logical y; the column beside it can fall inside the read area."""
- parts=sorted((r for r in words if abs(r['y']-y)<=10 and r['score']>=.60 and not re.fullmatch(r'[\d,.]*(적합|도전|위험)?',clean(r['text']))),key=lambda r:r['rx'])
+ def titled(text):
+  # Real rows also hold ※37,400 적합 beside them and a Q or ! mark before them. A lone digit can be the step number.
+  return '※' not in text and not re.fullmatch(r'[\d,.]*(적합|도전|위험)',text) and bool(hangul(text) or re.fullmatch(r'\d{1,2}',text))
+ parts=sorted((r for r in words if abs(r['y']-y)<=10 and r['score']>=.60 and titled(clean(r['text']))),key=lambda r:r['rx'])
  text=' '.join(r['text'].strip() for r in parts)
  return text if len(hangul(text))>=3 else None
 
@@ -420,7 +423,7 @@ class Groups:
    self._remember_visible(key,frame,matches[0]);return matches[0]
   return None
  def select(self,key):
-  from owner_mission_ui import markers,required_power
+  from owner_mission_ui import list_rows,required_power
   from owner_skill_ui import match
   self._last_unlocated=None
   self._position_recheck_ready=None
@@ -450,7 +453,7 @@ class Groups:
    if not row and not attempt:raise Pending('선택한 임무 묶음 위치 확인 필요')
    top=row['y']+20 if row else 96
    following=[r['y'] for r in group_rows(f) if r['y']>top];end=min(following,default=438)
-   candidates=[y for y in markers(f,'leaf-story') if top<y<min(end,427)]
+   candidates=[y for y in list_rows(self.ui,f,'leaf-story') if top<y<min(end,427)]
    candidates=[y for y in candidates if not match(f,'completed',(624,max(96,y-14),28,28),.96)]
    if candidates:
     # Prefer the accepted current step's dots, otherwise first uncompleted

@@ -65,6 +65,10 @@ class Names(unittest.TestCase):
   words=[word('[외전]',150,120),word('남편의 안부',151,180),word('12,300',150,700),word('적합',150,760),word('[첫걸음] 도술 구매',188)]
   self.assertEqual(row_title(words,150),'[외전] 남편의 안부')
   self.assertIsNone(row_title(words,300))
+ def test_row_title_as_read_on_a_real_list(self):
+  words=[word('Q',193,86,.86),word('[첫걸음] 승천의 탑',193,172,.94),word('※37',193,794,.97),word('!',386,86,.9),word('※44',385,793,.97),word('[첫걸음] 레이드',386,163,.96)]
+  self.assertEqual(row_title(words,193),'[첫걸음] 승천의 탑')
+  self.assertEqual(row_title(words,386),'[첫걸음] 레이드')
 
 
 if __name__=='__main__':unittest.main()
