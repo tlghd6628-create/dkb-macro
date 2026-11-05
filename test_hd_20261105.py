@@ -3,7 +3,8 @@ from pathlib import Path
 import sys
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE))
-import bootstrap,unittest
+import bootstrap,json,unittest
+from unittest.mock import patch
 import numpy as np,cv2
 from PIL import Image
 import owner_hd as hd
@@ -199,6 +200,106 @@ class Auto(unittest.TestCase):
   self.assertGreater(float(yes.max()),.9)
   self.assertLess(float(hd.match_state(f[442:455,794:806],needle,(794,442,12,13),f.hi,'white').max()),0)
   self.assertLess(float(hd.match_state(f[441:457,770:786],needle,(770,441,16,16),f.hi,'gold').max()),0)
+
+
+class SameAnswersFaster(unittest.TestCase):
+ def small(self):return np.random.default_rng(7).integers(0,255,(479,854,3),dtype=np.uint8)
+ def test_composing_gives_the_same_pixels_as_indexing(self):
+  small=self.small();rows=np.arange(hd.LOGICAL[1])[:,None]
+  grids=[GROWTH,INVENTORY,hd._PLAIN,*hd.layouts()]
+  for layout in grids:self.assertTrue(np.array_equal(layout.compose(small),small[rows,layout.picks()]),layout.name)
+ def test_a_match_hashes_its_picture_once(self):
+  rng=np.random.default_rng(3);real=cv2.GaussianBlur(rng.integers(0,255,(768,1366,3),dtype=np.uint8),(3,3),0)
+  needle=rng.integers(0,255,(10,20,3),dtype=np.uint8);key=hd.key_of(needle)
+  hd._index={key:dict(file='x.png',x=100,y=100,w=32,h=16,rule='left')};hd._images[(key,False)]=real[160:176,160:192].copy()
+  self.addCleanup(hd.reload_index);self.addCleanup(hd._hits.clear)
+  frame=hd.make_frame(real,GROWTH)[90:130,80:140]
+  with patch.object(hd,'key_of',wraps=hd.key_of) as hashed,patch.object(hd,'word_table',lambda:{}):
+   self.assertGreater(float(cv2.matchTemplate(frame,needle,cv2.TM_CCOEFF_NORMED).max()),.9)
+  self.assertEqual(hashed.call_count,1)
+ def test_tables_are_whole_before_anyone_sees_them(self):
+  self.addCleanup(hd.reload_index)
+  seen=[];plain=json.loads
+  def watch(line):
+   seen.append((hd._index,hd._words));return plain(line)
+  hd._index=None;hd._words=None
+  with patch.object(json,'loads',watch):hd.index();hd.word_table()
+  self.assertEqual(seen[0],(None,None));self.assertTrue(all(i is None or len(i)==len(hd._index) for i,_ in seen));self.assertTrue(all(w is None for _,w in seen))
+ def test_reloading_forgets_the_words_too(self):
+  hd._words={'x':{}};hd.reload_index();self.assertNotIn('x',hd.word_table())
+
+
+class CaptureBytes(unittest.TestCase):
+ """Fake window calls. Says nothing about the game's real capture."""
+ TARGET={'client_size':list(hd.REAL),'capture':{'layers':[]}}
+ def run_grab(self,*,layers=(),rect=(0,0,1366,768),after=None,image=None):
+  import win32gui,mdt_owned_capture as owned
+  image=np.zeros((768,1366,3),np.uint8) if image is None else image
+  calls=[];states=[rect,after or rect]
+  layer_calls=iter([list(layers),list(layers)])
+  original=lambda hwnd,target,printwindow=None:calls.append('original') or 'original'
+  with patch.dict(hd._state,{'capture':original}),patch.object(win32gui,'ClientToScreen',lambda h,p:(5,5)),\
+       patch.object(win32gui,'GetClientRect',lambda h:states.pop(0)),patch.object(owned,'_layers',lambda h,p:next(layer_calls)):
+   return hd._grab(1,self.TARGET,lambda h:image),calls
+ def test_nothing_over_it_comes_back_as_is(self):
+  image=np.full((768,1366,3),7,np.uint8);got,calls=self.run_grab(image=image)
+  self.assertIs(got,image);self.assertEqual(calls,[])
+ def test_a_layer_goes_the_original_way(self):
+  got,calls=self.run_grab(layers=[(9,0)]);self.assertEqual((got,calls),('original',['original']))
+ def test_a_wrong_size_goes_the_original_way(self):
+  got,calls=self.run_grab(rect=(0,0,800,600));self.assertEqual((got,calls),('original',['original']))
+ def test_a_window_that_moved_during_the_capture_is_refused(self):
+  with self.assertRaises(RuntimeError):self.run_grab(after=(0,0,1366,700))
+ def test_a_short_picture_is_refused(self):
+  with self.assertRaises(RuntimeError):self.run_grab(image=np.zeros((700,1366,3),np.uint8))
+ def test_a_minimized_game_is_left_alone(self):
+  import types,win32gui
+  gui=types.SimpleNamespace(session=types.SimpleNamespace(snapshot=lambda:{'status':'stopped'}),game_window=types.SimpleNamespace(hwnd=5))
+  with patch.object(hd,'_is_game',lambda h:True),patch.object(hd,'ensure_size') as size,patch.object(hd,'place_program'),patch.object(win32gui,'IsIconic',lambda h:True):
+   hd.keep_size(gui)
+  size.assert_not_called()
+  with patch.object(hd,'_is_game',lambda h:True),patch.object(hd,'ensure_size') as size,patch.object(hd,'place_program'),patch.object(win32gui,'IsIconic',lambda h:False):
+   hd.keep_size(gui)
+  size.assert_called_once()
+
+
+class Reading(unittest.TestCase):
+ """A stand-in for the engine. Says nothing about what it really reads."""
+ def setUp(self):
+  import owner_text
+  self.text=owner_text;self.calls=0;owner_text._areas.clear();self.addCleanup(owner_text._areas.clear)
+  test=self
+  class Engine:
+   def predict(self,source):
+    test.calls+=1
+    return [dict(rec_texts=['하나','둘'],rec_scores=[.9,.6],rec_polys=[[[16,16],[36,16],[36,26],[16,26]],[[16,36],[56,36],[56,46],[16,46]]])]
+  engine=patch.object(owner_text,'_engine',lambda r,l:Engine());engine.start();self.addCleanup(engine.stop)
+ def area(self,fill=1):return np.full((30,30,3),fill,np.uint8)
+ def test_the_same_pixels_are_read_once_whatever_was_asked(self):
+  a=self.text.read_area(None,self.area(),minimum=.5);b=self.text.read_area(None,self.area(),minimum=.8);c=self.text.read_area(None,self.area(),left=100,top=10)
+  self.assertEqual(self.calls,1);self.assertEqual([r['text'] for r in a],['하나','둘']);self.assertEqual([r['text'] for r in b],['하나'])
+  self.assertEqual((a[0]['rx'],a[0]['ry']),(5,2));self.assertEqual((c[0]['rx'],c[0]['ry']),(105,12));self.assertEqual(c[0]['bounds'],(100,10,110,15))
+ def test_what_comes_back_can_be_changed_freely(self):
+  self.text.read_area(None,self.area())[0]['x']=1;self.assertNotIn('x',self.text.read_area(None,self.area())[0])
+ def test_other_pixels_or_scale_are_read_again(self):
+  self.text.read_area(None,self.area());self.text.read_area(None,self.area(2));self.text.read_area(None,self.area(),scale=3);self.text.read_area(None,self.area(),bright=True)
+  self.assertEqual(self.calls,4)
+ def test_a_reading_in_use_outlives_a_moving_world(self):
+  self.text.read_area(None,self.area())
+  for fill in range(2,2+self.text.AREAS_KEPT*2):
+   self.text.read_area(None,self.area(fill));self.text.read_area(None,self.area())
+  self.assertEqual(self.calls,1+self.text.AREAS_KEPT*2);self.assertLessEqual(len(self.text._areas),self.text.AREAS_KEPT)
+ def test_a_menu_named_by_its_title_needs_no_more_reading(self):
+  import owner_start_menu as menu
+  frame=hd.make_frame(np.zeros((768,1366,3),np.uint8),GROWTH)
+  with patch.object(menu,'title_menu',lambda f:'성장'),patch.object(menu,'word_window',side_effect=AssertionError),patch.object(menu,'idle_training',side_effect=AssertionError):
+   self.assertEqual(menu.kind(frame),'성장')
+  with patch.object(menu,'title_menu',lambda f:None),patch.object(menu,'word_window',lambda f:('이벤트',(1,1))),patch.object(menu,'idle_training',side_effect=AssertionError):
+   self.assertEqual(menu.kind(frame),'이벤트')
+  with patch.object(menu,'title_menu',lambda f:None),patch.object(menu,'word_window',lambda f:None),patch.object(menu,'idle_training',lambda f:True):
+   self.assertEqual(menu.kind(frame),'영기 수련')
+  with patch.object(menu,'title_menu',lambda f:None),patch.object(menu,'word_window',lambda f:None),patch.object(menu,'idle_training',lambda f:False):
+   self.assertIsNone(menu.kind(frame))
 
 
 class RealScreen(unittest.TestCase):

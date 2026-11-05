@@ -102,8 +102,10 @@ def word_window(frame):
 def kind(frame):
  if getattr(frame,'shape',None)!=(479,897,3):return None
  if getattr(frame,'hi',None) is not None:
+  name=title_menu(frame)
+  if name:return name
   window=word_window(frame)
-  return title_menu(frame) or (window[0] if window else None) or ('영기 수련' if idle_training(frame) else None)
+  return window[0] if window else '영기 수련' if idle_training(frame) else None
  from owner_skill_ui import skill_screen,quest_screen,map_screen
  if skill_screen(frame):return '도술'
  if quest_screen(frame):return '임무'

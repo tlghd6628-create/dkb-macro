@@ -139,7 +139,7 @@ def resume_dungeon(gui,adapter,context,inputs,service):
 def _resume_dungeon(gui,adapter,context,inputs,service,*,goal=None):
     from owner_camera import zoom_once
     zoom_once(adapter,context,inputs)
-    from project_adapter.secret_exploration import AUTO_NAMES,ensure_auto_active
+    from project_adapter.secret_exploration import ensure_auto_active
     from project_adapter.main_quest import StateROIs,BoundedMainQuestRunner,dependencies
     slots=StateROIs(adapter.project.root/'profiles'/adapter.project.code,mode='sub_quest')
     timer=timer_pair(service)
