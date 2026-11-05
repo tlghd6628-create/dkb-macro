@@ -7,6 +7,9 @@ from contextlib import contextmanager
 import logging,re,time
 from owner_skill_goal import Pending
 LOG=logging.getLogger('project_gui.DKB')
+NEEDED=3
+# Real pixels on the 1366x768 screen.
+LIMIT_NAME=(75,108,200,22);LIMIT_ROW=(75,150,180,20);SLOT_COUNT=(562,722,44,24);SLOT_PRESS=(581,722)
 
 class PotionFull(BaseException):pass
 
@@ -61,6 +64,14 @@ def native_purchase_watch(adapter,context,ui,receipt,commit,guard):
   if probe.adapter is adapter and probe.context is context and value is not None:
    guard();evidence['full']=True
    if evidence['buy_sent']:raise Pending('물약 구매 후 결과 확인 필요 · 추가 사용 없음')
+   receipt['to_use']=3
+   raise PotionFull()
+  # The town row shows what is held against the limit, and holding over it (320/250) still counts as full.
+  counts=over_limit(probe) if probe.adapter is adapter and probe.context is context and not evidence['buy_sent'] else None
+  if counts and counts[0]+NEEDED>counts[1]:
+   guard();evidence['full']=True
+   receipt['to_use']=counts[0]+NEEDED-counts[1]
+   LOG.info('퀘스트 필수 구매 · 보유 %d/%d · 구매 전 물약 사용 필요',*counts)
    raise PotionFull()
   return value
  def button(service,name,*a,**k):
@@ -80,23 +91,48 @@ def native_purchase_watch(adapter,context,ui,receipt,commit,guard):
  try:yield evidence
  finally:TownServices.button=previous_button;limits.observed_full=previous_full;limits.cached_full=previous_cached
 
-def consume_three(ui,receipt,commit,guard):
- """User layout: tier1 Ctrl1, tier2 Ctrl2, tier3 Ctrl3. No slot guessing."""
- from owner_shop_runtime_candidate import _number
- if receipt.get('used',0)>=3:raise Pending('물약 3개 사용 후에도 구매 불가 · 추가 사용 없음')
- if not ui.normal():raise Pending('물약 사용 전 일반 필드 확인 필요')
- while receipt.get('used',0)<3:
-  guard();before=_number(ui,(381,445,25,13),minimum=.97)
-  if before<3-receipt.get('used',0):raise Pending('첫 칸 1단 물약 수량 부족')
-  receipt.update(phase='use_sent',use_before=before,use_sent_at=time.time());commit()
-  ui.click(385,443,lambda f:ui.normal_frame(f) and guard())
-  end=time.monotonic()+4
-  while True:
-   guard();after=_number(ui,(381,445,25,13),minimum=.97)
-   if after==before-1:break
-   if after!=before or time.monotonic()>=end:raise Pending('물약 사용 후 1개 감소 확인 필요 · 추가 사용 없음')
-   ui.context.wait(.4)
-  receipt.update(phase='full',used=receipt.get('used',0)+1,use_after=after);commit();ui.context.wait(.6)
+def over_limit(ui):
+ """(held, limit) from the shop's first row, 구매 가능 320/250, where two real frames agree. Or None."""
+ import owner_text as text
+ found=[]
+ for _ in range(2):
+  frame=ui.frame()
+  if getattr(frame,'hi',None) is None or not text.find(text.read(None,frame,LIMIT_NAME),'1단'):return None
+  rows=[re.search(r'(\d{1,5})\s*/\s*(\d{1,5})',str(r['text'])) for r in text.read(None,frame,LIMIT_ROW)]
+  rows=[(int(m[1]),int(m[2])) for m in rows if m]
+  if len(rows)!=1:return None
+  found.append(rows[0]);ui.context.wait(.12)
+ return found[0] if found[0]==found[1] else None
+
+def slot_count(ui):
+ """Potions left in the first quick slot, on the real screen. Or None."""
+ from owner_text import read_area
+ import numpy as np
+ x,y,w,h=SLOT_COUNT;real=np.asarray(ui.frame().hi)
+ values=[r['text'] for r in read_area(None,real[y:y+h,x:x+w],language='number',scale=3,minimum=.6) if re.fullmatch(r'\d{1,4}',str(r['text']).strip())]
+ return int(values[0]) if len(values)==1 else None
+
+def use_potions(ui,receipt,commit,guard):
+ """User layout: the potion on Ctrl1. Each use is proved by the slot's count falling; a press with no effect is pressed again."""
+ import owner_hd as hd
+ from owner_movement import field_hud
+ need=receipt.get('to_use',3);start=slot_count(ui)
+ if start is None:raise Pending('첫 칸 물약 수량 판독 필요')
+ if start<need:raise Pending('첫 칸 물약 수량 부족 · %d/%d'%(start,need))
+ LOG.info('퀘스트 필수 구매 · 한도 아래로 물약 %d개 사용 · 첫 칸 %d개',need,start)
+ frame=ui.frame();x,y=hd.logical_of(SLOT_PRESS[0],SLOT_PRESS[1],getattr(frame,'layout',None))
+ receipt.update(phase='using',use_before=start);commit()
+ used=0;last=time.monotonic();end=last+need*6+30
+ while used<need:
+  guard()
+  if time.monotonic()>=end or time.monotonic()-last>=20:raise Pending('물약 사용 후 수량 감소 확인 필요 · %d/%d'%(used,need))
+  ui.click(x,y,lambda f:field_hud(f) and guard());ui.context.wait(.5)
+  now=slot_count(ui)
+  if now is not None and now<start-used:
+   used=start-now;last=time.monotonic()
+   receipt.update(used=used,use_after=now)
+ receipt.update(phase='full');commit()
+ LOG.info('퀘스트 필수 구매 · 물약 %d개 사용 완료',used)
 
 def execute(ui,book,key):
  row=book.item['quests'][key]
@@ -121,6 +157,8 @@ def execute(ui,book,key):
   return True
  guard();receipt.update(phase='preflight',goal_before=stage['done'],route='existing_potion_purchase');book.commit()
  ui.close_known()
+ # The merchant must be seen again: the hour's rest after a full stack is for the ordinary top-up.
+ adapter._owner_potion_full_at=-1e30
  for attempt in range(2):
   guard();full=False
   try:
@@ -132,7 +170,13 @@ def execute(ui,book,key):
   if full:
    if not ui.normal():_close_potion_screen(ui.service)
    if not ui.normal():raise Pending('물약 사용 전 기존 상점 종료 확인 필요')
-   receipt.update(phase='full');book.commit();consume_three(ui,receipt,book.commit,guard)
+   receipt.update(phase='full');book.commit()
+   try:use_potions(ui,receipt,book.commit,guard)
+   except Pending as exc:
+    # Not enough in the slot, or the count would not fall. The quest stays open and the other stories go on.
+    LOG.info('퀘스트 필수 구매 보류 · %s · %s',exc,row['title'])
+    book.defer(key,'condition',detail='물약 사용 미완료 · '+str(exc));return True
+   adapter._owner_potion_full_at=-1e30
    continue
   if result['buy_sent']:
    receipt.update(phase='await_goal',requested_at=time.time());book.commit()
@@ -140,9 +184,5 @@ def execute(ui,book,key):
    adapter._owner_restore_story_once=False
    return True
   receipt.update(phase='not_purchased');book.commit()
-  # The town merchant shows 구매 불가 while the bag holds over the limit (320/250, 11-05), and a story that asks
-  # for a purchase then repeated until the run ended. It waits; every other story goes on. The quest stays open.
-  LOG.info('퀘스트 필수 구매 불가 · 물약 한도 초과 · 이 서사 보류 후 다음 서사 진행 · %s',row['title'])
-  book.defer(key,'condition',detail='물약 구매 한도 초과 · 구매 조건 대기')
-  return True
+  raise Pending('기존 물약 구매가 실행되지 않음 · 임무 미완료 유지')
  raise Pending('물약 사용 후에도 구매 불가 · 추가 사용 없음')
