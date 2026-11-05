@@ -229,8 +229,10 @@ def same_comparison_for_close(first,second):
  try:
   proof={'current_item':_item_token(first[97:115,313:425],first[128:148,356:376].copy()),
          'candidate_item':_item_token(first[97:115,468:568],first[128:148,511:531].copy())}
-  return comparison_item_proof(proof,second)
- except Hold:return False
+  if comparison_item_proof(proof,second):return True
+ except Hold:pass
+ # A long name scrolls, so it cannot match between two frames (11-05 12:02). This only decides to close, so the icons do.
+ return _score(first[128:148,356:376],second[128:148,356:376])>=.97 and _score(first[128:148,511:531],second[128:148,511:531])>=.97
 
 def single_item_proof(token,frame):
  try:return same_item(token,_item_token(frame[97:115,390:502],frame[128:148,434:454].copy()))
