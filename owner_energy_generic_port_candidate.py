@@ -1,6 +1,6 @@
 """Opt-in generic 1/N selection port, separate from frozen recovery build."""
 from owner_energy_box_port_candidate import Port
-from owner_energy_box_detail_candidate import detail,detail_screen,generic_box_detail,box_candidates,stable_box_candidates
+from owner_energy_box_detail_candidate import detail,detail_screen,generic_box_detail,box_candidates,stable_box_candidates,box_gone
 from owner_energy_choice_reader_candidate import read_pair,read_open_pair,layout_screen,layout_variant,rows_of,selected_of,asset,_score
 from owner_energy_box_runtime_candidate import Hold
 import logging
@@ -155,6 +155,11 @@ class GenericPort(Port):
    pair=self.pair(same_detail)
    if not pair:raise Hold('현재 기운상자 잔량 재확인 필요')
    return dict(verified=True,boxes=pair[0],frame_ids=pair[1],captured_at=pair[2])
+  # After the last batch nothing is left to open a popup on.
+  if self.ensure_inventory() is False:raise Hold('인벤토리 열기 확인 필요')
+  self.opened=True;self.view='inventory'
+  gone=self.pair(lambda a,b:True if box_gone(a) and box_gone(b) else None)
+  if gone:return dict(verified=True,boxes=0,frame_ids=gone[1],captured_at=gone[2])
   return super().current_detail(guard)
  def prepare_one(self,name,guard):
   from project_adapter import market_inventory

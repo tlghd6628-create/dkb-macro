@@ -116,6 +116,16 @@ def box_candidates(frame):
     if len(hits)>5:return None
  return sorted(hits,key=lambda p:(p[1],p[0]))
 
+def box_gone(frame):
+ """The bag on show with neither a popup nor this box left in it: the last batch has no popup to read."""
+ if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or inventory_parts(frame)!=(True,True):return False
+ from owner_energy_choice_reader_candidate import layout_screen
+ return not generic_box_detail(frame) and not layout_screen(frame) and not box_candidates(frame)
+
+def left_shown(frame,left):
+ """This frame shows `left` boxes remaining."""
+ return box_gone(frame) if left==0 else evidence_detail(frame)==left
+
 def box_location(frame):
  """Backward-compatible single candidate; never treats icon as item proof."""
  hits=box_candidates(frame)

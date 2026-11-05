@@ -30,7 +30,8 @@ class Port:
   refs=getattr(self,'inventory_reference',None)
   if not refs or getattr(frame,'shape',None)!=(479,897,3):return False
   crop=frame[30:416,205:700]
-  return any(np.array_equal(crop,ref[30:416,205:700]) for ref in refs)
+  # People walking through a town change a few pixels; an overlay changes the whole picture.
+  return any(float(np.abs(crop.astype('int16')-ref[30:416,205:700].astype('int16')).mean())<12 for ref in refs)
  def wait_pair(self,reader,seconds=3):
   end=time.monotonic()+seconds
   while True:
@@ -139,14 +140,14 @@ class Port:
     records.append(row)
     from owner_energy_reward_candidate import READERS,matches
     if name in READERS:
-     from owner_energy_box_detail_candidate import evidence_detail
+     from owner_energy_box_detail_candidate import left_shown
      from owner_ui_foreground import inventory_header
      character=(getattr(self,'evidence_identity',None) or {}).get('character')
      if character and inventory_header(frame,character) is not None:
       reward_now=matches(frame,name,expected)
       if reward_now:
        rewards.append(row);detail_rows=[]
-      elif len(rewards)>=2 and evidence_detail(frame)==getattr(self,'expected_boxes_before',0)-expected:detail_rows.append(row)
+      elif len(rewards)>=2 and left_shown(frame,getattr(self,'expected_boxes_before',0)-expected):detail_rows.append(row)
     try:pending.put_nowait((row,frame))
     except queue.Full:errors.append('queue_full');break
     index+=1;self.context.wait(.18)
@@ -161,7 +162,7 @@ class Port:
   if not (selected_rewards[0]['captured_at']<selected_rewards[1]['captured_at']<chosen[0]['captured_at']<chosen[1]['captured_at']):return None
   import hashlib
   evidence=selected_rewards+chosen
-  self.view='detail'
+  self.view='detail' if getattr(self,'expected_boxes_before',0)-expected else 'inventory'
   return {'verified':True,'name':name,'quantity':expected,'boxes':getattr(self,'expected_boxes_before',0)-expected,
           'toast_verified':True,'frame_ids':[r['frame_id'] for r in chosen],
           'captured_at':[r['captured_monotonic'] for r in chosen],
