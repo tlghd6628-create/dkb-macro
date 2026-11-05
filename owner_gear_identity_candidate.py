@@ -24,7 +24,10 @@ class IconIdentity:
             if not np.isfinite(value):return False
             scores.append((value,row['index']))
         own=next((v for v,i in scores if i==index),None);others=[v for v,i in scores if i!=index]
-        return own is not None and bool(others) and own>=.70 and own-max(others)>=.05
+        # A belt on its panel scored only .642, with the next tile at .237: a wide lead says as much as a high score.
+        if own is None or not others:return False
+        lead=own-max(others)
+        return (own>=.70 and lead>=.05) or (own>=.55 and lead>=.25)
 
     def __call__(self,frame,index,selected):
         if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or frame.dtype!=np.uint8:return None
