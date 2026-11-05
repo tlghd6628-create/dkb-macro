@@ -425,7 +425,15 @@ def tab_source(service,context,identity,targets,kind,tab):
     chosen=next((row for row in rows if wanted(row)),None)
     if chosen is None:return None
     done.add(chosen['index'])
-    source.prepare_and_select(chosen['index'])
+    from owner_gear_native_observer_candidate import Hold
+    # A list still redrawing fails this look, and it used to end the pass for every item left (22:13). Nothing is pressed.
+    for attempt in range(4):
+        try:source.prepare_and_select(chosen['index']);break
+        except Hold as exc:
+            if attempt==3:
+                _report(service,'장비 %s 선택 전 확인 안 됨 · 칸 %s · %s'%(kind,chosen['index'],exc))
+                return tab_source(service,context,identity,targets,kind,tab)
+            context.wait(.5);context.checkpoint()
     # The detail panel slides in and its glow settles.
     context.wait(1.0)
     # A press just after the list redraws can be lost: the panel stays empty and that item gets no turn (18:37). This
