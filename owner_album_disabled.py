@@ -89,6 +89,8 @@ def install(gui):
    except AlbumNothingLeft:
     LOG.removeHandler(watch)
     LOG.info('화첩 보상 완료 · 빨점 없음 · 추가 탐색 종료')
+    # The album is finished, so its completion guard has no say over leaving. This service does not know the album's images.
+    LOCAL.scope=previous
     TownServices(adapter,context,inputs,['버튼_나가기']).button('버튼_나가기',wait_before_click=.12,required=False)
     return True
    except AlbumBoundary as exc:
