@@ -30,7 +30,7 @@ SAME_SIDES=.85;BAG_SCREENS=('inventory','inv_','pc2_bag','pc2_box_detail');SIDE_
 DEFAULT_SCREEN='field'
 STORE=Path(__file__).parent/'assets/hd'
 HIT_LIFE=5.0
-_index=None;_images={};_missing=set();_layouts=None
+_index=None;_images={};_missing=set();_layouts=None;_words=None
 _current=None;_last_capture=None;_hits=collections.deque(maxlen=64);_lock=threading.Lock()
 
 
@@ -359,7 +359,8 @@ def match_real(image,needle,method,ordinary,scorer=None):
     if source is None and image.shape[:2]!=(LOGICAL[1],LOGICAL[0]):return None
     found=cut_for(needle)
     if found is None:
-        _note_missing(needle);return None
+        _note_missing(needle)
+        return match_words(image,needle,source,real)
     cut,row=found
     h,w=cut.shape[:2]
     box=source or (0,0,LOGICAL[0],LOGICAL[1])
@@ -381,6 +382,41 @@ def match_real(image,needle,method,ordinary,scorer=None):
     logical_x=np.clip(np.round((left+xs-shift)/F-box[0]).astype(int),0,cols-1)
     np.maximum.at(answer,(logical_y,logical_x),scores[ys,xs].astype(np.float32))
     _remember_hits(answer,box,np.asarray(needle).shape,shift)
+    return answer
+
+
+def word_table():
+    global _words
+    if _words is None:
+        _words={}
+        try:
+            for line in (STORE/'words.jsonl').read_text(encoding='utf-8').splitlines():
+                if line.strip():
+                    row=json.loads(line);_words[row['key']]=row
+        except (OSError,ValueError):pass
+    return _words
+
+
+def match_words(image,needle,source,real):
+    """A picture with no new cut, found by the words on it. A clear answer either way: words that are not there
+    are a low score, not a look at the scaled frame, where a picture can pass for what it is not."""
+    array=np.asarray(needle)
+    row=word_table().get(key_of(needle)) or (word_table().get(key_of(array[:,:,::-1])) if array.ndim==3 else None)
+    if row is None or source is None or source[2]*source[3]>=LOGICAL[0]*LOGICAL[1]/2:return None
+    import owner_text
+    x,y,w,h=owner_text.word_box(source)
+    rows=owner_text.read_area(None,np.asarray(real)[y:y+h,x:x+w],left=x,top=y,scale=3,minimum=.8)
+    wanted=row['words']
+    from difflib import SequenceMatcher
+    # The table's own reading can be a letter off (전래등화), so close counts, one word against one word.
+    near=[r for r in rows if wanted in owner_text.clean(r['text']) or SequenceMatcher(None,owner_text.clean(r['text']),wanted).ratio()>=.75]
+    rows_out=max(1,image.shape[0]-array.shape[0]+1);cols=max(1,image.shape[1]-array.shape[1]+1)
+    answer=np.full((rows_out,cols),-1.,np.float32)
+    if len(near)!=1:return answer
+    layout=getattr(image,'layout',None) or _current or default_layout()
+    lx,ly=logical_of(near[0]['rx'],near[0]['ry'],layout)
+    # Centre the old picture on the words, in the box that was asked about.
+    answer[min(rows_out-1,max(0,round(ly-array.shape[0]/2-source[1]))),min(cols-1,max(0,round(lx-array.shape[1]/2-source[0])))]=.99
     return answer
 
 
