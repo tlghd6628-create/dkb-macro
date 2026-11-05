@@ -115,7 +115,10 @@ class RealTabs(unittest.TestCase):
         self.assertFalse(extras.ExtraObserver(source,'awaken')._same_item(post))
     def test_enhance_tab_presses_the_tab_instead(self):
         service=Service([frame('tab_enhance.png')])
-        self.assertIsNone(extras.tab_source(service,service.context,'c',TARGETS,'awaken',native_extra.AWAKE_TAB))
-        self.assertEqual(service.buttons,[]);self.assertEqual(service.clicks,[extras._TAB_HITS['awaken']])
+        from unittest.mock import patch
+        with patch.object(extras,'read_tabs',return_value=True):
+            self.assertIsNone(extras.tab_source(service,service.context,'c',TARGETS,'awaken',native_extra.AWAKE_TAB))
+        top=extras.TABS['awaken']
+        self.assertEqual(service.buttons,[]);self.assertEqual(service.clicks,[(43,top+10,(14,top,73,top+20))])
 
 if __name__=='__main__':unittest.main()
