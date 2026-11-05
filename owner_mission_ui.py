@@ -293,6 +293,13 @@ class MissionUI(SkillUI):
     # It then blocks the current row it just read, and the block at the end of this function is never reached.
     stale=book.item.get('active')
     LOG.info('본편 목록 확인 결과 · 읽은 행=%d · 판독 보류=%d · 저장된 진행 임무=%s',len(keys),unknown,book.item['quests'][stale]['title'] if stale else '없음')
+    # The same row can read 탐방 then 탈방, and that used to retire the quest it was running.
+    if stale and stale not in keys:
+     from difflib import SequenceMatcher
+     near=[k for k in keys if SequenceMatcher(None,book.item['quests'][k]['title'],book.item['quests'][stale]['title']).ratio()>=.8]
+     if near:
+      LOG.info('본편 진행 임무 제목 차이 흡수 · %s',book.item['quests'][near[0]]['title'])
+      book.activate(near[0]);return near[0]
     if stale and book.item['quests'][stale]['mode']=='main_quest' and stale not in keys and book.choose(keys,'main_quest',power) and reconcile_depth<2:
      book.defer(stale,'condition',detail='본편 목록 밝은 행에 없음 · 완료로 단정하지 않음')
      LOG.info('본편 이전 진행 임무 미표시 · 완료 처리 없이 보류 · 현재 임무 재선택')
