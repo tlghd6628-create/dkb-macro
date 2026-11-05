@@ -237,7 +237,7 @@ class SkillUI:
         self.touched=True
         self.context.wait(.25)
     def key(self,vk):self.context.checkpoint();self._check_identity();self.service.key(vk);self.touched=True;self.context.wait(.25)
-    def drag(self,start,end,proof):
+    def drag(self,start,end,proof,*,hold=0):
         if not proof(self.frame()):raise Pending('도술 목록 이동 직전 화면 변경')
         self._check_identity()
         with self.inputs.transaction():
@@ -250,6 +250,8 @@ class SkillUI:
                     self.context.checkpoint();self._check_identity()
                     self.inputs.move(round(start[0]+(end[0]-start[0])*n/16),round(start[1]+(end[1]-start[1])*n/16))
                     self.context.wait(.025)
+                # Letting go while still moving flings a list further than the drag.
+                if hold:self.context.wait(hold)
             finally:
                 if pressed:self.inputs.up('mouse','left')
         self.context.wait(.2)

@@ -57,33 +57,34 @@ class Settings(_Store):
   self.assertEqual(self.store.read_document()['coin_reserve'],DEFAULT_COIN_RESERVE)
 
 class FakeUI:
- def __init__(self,journal):self.journal=journal;self.events=[];self.last_text_frame=np.zeros((479,897,3),dtype=np.uint8)
+ def __init__(self,journal):self.journal=journal;self.events=[];self.last_text_frame=np.zeros((479,897,3),dtype=np.uint8);self.context=NS(wait=lambda *a:None,checkpoint=lambda:None)
  def normal(self):return True
  def click(self,x,y,proof):
   if not proof(self.last_text_frame):raise Hold('proof rejected')
-  self.events.append('cart' if x==490 else 'close_popup' if x==408 else 'open_item')
- def wait(self,predicate):pass
+  self.events.append({490:'cart',408:'close_popup',507:'add_all',489:'add_one'}.get(x,'open_item'))
+ def wait(self,predicate,**kw):pass
  def click_word(self,*a,**k):self.events.append('commit')
- def word(self,*a,**k):self.events.append('receipt')
 
 class ReserveNull(_Store):
  def go(self,item):
   progress=NS(character='observed-hash',observed=0.)
   def refresh(*args):progress.observed=time.monotonic();return True
-  quote={'name':item,'row_y':387,'row_proof':lambda f:True,'unit_price':50000,'remaining':10,'icons':{}}
-  balances=[{'lower':1880000,'upper':1900000,'frame_ids':['a','b']},{'lower':1880000,'upper':1900000,'frame_ids':['c','d']},{'lower':1830000,'upper':1850000,'frame_ids':['e','f']}]
+  def quote(used):return {'name':item,'click_y':387,'row_proof':lambda f:True,'unit_price':50000,'remaining':10-used,'used':used,'limit':10,'kind':'observed_weekly_quote'}
+  balance={'lower':1880000,'upper':1900000,'frame_ids':['a','b']}
   journal=runtime._journal(self.root);ui=FakeUI(journal)
-  with patch.object(owner_membership,'paid',return_value=True),patch.object(owner_membership,'open_remote',return_value=ui),patch.object(owner_skill_ui,'SkillUI',return_value=ui),patch.object(owner_quest_preflight,'read_power',side_effect=refresh),patch.object(owner_progression,'state',return_value=progress),patch.object(runtime,'discover_visible_items',return_value={'known':[],'suggestions':[]}),patch.object(runtime,'_find_quote',return_value=quote),patch.object(runtime,'read_weekly_quote',return_value=quote),patch.object(runtime,'_balance',side_effect=balances),patch.object(runtime,'_total',side_effect=[0,50000,0]),patch.object(runtime,'_popup',side_effect=[(0,lambda f:True),(1,lambda f:True)]),patch.object(runtime,'_paired',return_value=True),patch.object(runtime,'_close_known_shop'),patch.object(runtime,'find_visible_row',return_value=387),patch.object(runtime,'_same_cart',return_value=True):
+  with patch.object(owner_membership,'paid',return_value=True),patch.object(owner_membership,'open_remote',return_value=ui),patch.object(owner_skill_ui,'SkillUI',return_value=ui),patch.object(owner_quest_preflight,'read_power',side_effect=refresh),patch.object(owner_progression,'state',return_value=progress),patch.object(runtime,'_find_quote',side_effect=[quote(0),quote(10)]),patch.object(runtime,'_balance',return_value=balance),patch.object(runtime,'_total',side_effect=[0,500000,500000,0]),patch.object(runtime,'_popup',return_value=(0,lambda f:True)),patch.object(runtime,'_paired',return_value=True),patch.object(runtime,'_close_known_shop'),patch.object(runtime,'_same_cart',return_value=True):
    return runtime.buy_remote_one(NS(project=NS(root=self.root)),NS(checkpoint=lambda:None),None,item),ui
  def test_null_reserve_no_longer_holds_before_navigation(self):
   self.enable_wanted(master=True,reserve=None)
   with self.assertLogs('project_gui.DKB',level='INFO') as logs:result,ui=self.go('강타 도술 강화 요령서')
-  self.assertEqual(result['status'],'confirmed');self.assertEqual(ui.events,['open_item','cart','commit','receipt','open_item','close_popup'])
+  self.assertEqual(result['status'],'confirmed');self.assertEqual(result['quantity'],10);self.assertTrue(result['finished'])
+  self.assertEqual(ui.events,['open_item','add_all','cart','commit'])
   self.assertTrue(any('기본 %d 적용'%DEFAULT_COIN_RESERVE in line for line in logs.output))
  def test_default_reserve_still_protects_balance(self):
   self.enable_wanted(master=True,reserve=None)
   with patch.object(runtime,'DEFAULT_COIN_RESERVE',1900000):
-   with self.assertRaises(Hold):self.go('강타 도술 강화 요령서')
+   result,ui=self.go('강타 도술 강화 요령서')
+  self.assertEqual(result['status'],'reserve_reached');self.assertEqual(ui.events,[])
   self.assertFalse(runtime._journal(self.root).path.exists())
  def test_master_off_still_holds_each_item(self):
   self.enable_wanted(master=False,reserve=None)
