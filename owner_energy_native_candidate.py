@@ -93,6 +93,9 @@ class EnergyObserver:
                 ratio=float(patch.mean()/reference.mean());active=.90<=ratio<=1.30
         from owner_growth_reading import breakthrough_allowed
         if button==native.ENERGY_BREAKTHROUGH and not breakthrough_allowed():active=False
+        if active:
+            from owner_coin_reserve import can_spend
+            active=can_spend(frame,'기운')
         return dict(info,active=bool(active and stage<self.target),button=button)
     def _word_state(self,native,frame,info,stage):
         """The button's word and the count under the panel, off the real frame. Nothing unclear can turn active on."""

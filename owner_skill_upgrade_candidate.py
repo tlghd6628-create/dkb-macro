@@ -234,6 +234,8 @@ class SkillUpgrade:
    if any(type(quote.get(k)) is not int for k in ('have','need','price','funds')) or quote['have']<0 or quote['need']<=0 or quote['price']<=0 or quote['funds']<0:
     raise Pending('도술 성장 재료·가격 판독 계약 불일치')
    if quote['have']<quote['need'] or quote['funds']<quote['price']:raise Pending('도술 '+field+' 재료·엽전 부족')
+   from owner_coin_reserve import reserve
+   if quote['funds']-quote['price']<reserve():raise Pending('도술 '+field+' 남길 엽전 도달')
    intents[key]={'status':'prepared','name':name,'kind':kind,'before':current,'next':current+1,
     'target':target,'price':quote['price'],'have':quote['have'],'need':quote['need'],'at':time.time()}
    self.ledger.event('skill_upgrade_prepared',key=key,before=current)
