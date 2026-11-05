@@ -899,7 +899,13 @@ def timed_invoke(adapter,job,context,inputs):
     # A story scene blocks every menu a job would open, so each job after it failed too.
     from owner_mission_controller import finish_scene
     finish_scene(adapter,context,inputs)
-    return invoke(adapter,job,context,inputs)
+    try:return invoke(adapter,job,context,inputs)
+    finally:
+        # A job that gave up inside its menu (clan, 09:31) made every later job fail too.
+        from owner_start_menu import normalize
+        from project_adapter.town_services import TownServices
+        try:normalize(TownServices(adapter,context,inputs,['버튼_나가기']))
+        except RuntimeError as exc:LOG.info('일정 후 메뉴 정리 보류 · %s',exc)
 
 def invoke(adapter,job,context,inputs):
     if job.key in ('shop','shop_weekly_verify'):
