@@ -3,6 +3,8 @@ from owner_energy_box_port_candidate import Port
 from owner_energy_box_detail_candidate import detail,detail_screen,generic_box_detail,box_candidates,stable_box_candidates
 from owner_energy_choice_reader_candidate import read_pair,read_open_pair,layout_screen,layout_variant,rows_of,asset,_score
 from owner_energy_box_runtime_candidate import Hold
+import logging
+LOG=logging.getLogger('project_gui.DKB')
 
 class GenericPort(Port):
  def ensure_inventory(self):
@@ -126,7 +128,11 @@ class GenericPort(Port):
   return super().pair(lambda a,b:reader(a,b) if self.same_character(a) and self.same_character(b) else None)
  def click(self,x,y,guard,predicate,on_sent=None):
   if not getattr(self,'evidence_identity',None):return super().click(x,y,guard,predicate,on_sent=on_sent)
-  return super().click(x,y,guard,lambda frame:self.same_character(frame) and predicate(frame),on_sent=on_sent)
+  def proved(frame):
+   same=self.same_character(frame);screen=bool(predicate(frame))
+   if not (same and screen):LOG.info('상자 입력 전 확인 실패 · 캐릭터=%s · 화면=%s',same,screen)
+   return same and screen
+  return super().click(x,y,guard,proved,on_sent=on_sent)
  def __init__(self,adapter,context,inputs):
   super().__init__(adapter,context,inputs)
   # Initialize before capturing an action proof. A cold OCR load must never

@@ -116,6 +116,9 @@ def native_readers_factory(service,context,identity,targets,*,observation_sink=N
     candidates=[r for r in rows if type(r.get('index')) is int and r['index']!=selected
                 and r.get('equipped') is True and r.get('equipped_state')=='장착'
                 and targets.get(grade_map.get(r.get('grade')),{}).get('enabled') is True]
+    # Worn items that showed a dim button this visit are not offered again (1→10→1 ended a visit before the white gear).
+    skipped=getattr(service,'_owner_gear_no_stones',frozenset())
+    candidates=[r for r in candidates if r['index'] not in skipped]
     if not candidates:raise Hold('장착 장비 또는 선택 전 등급 확인 필요')
     # Rotate across visible worn cells between calls; list order is not a
     # reliable equipment-category or inventory identity indicator.
@@ -422,7 +425,9 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
             if (status=='hold_screen_unverified' and getattr(observer,'last_reason',None)=='재료 또는 실행 버튼 미확인'
                 and intent.pending() is None and index not in _tried):
                 _report(service,f"성장 재료 없음 · 칸={index} · 다음 착용 장비 확인")
-                return guarded(service,_tried=_tried|{index})
+                service._owner_gear_no_stones=_tried|{index}
+                try:return guarded(service,_tried=_tried|{index})
+                finally:service._owner_gear_no_stones=frozenset()
             # Native caller result semantics are unverified; do not assert full
             # completion when one item advanced or an item was held.
             return False
