@@ -147,9 +147,14 @@ class Observer:
         self.native.select_growth_equipment(self.service,evidence[1][3])
         self.context.checkpoint();self.service.check()
         # The tile flashes after a click and reads as unselected until the flash ends.
+        def graded(listed):return sum(r.get('grade') in ('흰','파랑','보라') for r in listed)
+        shown=graded(self.items(second[2]))
         for _ in range(20):
-            frame=self.capture()[2]
-            if self.native._growth_selected_slot(frame,self.items(frame))==index:break
+            frame=self.capture()[2];listed=self.items(frame);chosen=self.native._growth_selected_slot(frame,listed)
+            if chosen==index:break
+            # The awaken list narrows to the chosen item and its duplicates, so the index moves and the wait above ran out
+            # every time: 4 s per item with nothing to wait for (18:21).
+            if chosen is not None and graded(listed)<shown:break
             self.context.wait(.2);self.context.checkpoint()
         self.ticket={'index':index,'grade':evidence[1][0],'identity':evidence[1][1],'row':evidence[1][3],
                      'captured_at':second[1]}

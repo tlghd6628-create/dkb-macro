@@ -19,6 +19,7 @@ from owner_gear_decision_candidate import Observation
 # So a place alone never names a tab; read_tabs replaces this from the words on screen.
 TABS={'enhance':67,'breakthrough':101,'awaken':135,'reroll':169}
 TAB_WORDS={'강화':'enhance','돌파':'breakthrough','각성':'awaken','재조율':'reroll'}
+GRID_STILL=6  # mean change across the item grid between two looks; the forge behind it keeps moving
 
 def tabs_from_rows(rows):
     """The word on each tab to its top. Missing 강화 or 각성 means this is not a list to trust."""
@@ -398,7 +399,9 @@ def tab_source(service,context,identity,targets,kind,tab):
         for _ in range(15):
             _,_,first=source.capture();context.wait(.2);_,_,second=source.capture()
             rows=source.items(second)
-            if tab_selected(first,kind) and tab_selected(second,kind) and shape(source.items(first))==shape(rows):break
+            # The grid slides back in after a selection clears, and a press during that selects nothing (18:21).
+            settled=float(np.abs(first[70:230,685:860].astype(np.int16)-second[70:230,685:860]).mean())<=GRID_STILL
+            if settled and tab_selected(first,kind) and tab_selected(second,kind) and shape(source.items(first))==shape(rows):break
         else:
             return None
         selected=native._growth_selected_slot(second,rows)
@@ -425,9 +428,23 @@ def tab_source(service,context,identity,targets,kind,tab):
     source.prepare_and_select(chosen['index'])
     # The detail panel slides in and its glow settles.
     context.wait(1.0)
+    # A press just after the list redraws can be lost: the panel stays empty and that item gets no turn (18:37). This
+    # only selects, and a selection still flashing would be cleared by a second press, so look first.
+    if chosen_after_flash(source,native,context,service)[1] is None:
+        source.prepare_and_select(chosen['index']);context.wait(1.0)
     # ExtraObserver keeps the centre icon of the last frame: it must show this item.
     source.capture()
     return source
+
+
+def chosen_after_flash(source,native,context,service):
+    """A selected tile flashes and reads as unselected for a moment. None only after that has had time to end."""
+    for _ in range(8):
+        context.checkpoint();service.check();frame=service.capture()
+        chosen=native._growth_selected_slot(frame,source.items(frame))
+        if chosen is not None:break
+        context.wait(.2)
+    return frame,chosen
 
 
 def factory(service,context,identity,targets,kind,*,source=None,stage_reader=read_explicit_stage):
@@ -456,7 +473,7 @@ def factory(service,context,identity,targets,kind,*,source=None,stage_reader=rea
         context.checkpoint();service.check();before=service.capture()
         # Once an item is selected the awaken list shows it and its unworn duplicates. Alone, it has no material.
         # Reading its stage anyway cost 9 s per item, 65 s per visit (15:15).
-        listed=source.items(before);chosen=native._growth_selected_slot(before,listed)
+        before,chosen=chosen_after_flash(source,native,context,service);listed=source.items(before)
         # The grid always reports 13 cells; an empty one has no grade colour.
         if kind=='awaken' and skip is False and chosen is not None and not any(r.get('index')!=chosen and r.get('grade') in ('흰','파랑','보라') for r in listed):
             from owner_gear_native_install_candidate import _report
