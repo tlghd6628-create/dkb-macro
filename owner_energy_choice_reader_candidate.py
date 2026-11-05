@@ -70,18 +70,24 @@ def ocr_counter(frame,offset):
     if hit and float(score)>=.85 and 1<=int(hit[1])<=int(hit[2]):found.add((int(hit[1]),int(hit[2])))
   if found:return found.pop() if len(found)==1 else None
  return None
-def read_screen(frame):
+def selected_of(frame):
+ """The selected row's name, None when none is lit, False on a screen that cannot be told."""
  offset=layout_variant(frame)
- if offset is None:return None
+ if offset is None:return False
  # Only a unique bright outline, with clear separation from the other rows,
  # counts as a selected row. Unknown highlights never imply a default.
  borders=[float(frame[y+offset:y+offset+3,363:535].min(axis=2).mean()) for y in rows_of(frame)]
  order=sorted(range(4),key=lambda i:borders[i],reverse=True)
  # In the current layout the rim pulses from 134 down near 90, against 69 for a plain row.
  bright=85 if rows_of(frame) is ROWS_V2 else 110
- if borders[order[0]]>=bright and borders[order[0]]-borders[order[1]]>=(15 if bright==85 else 30):selected=NAMES[order[0]]
- elif max(borders)<(80 if bright==85 else 90):selected=None
- else:return None
+ if borders[order[0]]>=bright and borders[order[0]]-borders[order[1]]>=(15 if bright==85 else 30):return NAMES[order[0]]
+ return None if max(borders)<(80 if bright==85 else 90) else False
+
+def read_screen(frame):
+ offset=layout_variant(frame)
+ if offset is None:return None
+ selected=selected_of(frame)
+ if selected is False:return None
  # Glyph result is provisional; a fresh independent detail count must match.
  from owner_energy_counter_glyph_candidate import load_observed_atlas,read_counter
  try:

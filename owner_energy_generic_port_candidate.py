@@ -1,7 +1,7 @@
 """Opt-in generic 1/N selection port, separate from frozen recovery build."""
 from owner_energy_box_port_candidate import Port
 from owner_energy_box_detail_candidate import detail,detail_screen,generic_box_detail,box_candidates,stable_box_candidates
-from owner_energy_choice_reader_candidate import read_pair,read_open_pair,layout_screen,layout_variant,rows_of,read_screen,asset,_score
+from owner_energy_choice_reader_candidate import read_pair,read_open_pair,layout_screen,layout_variant,rows_of,selected_of,asset,_score
 from owner_energy_box_runtime_candidate import Hold
 import logging
 LOG=logging.getLogger('project_gui.DKB')
@@ -88,13 +88,17 @@ class GenericPort(Port):
    _,kind=min(options,key=lambda p:p[0]);hit=self.quantity_control(frame,kind)
    if not hit:raise Hold('수량 조절 버튼 확인 필요')
    expected=1 if kind=='min' else total if kind=='max' else current+(1 if kind=='plus' else -1)
-   def same(f):return read_pair(f,f.copy())==state and self.quantity_control(f,kind)==hit
+   # Steps are followed by the counter moving, not by reading it: OCR takes 3 for 8 at .90. The total is read at the end.
+   counter=frame[317:337,405:491].copy()
+   def same(f):return selected_of(f)==name and self.quantity_control(f,kind)==hit
    self.click(hit[0],hit[1],guard,same)
    def changed(a,b):
-    value=read_pair(a,b)
-    return value if value and value.get('selected')==name and value.get('available_count')==total and value.get('quantity')==expected else None
+    import numpy as np
+    x,y=a[317:337,405:491],b[317:337,405:491]
+    if not np.array_equal(x,y) or np.array_equal(x,counter) or selected_of(a)!=name or selected_of(b)!=name:return None
+    return dict(state,quantity=expected)
    pair=self.wait_pair(changed)
-   if not pair:raise Hold('수량 변경 결과 재확인 필요 · %s에서 %s 기대 · 읽음 %s'%(current,expected,(read_screen(self.service.capture()) or {}).get('quantity')))
+   if not pair:raise Hold('수량 변경 결과 재확인 필요 · %s에서 %s 기대'%(current,expected))
    state=pair[0]
   else:raise Hold('수량 조절 한도 초과')
   final=self.pair(read_pair)
