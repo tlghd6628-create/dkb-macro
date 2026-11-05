@@ -285,10 +285,16 @@ class Route:
         return True
     # ---- the visit
     def work(self,item,cap=None):
-        """This item's turn, already on its growth screen."""
+        """This item's turn, already on its growth screen. True when something was pressed, so its details should be read again.
+        What cannot run moves on to the item's next need on the same screen, with nothing read twice."""
         kind=item.pending_kind
-        if kind==ENHANCE:self.press_enhance(item,cap)
-        else:self.press_once(item,kind)
+        while kind:
+            before=len(item.done)
+            if kind==ENHANCE:self.press_enhance(item,cap)
+            else:self.press_once(item,kind)
+            if len(item.done)==before:return True
+            kind=self.need(item)
+        return False
     def visit(self,item,cap=None):
         """Read, grow what it lacks, read again: a stage only counts once the details show it."""
         for _ in range(ROUNDS):
@@ -296,8 +302,9 @@ class Route:
             kind=self.read(item,True)
             if not kind:return
             item.pending_kind=kind
-            try:self.work(item,cap)
+            try:pressed=self.work(item,cap)
             finally:self.leave_growth()
+            if not pressed:return
             if kind==ENHANCE and cap is not None:
                 # One look back at the level, then the next lowest of the grade takes its turn.
                 self.read(item,False);return

@@ -223,6 +223,34 @@ class Order(WithRoute):
         self.assertEqual(reads['무기'],50);self.assertEqual(reads['반지'],50)
 
 
+class Visit(WithRoute):
+    def setUp(self):
+        super().setUp();self.route.leave_growth=lambda:True;self.reads=0
+        def read(item,enter):
+            self.reads+=1
+            return self.route.need(item)
+        self.route.read=read
+    def test_what_cannot_run_moves_on_with_nothing_read_twice(self):
+        item=self.item({'enhance':50,'breakthrough':1,'awaken':0})
+        seen=[]
+        def once(item,kind):seen.append(kind);item.done.add(kind)
+        self.route.press_once=once
+        self.route.visit(item)
+        self.assertEqual(seen,[g.BREAK,g.AWAKEN]);self.assertEqual(self.reads,1)
+    def test_a_press_reads_the_details_again(self):
+        item=self.item({'enhance':50,'breakthrough':3,'awaken':0})
+        def once(item,kind):item.values['awaken']=1
+        self.route.press_once=once
+        self.route.visit(item)
+        self.assertEqual(self.reads,2)
+    def test_rounds_are_bounded_when_nothing_rises(self):
+        item=self.item({'enhance':50,'breakthrough':2,'awaken':1})
+        presses=[]
+        self.route.press_once=lambda item,kind:presses.append(kind)
+        self.route.visit(item)
+        self.assertEqual(len(presses),g.ROUNDS)
+
+
 class Stand(unittest.TestCase):
     def test_the_old_list_route_stands_aside_after_this_route(self):
         import owner_gear_native_install_candidate as install

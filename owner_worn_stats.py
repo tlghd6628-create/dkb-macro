@@ -150,6 +150,15 @@ READ_TRIES=6;OPEN_LOOKS=30
 class ReadAgain(Exception):
  """The last look before a press did not hold. Nothing was sent."""
 
+ITEM_AWAKEN_MAX=1
+
+def corrected(values,blessing):
+ """An item's 각성 tops out at 1 (최대 각성 단계), and the font's 1 keeps reading 7, on both looks (02:11). Over the top is no reading."""
+ if blessing or 'awaken' not in values:return values
+ fixed=dict(values)
+ if fixed['awaken']==7:fixed['awaken']=1
+ return None if fixed['awaken']>ITEM_AWAKEN_MAX else fixed
+
 def settled_read(service,context):
  """The numbers once two looks in a row agree. The list slides after the wheel and the 1 can read 7 while it does (23:54).
  A lone 1 can also go unread on a look (02:06), so failing that each row takes what most looks gave it, and a row with no
@@ -159,6 +168,8 @@ def settled_read(service,context):
  for _ in range(READ_TRIES):
   context.checkpoint();service.check();real=np.asarray(service.capture().hi);hits=real_table(real)
   now=real_read(real,hits) if hits else None
+  # 7 and 1 are the same reading of an item's 각성 here; corrected() decides which. A blessing's 7 stays what it says only if most looks agree.
+  if now and now.get('awaken')==7 and 'breakthrough' in now:now=dict(now,awaken=1)
   if now and len(now)==len(hits) and now==last:return now
   if hits:
    rows=list(hits)
@@ -214,6 +225,7 @@ def inspect_real(service,context,inputs,profile,character,slot,*,decide=None):
    context.checkpoint();inputs._guard_target();inputs.move(550,110)
   context.wait(.25)
   values=settled_read(service,context)
+  if values:values=corrected(values,blessing)
   if not values:
    LOG.info('착용 %s 현재값 미확인 · 재시도 대기',slot);return False
   if grade is None:

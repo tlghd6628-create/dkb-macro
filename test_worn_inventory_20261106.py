@@ -62,6 +62,16 @@ class Heading(unittest.TestCase):
   self.assertIsNone(w.blessing_kind('호랑이가호장식1'))
 
 
+class Corrected(unittest.TestCase):
+ def test_the_font_s_1_on_an_item(self):
+  self.assertEqual(w.corrected({'enhance':50,'awaken':7},False)['awaken'],1)
+  self.assertEqual(w.corrected({'enhance':50,'awaken':0},False)['awaken'],0)
+ def test_over_the_top_is_no_reading(self):
+  self.assertIsNone(w.corrected({'enhance':50,'awaken':3},False))
+ def test_a_blessing_is_left_alone(self):
+  self.assertEqual(w.corrected({'enhance':39,'awaken':7},True)['awaken'],7)
+
+
 class Belongs(unittest.TestCase):
  def check(self,slot,words,title=''):
   with patch('owner_text.read_area',return_value=[word(text,217) for text in words]):return w.real_matches(REAL,slot,title)
