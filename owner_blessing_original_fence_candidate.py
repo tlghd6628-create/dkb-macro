@@ -92,6 +92,11 @@ def install_runtime(reward_module,market_module,identity_resolver,*,alias_module
     @wraps(old)
     def combined(adapter,context,inputs,*args,**kwargs):
         adapter._owner_blessing_policy_outcome={'state':'not_run'}
+        if real_screen(adapter,context,inputs):
+            # At 1366x768 this job is the bulk claim alone; the original also equipped and summoned.
+            from owner_blessing_bound import claim
+            if claim(adapter,context,inputs) is True:
+                adapter._owner_blessing_policy_outcome={'state':'bulk_claim_only'};return True
         result=old(adapter,context,inputs,*args,**kwargs)
         # A false reward result is not proof that the equipment policy cannot
         # run. Its own entry point independently requires the ordinary field.

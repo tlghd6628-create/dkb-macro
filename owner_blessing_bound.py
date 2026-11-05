@@ -63,6 +63,53 @@ def places(count):
     return [(x,y) for y in TILE_Y for x in TILE_X][:count]
 
 
+CLAIM_BUTTON=(1100,695,170,50)   # real pixels around 일괄 획득
+DIALOG=(420,230,530,330);TOP_BAND=(400,60,560,50)
+
+
+def claim(adapter,context,inputs):
+    """At 1366x768, 일괄 획득 and nothing else: the original job went on to equip and summon as well. True when it ran."""
+    from project_adapter.town_services import TownServices
+    from project_adapter import market_inventory
+    service=TownServices(adapter,context,inputs,market_inventory.INVENTORY_USE_NAMES)
+    service.context=context
+    if getattr(service.capture(),'hi',None) is None:return False
+    try:
+        if not worn.open_blessing_screen(service,context):
+            LOG.info('가호 일괄 획득 생략 · 가호 화면 안 열림');return True
+        reason=skip_reason(service)
+        if reason:
+            LOG.info('가호 일괄 획득 생략 · %s',reason);return True
+        context.checkpoint();service.check();frame=service.capture()
+        button=[row for row in text.read(None,frame,CLAIM_BUTTON,scale=2,minimum=.7) if text.clean(row['text'])=='일괄획득']
+        if len(button)!=1:
+            LOG.info('가호 일괄 획득 생략 · 버튼 글자 미확인');return True
+        service.click_hit(hd.real_hit(button[0]['rx'],button[0]['ry']))
+        said=watch(service,context)
+        LOG.info('가호 일괄 획득 누름 · 화면 문구 %s',said or '없음')
+        return True
+    finally:
+        context.checkpoint()
+        if window_kind(service.capture()):close_window(service,context,window_kind(service.capture()))
+        worn.leave_blessing_screen(service,context)
+
+
+def watch(service,context,seconds=4.0):
+    """What the screen says after the press, for the log. A window asking to confirm a claim is answered; any other is left."""
+    said=[];end=time.monotonic()+seconds
+    while time.monotonic()<end:
+        context.wait(.4);context.checkpoint();service.check();frame=service.capture()
+        for box in (TOP_BAND,DIALOG):
+            for row in text.read(None,frame,box,scale=2,minimum=.7):
+                word=text.clean(row['text'])
+                if word and word not in said:said.append(word)
+        dialog=[text.clean(row['text']) for row in text.read(None,frame,DIALOG,scale=2,minimum=.7)]
+        confirm=[row for row in text.read(None,frame,DIALOG,scale=2,minimum=.8) if text.clean(row['text'])=='확인']
+        if confirm and any('획득' in word for word in dialog) and not any('판매' in word or '분해' in word for word in dialog):
+            service.click_hit(hd.real_hit(confirm[0]['rx'],confirm[0]['ry']));context.wait(1)
+    return said
+
+
 def skip_reason(service,**_):
     """None when every blessing is 귀속 and 일괄 획득 may be pressed, else why not. Whether the button is lit is the original
     routine's own check: a colour taken for unlit here was never seen lit, and it kept every claim from running."""

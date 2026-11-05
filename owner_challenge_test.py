@@ -16,7 +16,7 @@ TARGETS={
  WORN_KEY:('착용 현재값 확인',WORN),
  SHOP_KEY:('잡화상점 구매',SHOP),
  'auto_schedule.boss_raid.skill_preset.enabled':('레이드 단일 덱 구성',PRESET),
- 'auto_rewards.blessing.enabled':('가호 일괄 획득·장착',BLESSING),
+ 'auto_rewards.blessing.enabled':('가호 일괄 획득',BLESSING),
  'auto_growth.equipment.enabled':('장비 성장',GROWTH),
  'auto_growth.blessing.enabled':('가호 성장',GROWTH),
  'auto_growth.energy.enabled':('기운 발현',GROWTH),

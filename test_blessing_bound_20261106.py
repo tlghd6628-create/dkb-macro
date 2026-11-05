@@ -93,6 +93,44 @@ class Hook(unittest.TestCase):
         self.assertEqual(_bound(lambda *a:'old')(),'old')
 
 
+class Claim(unittest.TestCase):
+    """The claim alone: open, check 귀속, press 일괄 획득, leave. Equip and summon are never reached."""
+    def run_claim(self,reason=None,button=True,dialog=()):
+        clicks=[];left=[]
+        service=NS(capture=lambda:NS(hi=np.zeros((768,1366,3),np.uint8)),check=lambda:None,click_hit=lambda hit:clicks.append(hit[:2]))
+        context=NS(checkpoint=lambda:None,wait=lambda s:None)
+        def read(root,frame,box,**k):
+            if box==b.CLAIM_BUTTON:return [dict(text='일괄 획득',rx=1182,ry=717)] if button else []
+            if box==b.DIALOG:return [dict(text=w,rx=760,ry=480) for w in dialog]
+            return []
+        with patch('project_adapter.town_services.TownServices',lambda *a:service),patch.object(worn,'open_blessing_screen',return_value=True),\
+             patch.object(b,'skip_reason',return_value=reason),patch('owner_text.read',read),patch.object(b,'window_kind',return_value=None),\
+             patch.object(worn,'leave_blessing_screen',side_effect=lambda *a:left.append(1)),patch.object(b,'watch',return_value=[]):
+            result=b.claim(NS(),context,None)
+        return result,clicks,left
+    def test_pressed_when_all_are_bound(self):
+        result,clicks,left=self.run_claim()
+        self.assertTrue(result);self.assertEqual(clicks,[hd.real_hit(1182,717)[:2]]);self.assertEqual(left,[1])
+    def test_a_reason_presses_nothing(self):
+        result,clicks,left=self.run_claim(reason='귀속 없는 가호 · 연꽃')
+        self.assertTrue(result);self.assertEqual(clicks,[]);self.assertEqual(left,[1])
+    def test_no_button_word_presses_nothing(self):
+        result,clicks,_=self.run_claim(button=False);self.assertEqual(clicks,[])
+
+
+class Watch(unittest.TestCase):
+    def run_watch(self,dialog):
+        clicks=[];service=NS(capture=lambda:None,check=lambda:None,click_hit=lambda hit:clicks.append(hit[:2]))
+        context=NS(checkpoint=lambda:None,wait=lambda s:None)
+        def read(root,frame,box,**k):
+            return [dict(text=w,rx=760,ry=480) for w in dialog] if box==b.DIALOG else []
+        with patch('owner_text.read',read):b.watch(service,context,seconds=.05)
+        return clicks
+    def test_a_claim_window_is_confirmed(self):self.assertTrue(self.run_watch(['가호를 획득하시겠습니까','확인']))
+    def test_a_sale_window_is_left(self):self.assertEqual(self.run_watch(['판매 후 획득','확인']),[])
+    def test_no_window_presses_nothing(self):self.assertEqual(self.run_watch([]),[])
+
+
 class PolicyAtRealSize(unittest.TestCase):
     """The priority equip still finds its screens by old pictures: at 1366 it is passed over, and the job does not fail."""
     def run_policy(self,real_screen):
@@ -110,8 +148,13 @@ class PolicyAtRealSize(unittest.TestCase):
             result=module.run_blessing_rewards(adapter,NS(checkpoint=lambda:None),None)
         return result,ran,adapter._owner_blessing_policy_outcome
     def test_passed_over_at_real_size(self):
-        result,ran,outcome=self.run_policy(True)
+        with patch('owner_blessing_bound.claim',return_value=False):
+            result,ran,outcome=self.run_policy(True)
         self.assertIs(result,True);self.assertEqual(ran,[]);self.assertEqual(outcome['state'],'skipped_real_screen')
+    def test_at_real_size_the_job_is_the_claim_alone(self):
+        with patch('owner_blessing_bound.claim',return_value=True) as claim:
+            result,ran,outcome=self.run_policy(True)
+        claim.assert_called_once();self.assertIs(result,True);self.assertEqual(ran,[]);self.assertEqual(outcome['state'],'bulk_claim_only')
     def test_runs_as_before_at_the_old_size(self):
         result,ran,outcome=self.run_policy(False)
         self.assertEqual(ran,[1]);self.assertEqual(outcome['state'],'ran')
