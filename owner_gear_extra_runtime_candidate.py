@@ -179,16 +179,22 @@ class ExtraObserver:
                 if grade!=self.source.ticket['grade']:continue
                 s=row.get('slot') or {};x=s.get('cell_x',-100)+8;y=s.get('cell_y',-100)+8;icon=frame[y:y+18,x:x+18]
                 if icon.shape!=(18,18,3):continue
-                if np.array_equal(icon,self.icon) or _same_stable_icon(icon,self.icon):matches.append(row)
+                # With an item selected the game lists only it and its duplicates, so at 1366x768, where shrunken icons
+                # with and without their +N no longer match, the list itself is the proof.
+                listed_only=getattr(frame,'hi',None) is not None and self.native._growth_selected_slot(frame,rows) is not None
+                if listed_only or np.array_equal(icon,self.icon) or _same_stable_icon(icon,self.icon):matches.append(row)
             # Several duplicate materials are allowed; choose the first stable
             # grid row, not all cards or the game's unrestricted auto-select.
-            if not matches:return
+            if not matches:
+                from owner_gear_native_install_candidate import _report
+                _report(self.service,'장비 각성 재료 칸 못 찾음 · 목록 %s'%[(r.get('index'),r.get('grade'),r.get('equipped_state')) for r in rows if r.get('grade')][:4])
+                return
             candidates.append(sorted(matches,key=lambda r:r['index'])[0]);self.context.wait(.12)
-        if candidates[0]!=candidates[1]:return
+        if candidates[0]['index']!=candidates[1]['index']:return
         row=candidates[1];slot=row['slot'];x,y=self.native._click_xy(slot)
         l,t,w,h=(slot[k] for k in ('cell_x','cell_y','cell_w','cell_h'))
         if not l<=x<l+w or not t<=y<t+h:return
-        self._guard();self.service.click_hit((x,y,(l,t,l+w,t+h)));self.context.wait(.2)
+        self._guard();self.service.click_hit((x,y,(l,t,l+w,t+h)));self.context.wait(.8)
     def _state(self,frame,*,resources=True):
         from project_adapter import growth_equipment_extra as extra
         if not resources and self.kind=='breakthrough':
