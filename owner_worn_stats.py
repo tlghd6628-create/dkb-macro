@@ -46,9 +46,17 @@ def real_table(real):
   if field:hits[field]=row['ry']
  if 'enhance' not in hits or 'awaken' not in hits:return None
  rows=round((hits['awaken']-hits['enhance'])/REAL_ROW_GAP)
- names={2:('enhance','opening','awaken'),3:('enhance','opening','breakthrough','awaken')}.get(rows)
+ # A table with no 개방 row has 강화 and 각성 next to each other.
+ names={1:('enhance','awaken'),2:('enhance','opening','awaken'),3:('enhance','opening','breakthrough','awaken')}.get(rows)
  if names is None or abs(hits['awaken']-hits['enhance']-rows*REAL_ROW_GAP)>4:return None
  return {field:(REAL_NUMBER[0],hits['enhance']+index*REAL_ROW_GAP-REAL_NUMBER[2]//2,REAL_NUMBER[1],REAL_NUMBER[2]) for index,field in enumerate(names)}
+
+def row_words(real):
+ """What the rows area reads, with each word's height, for the log when no table was found."""
+ from owner_text import clean,read_area
+ x,y,w,h=REAL_ROWS
+ try:return [(clean(row['text']),round(row['ry'])) for row in read_area(None,real[y:y+h,x:x+w],left=x,top=y,minimum=.5)][:12]
+ except Exception as exc:return '판독 실패 '+type(exc).__name__
 
 def real_popup(real):
  """The details window is open: its 정보 tab, the same on an item and a blessing. It has no E to read."""
@@ -76,9 +84,9 @@ def real_matches(real,slot,title):
  x,y,w,h=REAL_PART
  words=[clean(row['text']) for row in read_area(None,real[y:y+h,x:x+w],minimum=.6)]
  if slot in BLESSING_SLOTS:
-  # The font's 1 reads ] (도깨비 가호 장식1). A digit that cannot be read proves nothing.
-  found=re.search(r'장[식시]([1-5\]lI|])',title)
-  return '가호' in words and found is not None and ('1' if found[1] in ']lI|' else found[1])==slot[-1]
+  # The font's 1 reads ] (도깨비 가호 장식1) or 7 (토끼 가호 장식1, pc2 11-06); there is no 장식7. A digit that cannot be read proves nothing.
+  found=re.search(r'장[식시]([1-57\]lI|])',title)
+  return '가호' in words and found is not None and ('1' if found[1] in '7]lI|' else found[1])==slot[-1]
  if slot in PART_WORDS:return PART_WORDS[slot] in words
  return bool(words) and not any(word in PART_WORDS.values() or word=='가호' for word in words)
 
@@ -300,7 +308,7 @@ def inspect_real(service,context,inputs,profile,character,slot,*,decide=None):
   values=settled_read(service,context)
   if values:values=corrected(values,blessing)
   if not values:
-   LOG.info('착용 %s 현재값 미확인 · 재시도 대기',slot);return False
+   LOG.info('착용 %s 현재값 미확인 · 재시도 대기 · 줄 글자 %s',slot,row_words(np.asarray(service.capture().hi)));return False
   if grade is None:
    LOG.info('착용 %s 등급 미확인 · 현재값 저장 보류 · %s',slot,title);return False
   if blessing:
