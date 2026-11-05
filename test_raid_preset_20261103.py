@@ -59,7 +59,8 @@ class Timing(unittest.TestCase):
   module,_,adapter,events=scenario({raid.ENABLED:True,raid.COMMON:True},fail=RuntimeError('menu'))
   with self.assertLogs('project_gui.DKB',level='ERROR'):
    self.assertEqual(module._run(adapter,None,None),'done')
-  self.assertEqual([e for e in events if e.startswith('preset')],['preset:raid'])
+  # A failure can be a switch that went through unread, so going back is still tried, and that may fail too.
+  self.assertEqual([e for e in events if e.startswith('preset')][0],'preset:raid')
   self.assertIn('left',events)
  def test_stop_during_the_change_propagates(self):
   from biol_base.session import Cancelled

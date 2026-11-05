@@ -15,8 +15,14 @@ if fg!=H:
     time.sleep(.4)
 if args[0]=='click':
     x,y=int(args[1]),int(args[2])
-    if (730<=x<=795 and 430<=y<=470) or (450<=x<=525 and 290<=y<=315):raise SystemExit('refused: purchase or confirm')
+    in_shop=has('버튼_나가기',grab())
+    if in_shop and ((730<=x<=795 and 430<=y<=470) or (450<=x<=525 and 290<=y<=315)):raise SystemExit('refused: purchase or confirm')
     click(x,y);time.sleep(float(args[4]) if len(args)>4 else 1.2);save(args[3],grab())
+elif args[0]=='settings':
+    # The field's settings icon shares its place with the shop's purchase button, so only on the field.
+    f=grab()
+    if not field(f):raise SystemExit('refused: not on the field')
+    click(769,450);time.sleep(2);save(args[1],grab())
 elif args[0]=='shot':save(args[1],grab())
 elif args[0]=='key':key(int(args[1],16));time.sleep(1.5);save(args[2],grab())
 elif args[0]=='drag':

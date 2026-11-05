@@ -98,11 +98,11 @@ def install_on(flow_class,module,change):
     flow._owner_raid_pending=False
     adapter,context,inputs=flow._owner_raid_args
     LOG.info('레이드 입장 확인 · 레이드 스킬 프리셋 불러오기')
-    if guarded(change,adapter,context,inputs,enabled_key=ENABLED,choice_key=CHOICE):
-     adapter._owner_raid_preset_applied=True
-     # A stop inside the raid never reaches restore below; the next run goes back from this.
-     from owner_single_preset import mark
-     mark(adapter,True)
+    # Noted before the attempt: a switch that went through but could not be read back also needs undoing.
+    # A stop inside the raid never reaches restore below; the next run goes back from this.
+    from owner_single_preset import mark
+    mark(adapter,True);adapter._owner_raid_preset_applied=True
+    guarded(change,adapter,context,inputs,enabled_key=ENABLED,choice_key=CHOICE)
    return _ordinary(flow,*args,**kwargs)
   setattr(flow_class,name,checked)
  ordinary_run=module._run

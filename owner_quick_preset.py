@@ -41,11 +41,14 @@ def select(service,letter):
         LOG.warning('스킬 프리셋 메뉴 확인 안 됨 · %s',letter);return False
     if current==letter:
         service.key(KEY_H);service.context.wait(.2);return True
-    y=LETTERS[letter];service.click_hit((X,y,(X-9,y-9,X+10,y+10)));service.context.wait(.6)
+    y=LETTERS[letter];service.click_hit((X,y,(X-9,y-9,X+10,y+10)))
+    # Picking closes the menu, slowly: a key pressed while it slides is lost or reopens it.
+    service.context.wait(1.5)
     service.check()
-    # Picking closes the menu. Open it once more: only the lit letter says the switch took.
-    if lit_letter(service.capture()) is None:service.key(KEY_H)
-    shown=_wait_open(service)
+    # Open it once more: only the lit letter says the switch took.
+    shown=lit_letter(service.capture())
+    if shown is None:
+        service.key(KEY_H);shown=_wait_open(service,4)
     if shown is not None:service.key(KEY_H);service.context.wait(.2)
     if shown!=letter:
         LOG.warning('스킬 프리셋 전환 확인 안 됨 · 목표 %s · 화면 %s',letter,shown);return False
