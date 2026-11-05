@@ -112,6 +112,8 @@ def same_item(one,two):
   # A name wider than the title box scrolls, and the title edge does not always show it, so two views
   # can share too little to compare. An identical icon is the same item (rare bracelet, 11-05: icon 1.00).
   if x.shape!=y.shape and _score(ia,ib)>=.99:return True
+  # The worn detail shows the same long name in another phase of its scroll, so the same width says little.
+  if max(x.shape[1],y.shape[1])>=90:return True
   if x.shape==y.shape:
    union=np.logical_or(x,y).sum()
    if union and np.logical_and(x,y).sum()/union>=.92:return True
