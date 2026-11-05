@@ -131,6 +131,9 @@ def popup(frame):
 
 READ_TRIES=6
 
+class ReadAgain(Exception):
+ """The last look before a press did not hold. Nothing was sent."""
+
 def settled_read(service,context):
  """The numbers once two looks in a row agree. The list slides after the wheel and the 1 can read 7 while it does (23:54)."""
  last=None
@@ -141,9 +144,10 @@ def settled_read(service,context):
   last=now;context.wait(.25)
  return None
 
-def inspect_real(service,context,inputs,profile,character,slot):
+def inspect_real(service,context,inputs,profile,character,slot,*,decide=None):
  """A worn tile's details at 1366x768: click its fixed place once, read, close with X. No E mark is read, so a spare can
- never answer for it. A second click on the same tile would take the item off, so a tile is never clicked twice."""
+ never answer for it. A second click on the same tile would take the item off, so a tile is never clicked twice.
+ decide(values,grade,title) runs with the window still open and always reads afresh; True means it left the window itself."""
  from owner_skill_ui import SkillUI
  from owner_mission_ui import MissionUI
  from owner_equipment_boxes import SLOTS
@@ -158,9 +162,9 @@ def inspect_real(service,context,inputs,profile,character,slot):
  cache=getattr(adapter,'_owner_worn_stats_cache',None)
  if cache is None:cache={};adapter._owner_worn_stats_cache=cache
  token=(profile,character,slot);old=cache.get(token)
- if old and time.monotonic()<old['after']:return False
+ if decide is None and old and time.monotonic()<old['after']:return False
  cache[token]={'after':time.monotonic()+120}
- service.click_hit((x+w//2,y+h//2,(x,y,x+w,y+h)));opened=False
+ service.click_hit((x+w//2,y+h//2,(x,y,x+w,y+h)));opened=False;left=False
  for _ in range(10):
   context.wait(.2);context.checkpoint();service.check()
   if popup(service.capture()):opened=True;break
@@ -197,9 +201,12 @@ def inspect_real(service,context,inputs,profile,character,slot):
    row.update({fields[k]:v for k,v in values.items()})
    if not observe(adapter.project.root,row):return False
    LOG.info('착용 %s 현재값 확인 · 강화 %s · 개방 %s · 돌파 %s · 각성 %s',slot,values['enhance'],values.get('opening','미확인'),values.get('breakthrough','미확인'),values['awaken'])
-  cache[token]={'after':time.monotonic()+1200};return True
+  cache[token]={'after':time.monotonic()+1200}
+  if decide is not None:left=decide(values,grade,title) is True
+  return True
  finally:
   context.checkpoint();service.check()
+  if left:return
   service.click_hit((510,106,(503,99,518,113)))
   for _ in range(10):
    context.wait(.2);context.checkpoint();service.check()

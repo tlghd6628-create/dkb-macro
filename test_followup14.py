@@ -27,12 +27,12 @@ class Gates(unittest.TestCase):
   calls=[];native=S(run_growth_entry=lambda *a,**kw:calls.append('guarded-growth') or True)
   runtime.install_identity_preflight(native,'run_growth_entry',())
   def display(*a,**kw):calls.append('display');raise ChoreYield('팔찌')
-  with patch.object(runtime,'fresh_growth_identity',return_value=True),patch('owner_worn_stats.inspect_equipped',side_effect=display):
+  with patch.object(runtime,'fresh_growth_identity',return_value=True),patch('owner_worn_stats.inspect_equipped',side_effect=display),patch('owner_worn_growth.run',return_value=False):
    self.assertTrue(native.run_growth_entry(S(values={'auto_growth.equipment.enabled':True}),None,None))
   self.assertEqual(calls,['guarded-growth','display'])
  def test_pending_resource_result_never_opens_optional_display(self):
   run=self.wrap();adapter=S(values={'auto_growth.equipment.enabled':True},_owner_growth_pending_hold=True)
-  with patch.object(runtime,'fresh_growth_identity',return_value=True),patch('owner_worn_stats.inspect_equipped') as display:
+  with patch.object(runtime,'fresh_growth_identity',return_value=True),patch('owner_worn_stats.inspect_equipped') as display,patch('owner_worn_growth.run',return_value=False):
    self.assertTrue(run(adapter,None,None));display.assert_not_called()
  def test_stale_pending_disabled_job_is_discarded(self):
   context=S(stop=threading.Event(),checkpoint=lambda:None)

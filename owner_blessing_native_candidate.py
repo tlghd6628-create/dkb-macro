@@ -360,6 +360,8 @@ def run_blessing(service,context,identity,targets,*,slot_reader=read_slot_title,
     from owner_native_contracts import pool_for
     outcome={'state':'hold_identity','slots':{},'actions':0,'confirmed':0}
     service.adapter._owner_blessing_growth_outcome=outcome
+    if getattr(service.adapter,'_owner_worn_growth_context',None) is context:
+        outcome['state']='inventory_route';return False  # done by way of the bag
     if not isinstance(identity,str) or not identity.strip():return False
     if not isinstance(targets,dict):outcome['state']='hold_settings';return False
     store=Store(service.adapter.project.root,identity)

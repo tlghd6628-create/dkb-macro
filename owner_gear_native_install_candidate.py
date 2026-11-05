@@ -266,6 +266,7 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
     @wraps(original)
     def guarded(service,*,blessing=False,_tried=frozenset()):
         context=service.context;context.checkpoint();service.check()
+        if getattr(service.adapter,'_owner_worn_growth_context',None) is context:return False  # done by way of the bag
         if getattr(service,'_owner_gear_visit_started',None) is None:
             service._owner_gear_short_grades=frozenset();service._owner_gear_seen_levels={}
         try:
@@ -476,6 +477,7 @@ def wrap_extras_decorator(original_decorator,identity_resolver,extra_readers_fac
             # The blessing pass shares this entry and has no equipment extras.
             if kwargs.get('blessing'):return original(service,*args,**kwargs)
             context=service.context;context.checkpoint();service.check()
+            if getattr(service.adapter,'_owner_worn_growth_context',None) is context:return False  # done by way of the bag
             try:
                 root=service.adapter.project.root;identity=identity_resolver(service)
                 if not isinstance(identity,str) or not identity.strip():return False
