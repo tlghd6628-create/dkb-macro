@@ -36,6 +36,14 @@ def _screen(frame,tier):
     red=((hsv[:,:,0]<12)|(hsv[:,:,0]>165))&(hsv[:,:,1]>60)&(hsv[:,:,2]>28)
     return int(red.sum())>=10
 
+def sold_out(frame,tier):
+    """The town merchant's row for this tier says 구매 불가: the weekly amount is used up, so there is nothing to buy.
+    The label is the same in every row, one row pitch apart."""
+    from owner_membership import hit
+    if tier not in ('1단물약','2단물약','3단물약') or getattr(frame,'shape',None)!=(479,897,3):return False
+    if not hit(frame,'remote-shop-title',(35,4,110,30),.95):return False
+    return _fixed(frame,'unavailable',(9,81+round(46.14*'123'.index(tier[0])),35,13))
+
 def _parse(rows):
     found=set()
     for row in rows:
