@@ -181,6 +181,8 @@ class Observer:
                     context=self.context,threshold=self.config.get('threshold',.85))
                 value=result.get('value') if isinstance(result,dict) else None
                 confidence=result.get('confidence') if isinstance(result,dict) else None
+                if type(value) is not int:
+                    value=self._both_engines(frame);confidence=1. if type(value) is int else None
                 if (type(value) is not int or not 0<=value<=50 or type(confidence) not in (int,float)
                     or confidence<self.config.get('threshold',.85)):
                     self.last_reason='강화 원본 숫자 미확인';return {'screen_proof':False}

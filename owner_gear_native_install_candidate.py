@@ -393,7 +393,7 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
                 if status in ('hold_screen_unverified','hold_observation','hold_final_preinput','hold_boundary_preinput'):
                     from owner_gear_hold_capture_candidate import enqueue
                     enqueue(root,'growth-'+status,getattr(observer,'last_reason','미확인'),tuple(getattr(observer,'last_frames',())))
-                if (status=='hold_screen_unverified' and not numeric_retry
+                if (status in ('hold_screen_unverified','hold_boundary_preinput') and not numeric_retry
                     and getattr(observer,'last_reason',None)=='강화 수치 불일치' and intent.pending() is None):
                     # Selection animation produced actual1/16 at13:14:10.
                     # Re-read one entirely fresh pair; never combine numbers,

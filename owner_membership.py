@@ -174,7 +174,19 @@ def route_potion_purchase(ordinary,adapter,context,inputs):
   if getattr(priority,'combat',None):
    LOG.info('특수 콘텐츠 물약 보충 보류 · 원격 상점 미사용 · 마을 이동 없음')
    return False
-  return ordinary(adapter,context,inputs)
+  # A full stack shows 구매 불가 (525/500 on 11-05). The trip cost 30 s on every start, so rest for an hour.
+  import time
+  if time.monotonic()-getattr(adapter,'_owner_potion_full_at',-1e30)<3600:
+   LOG.info('물약 한도 확인 후 1시간 대기 · 상인 이동 없음');return True
+  class Full(logging.Handler):
+   said=False
+   def emit(self,record):
+    if '물약구매 불가' in record.getMessage():self.said=True
+  watch=Full();LOG.addHandler(watch)
+  try:result=ordinary(adapter,context,inputs)
+  finally:LOG.removeHandler(watch)
+  if watch.said:adapter._owner_potion_full_at=time.monotonic()
+  return result
  previous=getattr(LOCAL,'potion',None);LOCAL.potion=(adapter,context,inputs)
  try:return remote_purchase(adapter,context,inputs)
  finally:LOCAL.potion=previous

@@ -99,7 +99,7 @@ def attempt(adapter,context,inputs):
   if outcome['state']=='starting':outcome['state']='interrupted_unverified'
   # A safely closed UI with unreadable evidence is incomplete, not processed.
   # Any sent/unknown intent changes the *next* visit into result-only recovery.
-  if outcome['state'] not in ('disabled','nothing_pending','confirmed','cleanup_blocked','interrupted_unverified'):
+  if outcome['state'] not in ('disabled','nothing_pending','confirmed','cleanup_blocked','interrupted_unverified') and outcome.get('remaining')!=0:
    outcome.update(retryable=True,retry_mode='recheck')
    if 'journal' in locals():
     try:
