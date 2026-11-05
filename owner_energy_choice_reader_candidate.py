@@ -61,14 +61,15 @@ def ocr_counter(frame,offset):
  from owner_progression import resized
  root=os.environ.get('MDT_SHARED_APP_ROOT')
  if not root:return None
- found=set()
+ # The number engine decides; Korean only when it reads nothing, since Korean takes a 3 for an 8.
  for language in ('number','korean'):
+  found=set()
   for page in get_paddle_engine(Path(root),language=language).predict(resized(frame,(405,317+offset,86,20))):
    for text,score in zip(page.get('rec_texts',()),page.get('rec_scores',())):
     hit=re.fullmatch(r'(\d{1,4})/(\d{1,4})',str(text).replace(' ',''))
     if hit and float(score)>=.85 and 1<=int(hit[1])<=int(hit[2]):found.add((int(hit[1]),int(hit[2])))
- # Either engine may name it at the same .85, but they must not name different values.
- return found.pop() if len(found)==1 else None
+  if found:return found.pop() if len(found)==1 else None
+ return None
 def read_screen(frame):
  offset=layout_variant(frame)
  if offset is None:return None
