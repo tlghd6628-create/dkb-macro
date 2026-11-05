@@ -46,6 +46,9 @@ def visible_stage(frame):
     return selected[0]
 
 def read_text(root,frame):
+    if getattr(frame,'hi',None) is not None:
+        from owner_growth_words import read_energy_title
+        return read_energy_title(root,frame)
     from tools.ocr_support import get_paddle_engine
     engine=get_paddle_engine(root,language='korean')
     # The patch moved this block down 45px. Read the whole panel top and go by what
@@ -66,13 +69,14 @@ def read_text(root,frame):
 class EnergyObserver:
     def __init__(self,service,context,identity,name,target,*,text_reader=read_text,clock=time.monotonic):
         self.service=service;self.context=context;self.identity=identity;self.name=name;self.target=target
-        self.reader=text_reader;self.clock=clock;self.sequence=0
+        self.reader=text_reader;self.clock=clock;self.sequence=0;self.word_hit=None
     def state(self,frame):
         from project_adapter import achievement_rewards as native
         info=self.reader(Path(self.service.adapter.project.root),frame)
         if not isinstance(info,dict) or info.get('name')!=self.name:return None
         stage,level=info.get('stage'),info.get('level')
         if type(stage) is not int or stage<1 or type(level) is not int or level<0:return None
+        if getattr(frame,'hi',None) is not None:return self._word_state(native,frame,info,stage)
         # Red numerator is a definite shortage. A non-red counter alone is
         # never enough; one positively detected native active action is needed.
         hsv=cv2.cvtColor(frame[411:437,730:790],cv2.COLOR_RGB2HSV)
@@ -90,6 +94,20 @@ class EnergyObserver:
         from owner_growth_reading import breakthrough_allowed
         if button==native.ENERGY_BREAKTHROUGH and not breakthrough_allowed():active=False
         return dict(info,active=bool(active and stage<self.target),button=button)
+    def _word_state(self,native,frame,info,stage):
+        """The button's word and the count under the panel, off the real frame. Nothing unclear can turn active on."""
+        from owner_growth_reading import breakthrough_allowed
+        from owner_growth_words import read_energy_action
+        action=read_energy_action(Path(self.service.adapter.project.root),frame)
+        button={'active':native.ENERGY_ACTIVE,'breakthrough':native.ENERGY_BREAKTHROUGH}.get(action['kind'])
+        active=bool(button and action['lit'] and action['enough'] is True and stage<self.target)
+        if button==native.ENERGY_BREAKTHROUGH and not breakthrough_allowed():active=False
+        self.word_hit=action['hit']
+        said=(info['name'],stage,info.get('level'),action['kind'],action['lit'],action['enough'],active)
+        if said!=getattr(self,'_said',None):
+            self._said=said
+            logging.getLogger('project_gui.DKB').info('기운 글자 판독 · %s %d단계 레벨 %s · 버튼 %s · 켜짐 %s · 재료 %s · 입력 가능=%s',*said)
+        return dict(info,active=active,button=button)
     def read_pair(self):
         observations=[];states=[]
         for _ in range(2):
@@ -154,9 +172,22 @@ def run_energy(service,context,identity,targets,*,text_reader=read_text,settings
         context.checkpoint();service.check()
         # The selected tab's template may be absent while its title is visible.
         # Reuse it rather than requiring an unnecessary re-click.
-        current=text_reader(Path(service.adapter.project.root),service.capture())
+        frame=service.capture();current=text_reader(Path(service.adapter.project.root),frame)
         if not isinstance(current,dict) or current.get('name')!=name:
-            service.button(native.ENERGY_TABS[index],wait_before_click=.1,required=True);context.wait(.15)
+            real=getattr(frame,'hi',None) is not None
+            hit=None
+            if real:
+                from owner_growth_words import energy_tab
+                hit=energy_tab(Path(service.adapter.project.root),frame,name)
+            if hit:service.click_hit(hit)
+            else:service.button(native.ENERGY_TABS[index],wait_before_click=.1,required=True)
+            context.wait(.15)
+            # Reading takes longer than the tab takes to draw at this size, but the panel slides in first.
+            for _ in range(6 if real else 0):
+                context.checkpoint();service.check()
+                shown=text_reader(Path(service.adapter.project.root),service.capture())
+                if isinstance(shown,dict) and shown.get('name')==name:break
+                context.wait(.25)
         observer=EnergyObserver(service,context,identity,name,target['stage'],text_reader=text_reader)
         if pending:
             if not settle_pending(observer,intents,context):return False
@@ -168,7 +199,8 @@ def run_energy(service,context,identity,targets,*,text_reader=read_text,settings
             if callable(settings_check) and settings_check() is not True:raise RuntimeError('기운 설정 또는 캐릭터가 바뀌었습니다')
             button=latest.get('button_name')
             if button not in (native.ENERGY_ACTIVE,native.ENERGY_BREAKTHROUGH):raise RuntimeError('기운 버튼 미확인')
-            hit=service.detector.find(button,frame,threshold=.95)
+            # On a real frame the words verify_final just read on this same frame name the place.
+            hit=observer.word_hit if getattr(frame,'hi',None) is not None else service.detector.find(button,frame,threshold=.95)
             if not hit:raise RuntimeError('기운 버튼 미확인')
             context.checkpoint();service.check();mark_sent();context.checkpoint();service.check()
             if callable(settings_check) and settings_check() is not True:raise RuntimeError('기운 설정 또는 캐릭터가 바뀌었습니다')

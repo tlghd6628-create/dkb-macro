@@ -451,6 +451,11 @@ def install(gui=None):
         ordinary=RoiDetector.find
         @wraps(ordinary)
         def find(detector,name,frame,region=None,threshold=.9,*,candidate_filter=None):
+            import owner_growth_words as words
+            if words.answers(name,frame):
+                hit=words.find_word(detector,name,frame)
+                if hit is not None and (candidate_filter is None or candidate_filter(frame,hit)):return hit
+                if name in words.WORDS_ONLY:return None
             hit=ordinary(detector,name,frame,region,threshold,candidate_filter=candidate_filter)
             if hit is not None or threshold<SOFT_FROM:return hit
             LOCAL.last_frame=frame
