@@ -7,6 +7,8 @@ import win32gui
 from PIL import Image
 from project_adapter import protected_assets
 import runtime_capture
+import owner_window_scale
+owner_window_scale.install()
 OUT=Path(__file__).parent/'f1';OUT.mkdir(exist_ok=True)
 profile=bootstrap.A/'profiles/DKB'
 target=json.loads(protected_assets.read_text(profile/'config/authoring-targets.json',encoding='utf-8-sig'))['targets']['game']

@@ -219,8 +219,13 @@ def state(adapter):
 
 
 def resized(frame,box):
+    import numpy as np
     import cv2
-    x,y,w,h=box;roi=frame[y:y+h,x:x+w].copy()
+    # A larger game window gives real pixels here, at the same size and place as below.
+    from owner_window_scale import real_crop
+    sharp=real_crop(frame,box)
+    if sharp is not None:return cv2.copyMakeBorder(sharp,32,32,32,32,cv2.BORDER_CONSTANT,value=(40,40,40))
+    x,y,w,h=box;roi=np.asarray(frame)[y:y+h,x:x+w].copy()
     roi=cv2.copyMakeBorder(roi,8,8,8,8,cv2.BORDER_CONSTANT,value=(40,40,40))
     return cv2.resize(roi,None,fx=4,fy=4,interpolation=cv2.INTER_CUBIC)
 
