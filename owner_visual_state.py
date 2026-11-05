@@ -13,6 +13,9 @@ def same_label(frame, reference, box, *, correlation=.97):
     if min(x,y)<0 or w<8 or h<5:return False
     patch=frame[y:y+h,x:x+w]
     if patch.shape!=reference.shape or patch.ndim!=3 or patch.shape[2]!=3:return False
+    from owner_hd import real_reference
+    real=real_reference(frame,reference,box)
+    if real is not None:patch,reference=real
     a=reference.min(axis=2).astype('float64').ravel()
     b=patch.min(axis=2).astype('float64').ravel()
     if min(a.std(),b.std())<5:return False

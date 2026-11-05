@@ -357,6 +357,24 @@ def match_real(image,needle,method,ordinary,scorer=None):
     return answer
 
 
+def real_reference(frame,reference,box):
+    """For a check that compares pixels itself: the real pixels at this place and the picture's new cut, aligned.
+    None when this is not a real frame or the picture has no cut, so the check runs as it always did."""
+    real=getattr(frame,'hi',None)
+    if real is None:return None
+    found=cut_for(reference)
+    if found is None:
+        _note_missing(reference);return None
+    import cv2
+    cut,row=found;h,w=cut.shape[:2];shift=SHIFTS[row['rule']]
+    left=max(0,round(box[0]*F+shift)-4);top=max(0,round(box[1]*F)-4)
+    area=np.asarray(real)[top:top+h+8,left:left+w+8]
+    if getattr(frame,'flip',False):area=area[:,:,::-1]
+    if area.shape[0]<h or area.shape[1]<w:return None
+    _,_,_,at=cv2.minMaxLoc(np.nan_to_num(_PLAIN_MATCH[0](area.copy(),cut,cv2.TM_CCOEFF_NORMED),nan=-1))
+    return area[at[1]:at[1]+h,at[0]:at[0]+w],cut
+
+
 def _remember_hits(answer,box,size,shift):
     best=float(answer.max())
     if best<.85:return
@@ -375,6 +393,7 @@ def install_reading():
     if getattr(cv2,'_owner_hd',False):return
     cv2._owner_hd=True
     plain_match=cv2.matchTemplate;plain_resize=cv2.resize;plain_convert=cv2.cvtColor
+    _PLAIN_MATCH[0]=plain_match
     def matchTemplate(image,templ,method,*args,**kwargs):
         if isinstance(image,HdFrame) and not args and not kwargs:
             answer=match_real(image,templ,method,plain_match)
@@ -411,7 +430,7 @@ def install_reading():
     roi_runtime._match_ccoeff_normed_masked=masked
 
 
-_game={};_state={}
+_game={};_state={};_PLAIN_MATCH=[None]
 
 
 def _is_game(hwnd):
