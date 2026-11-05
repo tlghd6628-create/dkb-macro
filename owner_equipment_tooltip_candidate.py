@@ -78,7 +78,7 @@ def worn_detail_frame(frame,engine):
 def _part_name(engine,frame,box):
  """The glyph 찌 reads near .70 and sometimes as 짜. Only an exact part name passes the caller's check."""
  text=_ocr(engine,frame,box,minimum=.60)
- return '팔찌' if text=='팔짜' else text
+ return '팔찌' if text in ('팔짜','팔째','팔쩌') else text
 
 def initial_candidate_frame(frame,engine):
  """Single un-worn tooltip; blank slot must be proved separately."""
