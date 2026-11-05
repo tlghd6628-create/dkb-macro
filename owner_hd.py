@@ -511,8 +511,9 @@ def match_words(image,needle,source,real):
     if row is None or source is None or source[2]*source[3]>=LOGICAL[0]*LOGICAL[1]/2:return None
     import owner_text
     x,y,w,h=owner_text.word_box(source,row.get('pad',0))
-    rows=owner_text.read_area(None,np.asarray(real)[y:y+h,x:x+w],left=x,top=y,scale=3,minimum=.8)
     wanted=row['words']
+    # A lone X reads at .72 to .85, and it is only asked for inside its own small place.
+    rows=owner_text.read_area(None,np.asarray(real)[y:y+h,x:x+w],left=x,top=y,scale=4 if wanted=='×' else 3,minimum=.6 if wanted=='×' else .8)
     from difflib import SequenceMatcher
     # The table's own reading can be a letter off (전래등화), so close counts, one word against one word.
     if wanted=='×':near=[r for r in rows if owner_text.clean(r['text']) in ('×','X','x','✕')]

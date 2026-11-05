@@ -44,7 +44,7 @@
 {"exact": false, "h": 13, "key": "54e8cde42a02c453d1a9", "name": "체크_문파", "w": 25, "words": "문파", "x": 59, "y": 13}
 {"exact": true, "h": 16, "key": "5631ef3b8ce8c821affb", "name": "버튼_비경_입장확인", "w": 25, "words": "입장", "x": 496, "y": 286}
 {"exact": true, "h": 17, "key": "563624c28306f235cb47", "name": "버튼_문파_전투2", "w": 29, "words": "전투", "x": 758, "y": 43}
-{"exact": true, "key": "575988c9da0b7579139f", "name": "버튼_X_레이드부결", "pad": 20, "words": "×"}
+{"exact": true, "key": "575988c9da0b7579139f", "name": "버튼_X_레이드부결", "pad": 0, "words": "×"}
 {"exact": false, "h": 11, "key": "576b51ae5fb7da72ddaf", "name": "체크_영기수련_미진행", "w": 101, "words": "진행중인수렵이없습니다", "x": 398, "y": 433}
 {"exact": true, "h": 11, "key": "57db2497bf5cf5a28f2d", "name": "버튼_나가기_중하", "w": 31, "words": "나가기", "x": 433, "y": 446}
 {"exact": true, "h": 15, "key": "5a0ac636afcfa1fe680b", "name": "버튼_사망상태_나가기", "w": 35, "words": "나가기", "x": 432, "y": 446}
