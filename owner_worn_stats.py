@@ -48,7 +48,8 @@ def real_table(real):
  rows=round((hits['awaken']-hits['enhance'])/REAL_ROW_GAP)
  names={2:('enhance','opening','awaken'),3:('enhance','opening','breakthrough','awaken')}.get(rows)
  if names is None or abs(hits['awaken']-hits['enhance']-rows*REAL_ROW_GAP)>4:return None
- return {field:(REAL_NUMBER[0],hits['enhance']+index*REAL_ROW_GAP-REAL_NUMBER[2]//2,REAL_NUMBER[1],REAL_NUMBER[2]) for index,field in enumerate(names)}
+ # 개방 only keeps the spacing: it follows from 강화 and is never read or needed (user, 11-06).
+ return {field:(REAL_NUMBER[0],hits['enhance']+index*REAL_ROW_GAP-REAL_NUMBER[2]//2,REAL_NUMBER[1],REAL_NUMBER[2]) for index,field in enumerate(names) if field!='opening'}
 
 def row_words(real):
  """What the rows area reads, with each word's height, for the log when no table was found."""
@@ -317,7 +318,7 @@ def inspect_real(service,context,inputs,profile,character,slot,*,decide=None):
     LOG.info('착용 %s 종류 미확인 · 현재값 저장 보류 · %s',slot,title);return False
    number=slot[-1]
    if not observe_blessing(adapter.project.root,profile,number+'번',kind,grade,values):return False
-   LOG.info('착용 %s 현재값 확인 · %s · %s · 강화 %s · 개방 %s · 각성 %s',slot,kind,grade,values['enhance'],values.get('opening','미확인'),values['awaken'])
+   LOG.info('착용 %s 현재값 확인 · %s · %s · 강화 %s · 각성 %s',slot,kind,grade,values['enhance'],values['awaken'])
   else:
    from owner_growth_current import observe
    if grade not in ('일반','희귀','영웅'):
@@ -327,7 +328,7 @@ def inspect_real(service,context,inputs,profile,character,slot,*,decide=None):
         'replace_values':True,'source':'paired_equipped_tooltip_display_only'}
    row.update({fields[k]:v for k,v in values.items()})
    if not observe(adapter.project.root,row):return False
-   LOG.info('착용 %s 현재값 확인 · 강화 %s · 개방 %s · 돌파 %s · 각성 %s',slot,values['enhance'],values.get('opening','미확인'),values.get('breakthrough','미확인'),values['awaken'])
+   LOG.info('착용 %s 현재값 확인 · 강화 %s · 돌파 %s · 각성 %s',slot,values['enhance'],values.get('breakthrough','미확인'),values['awaken'])
   cache[token]={'after':time.monotonic()+1200}
   if decide is not None:left=decide(values,grade,title) is True
   return True

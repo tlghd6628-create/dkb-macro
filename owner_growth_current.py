@@ -107,7 +107,7 @@ def blessing_rows(root,character):
  with _LOCK:scope=_load(root);rows={key:_VALUES.get((scope,character,'blessings',key),{}) for key in ('1번','2번','3번','4번','5번')}
  for key,row in rows.items():
   values=row.get('values',{})
-  result.append((key,row.get('kind','미확인'),row.get('grade','미확인'),*(str(values[k]) if k in values else '미확인' for k in ('enhance','opening','awaken'))))
+  result.append((key,row.get('kind','미확인'),row.get('grade','미확인'),*(str(values[k]) if k in values else '미확인' for k in ('enhance','awaken'))))
  return result
 
 def current_value(root,character,section,key,field,*,now=None):
@@ -165,7 +165,7 @@ def equipped_rows(root,character):
   rows=[r for r in items if r.get('slot')==slot]
   row=max(rows,key=lambda r:r['at_epoch']) if rows else {}
   values=row.get('values',{})
-  result.append((slot,row.get('grade','미확인'),*(str(values[k]) if k in values else '미확인' for k in ('enhance','opening','breakthrough','awaken'))))
+  result.append((slot,row.get('grade','미확인'),*(str(values[k]) if k in values else '미확인' for k in ('enhance','breakthrough','awaken'))))
  return result
 
 def invalidate_item(root,character,item_identity,*,grade=None):

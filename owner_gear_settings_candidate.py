@@ -200,8 +200,8 @@ class GearSettings:
             for target_column,key in ((2,'enhance'),(3,'breakthrough'),(4,'awaken')):
                 ttk.Entry(box,textvariable=v[key],width=6).grid(row=index,column=target_column,padx=4)
         self.worn_heading(box,'착용 장비 · 최근 확인값',row=6,columnspan=8)
-        equipped=ttk.Treeview(box,columns=('slot','grade','enhance','opening','breakthrough','awaken'),show='headings',height=5)
-        for key,text in zip(equipped['columns'],('부위','등급','강화','개방','돌파','각성')):
+        equipped=ttk.Treeview(box,columns=('slot','grade','enhance','breakthrough','awaken'),show='headings',height=5)
+        for key,text in zip(equipped['columns'],('부위','등급','강화','돌파','각성')):
             equipped.heading(key,text=text);equipped.column(key,width=78,anchor='center',stretch=True)
         equipped.grid(row=7,column=0,columnspan=8,sticky='nsew')
         scroll=ttk.Scrollbar(box,orient='vertical',command=equipped.yview);equipped.configure(yscrollcommand=scroll.set)
@@ -263,8 +263,8 @@ class GearSettings:
             ttk.Combobox(ranks,textvariable=v,values=('',)+PATTERNS,state='readonly',width=7).grid(row=1,column=index,padx=3)
         # Beside the targets: below the reward box the page runs out of height.
         self.worn_heading(blessings,'착용 가호 · 최근 확인값',row=0,column=6,columnspan=1,padx=(24,0))
-        worn_blessings=ttk.Treeview(blessings,columns=('slot','kind','grade','enhance','opening','awaken'),show='headings',height=5)
-        for key,text,width in zip(worn_blessings['columns'],('칸','종류','등급','강화','개방','각성'),(44,62,52,46,46,46)):
+        worn_blessings=ttk.Treeview(blessings,columns=('slot','kind','grade','enhance','awaken'),show='headings',height=5)
+        for key,text,width in zip(worn_blessings['columns'],('칸','종류','등급','강화','각성'),(44,62,52,46,46)):
             worn_blessings.heading(key,text=text);worn_blessings.column(key,width=width,anchor='center',stretch=False)
         worn_blessings.grid(row=1,column=6,rowspan=6,sticky='n',padx=(24,0))
         self._blessing_display=None

@@ -23,10 +23,11 @@ class Table(unittest.TestCase):
   with patch('owner_text.read_area',return_value=rows):return w.real_table(REAL)
  def test_an_item_has_four_rows(self):
   hits=self.table([word('강화',415),word('개방',443),word('돌파',471),word('각성',499)])
-  self.assertEqual(list(hits),['enhance','opening','breakthrough','awaken'])
+  # 개방 is never read (user, 11-06): it only keeps the spacing.
+  self.assertEqual(list(hits),['enhance','breakthrough','awaken']);self.assertEqual(hits['breakthrough'][1],471-13)
  def test_a_blessing_has_three(self):
   hits=self.table([word('강화',483),word('개방',511),word('각성',539)])
-  self.assertEqual(list(hits),['enhance','opening','awaken'])
+  self.assertEqual(list(hits),['enhance','awaken']);self.assertEqual(hits['awaken'][1],539-13)
  def test_a_word_read_badly_keeps_its_row_by_spacing(self):
   hits=self.table([word('강화',415),word('개방',443),word('들파',471),word('각성',499)])
   self.assertEqual(hits['breakthrough'][1],471-13)
@@ -141,11 +142,11 @@ class Inspect(unittest.TestCase):
    return w.inspect_real(self.service,self.context,self.inputs,'profile','c',slot)
  def test_a_blessing_is_saved_by_its_place(self):
   self.assertIs(self.run_slot('가호2'),True)
-  self.assertEqual(current.blessing_rows(self.root,'profile')[1],('2번','토끼','일반','20','2','0'))
+  self.assertEqual(current.blessing_rows(self.root,'profile')[1],('2번','토끼','일반','20','0'))
   self.assertEqual(self.clicks[0],FILTER2);self.assertEqual(self.clicks[1],TILE);self.assertEqual(self.clicks[-1],CLOSE);self.assertEqual(len(self.clicks),3)
  def test_an_item_is_saved_by_its_slot(self):
   self.assertIs(self.run_slot('무기',values={'enhance':50,'opening':5,'breakthrough':3,'awaken':1},heading=('바람물결은선','희귀')),True)
-  self.assertEqual(current.equipped_rows(self.root,'profile')[0],('무기','희귀','50','5','3','1'))
+  self.assertEqual(current.equipped_rows(self.root,'profile')[0],('무기','희귀','50','3','1'))
  def test_the_same_tile_is_not_read_again_soon(self):
   self.run_slot('가호2');self.clicks.clear()
   self.assertIs(self.run_slot('가호2'),False);self.assertEqual(self.clicks,[])
@@ -188,11 +189,11 @@ class Rows(unittest.TestCase):
  def setUp(self):
   self.dir=tempfile.TemporaryDirectory();self.addCleanup(self.dir.cleanup);self.root=Path(self.dir.name)
  def test_empty_rows_say_unread(self):
-  self.assertEqual(current.blessing_rows(self.root,'p')[4],('5번','미확인','미확인','미확인','미확인','미확인'))
+  self.assertEqual(current.blessing_rows(self.root,'p')[4],('5번','미확인','미확인','미확인','미확인'))
  def test_growth_keeps_the_kind_of_the_same_item(self):
   current.observe_blessing(self.root,'p','3번','도깨비','희귀',{'enhance':23,'opening':2,'awaken':0})
   current.observe_value(self.root,'p','blessings','3번',{'enhance':24},verified=True,item_identity='blessing-words:도깨비3')
-  self.assertEqual(current.blessing_rows(self.root,'p')[2],('3번','도깨비','희귀','24','2','0'))
+  self.assertEqual(current.blessing_rows(self.root,'p')[2],('3번','도깨비','희귀','24','0'))
  def test_stale_slots_name_blessings_until_read(self):
   self.assertIn('가호1',w.stale_slots(self.root,'p'))
   current.observe_blessing(self.root,'p','1번','도깨비','희귀',{'enhance':39,'opening':3,'awaken':0})
@@ -200,7 +201,7 @@ class Rows(unittest.TestCase):
  def test_saved_values_come_back(self):
   current.observe_blessing(self.root,'p','1번','도깨비','희귀',{'enhance':39,'opening':3,'awaken':0})
   current._LOADED.clear();current._VALUES.clear()
-  self.assertEqual(current.blessing_rows(self.root,'p')[0],('1번','도깨비','희귀','39','3','0'))
+  self.assertEqual(current.blessing_rows(self.root,'p')[0],('1번','도깨비','희귀','39','0'))
 
 
 class TestButton(unittest.TestCase):

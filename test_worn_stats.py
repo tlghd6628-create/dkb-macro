@@ -44,11 +44,11 @@ class Persist(unittest.TestCase):
    'verified_fields':['enhancement','opening','breakthrough','awakening']}
  def test_four_different_stats_and_slot_persist(self):
   self.assertTrue(g.observe(self.root,self.row()))
-  self.assertEqual(g.equipped_rows(self.root,'server/charA')[0],('무기','희귀','50','5','3','1'))
+  self.assertEqual(g.equipped_rows(self.root,'server/charA')[0],('무기','희귀','50','3','1'))
   key=str(self.root.resolve());g._LOADED.discard(key)
   for token in list(g._READINGS):
    if token[0]==key:g._READINGS.pop(token)
-  self.assertEqual(g.equipped_rows(self.root,'server/charA')[0],('무기','희귀','50','5','3','1'))
+  self.assertEqual(g.equipped_rows(self.root,'server/charA')[0],('무기','희귀','50','3','1'))
  def test_characters_and_slots_are_separate(self):
   g.observe(self.root,self.row())
   self.assertEqual(g.equipped_rows(self.root,'server/charB')[0][1],'미확인')
@@ -56,11 +56,11 @@ class Persist(unittest.TestCase):
  def test_unverified_fields_not_saved_from_defaults(self):
   row=self.row();row['verified_fields']=['enhancement'];g.observe(self.root,row)
   result=g.equipped_rows(self.root,'server/charA')[0]
-  self.assertEqual(result[2],'50');self.assertEqual(result[3:],('미확인','미확인','미확인'))
+  self.assertEqual(result[2],'50');self.assertEqual(result[3:],('미확인','미확인'))
  def test_new_slot_snapshot_does_not_reuse_old_items_unknown_stats(self):
   g.observe(self.root,self.row())
   row=self.row();row.update(enhancement=0,verified_fields=['enhancement'],replace_values=True)
   g.observe(self.root,row);result=g.equipped_rows(self.root,'server/charA')[0]
-  self.assertEqual(result[2:6],('0','미확인','미확인','미확인'))
+  self.assertEqual(result[2:5],('0','미확인','미확인'))
 
 if __name__=='__main__':unittest.main()
