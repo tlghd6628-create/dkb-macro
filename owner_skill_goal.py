@@ -110,10 +110,12 @@ def aoe_matches_request(item):
     return (receipt.get('verified') is True and receipt.get('complete') is True
             and receipt.get('slots')==list(SLOTS) and receipt.get('order')==list(ORDER))
 
+PURCHASE_STYLES=('파멸','강타','절명','저격')  # the user's rule. Ultimates are not bought: the deck's slots switch them on.
+
 def desired_learning_ids():
     data=catalog()
     approved={entry['id'] for entry in data['all_skill_names'].values()
-              if entry.get('style') in ('파멸','강타') and entry.get('ultimate') is not True}
+              if entry.get('style') in PURCHASE_STYLES and entry.get('ultimate') is not True}
     return approved
 
 def same_skill_context(adapter,context,character,configured):
