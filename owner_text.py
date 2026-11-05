@@ -115,12 +115,12 @@ def shows_field_words(frame,root=None):
     return 'home' in words and len(words&{'h','t','tab','tob','toab'})>=2
 
 
-def word_box(box):
-    """Real pixels covering a logical (x, y, w, h) under any of the three anchors."""
+def word_box(box,pad=0):
+    """Real pixels covering a logical (x, y, w, h) under any of the three anchors, with room for `pad` more each way."""
     import owner_hd
     x,y,w,h=box;F=owner_hd.F
-    left=max(0,round(x*F+owner_hd.SHIFT_RIGHT)-12);right=min(owner_hd.REAL[0],round((x+w)*F)+12)
-    top=max(0,round(y*F)-8);bottom=min(owner_hd.REAL[1],round((y+h)*F)+8)
+    left=max(0,round(x*F+owner_hd.SHIFT_RIGHT)-12-pad);right=min(owner_hd.REAL[0],round((x+w)*F)+12+pad)
+    top=max(0,round(y*F)-8-pad);bottom=min(owner_hd.REAL[1],round((y+h)*F)+8+pad)
     return left,top,right-left,bottom-top
 
 

@@ -2,14 +2,14 @@
 {"exact": true, "h": 15, "key": "035c56d8bf7a0c7db2d7", "name": "버튼_나가기_중하2", "w": 37, "words": "나가기", "x": 430, "y": 445}
 {"key": "053354b0346ba473a7fd", "name": "버튼_AUTO_비활성2", "state": "white"}
 {"exact": false, "h": 22, "key": "060f8bc57dfd464d0563", "name": "체크_비경_전래동화_팥쥐24", "w": 146, "words": "[상시비경]팔쥐네", "x": 712, "y": 73}
-{"exact": true, "h": 11, "key": "072b8332afde21efe309", "name": "버튼_레이드_매칭입장확인", "w": 22, "words": "확인", "x": 498, "y": 313}
+{"exact": false, "key": "072b8332afde21efe309", "name": "버튼_레이드_매칭입장확인", "pad": 40, "words": "확인"}
 {"exact": false, "h": 13, "key": "09d2380532894c8256ff", "name": "체크_인벤토리_장비귀속", "w": 30, "words": "(귀속)", "x": 436, "y": 100}
 {"exact": false, "h": 15, "key": "0a5c9a6a951ad223f208", "name": "체크_전체매뉴_화첩", "w": 27, "words": "화첩", "x": 58, "y": 12}
 {"exact": false, "h": 29, "key": "0adb8f8b2e052d90ef77", "name": "체크_문파_결계지방어", "w": 108, "words": "결계지방어", "x": 164, "y": 80}
 {"exact": false, "h": 9, "key": "0f3958a3af41b28f1252", "name": "버튼_메인퀘_도술모두배우기", "w": 81, "words": "도술모두배우기", "x": 728, "y": 452}
 {"exact": false, "h": 17, "key": "107a13ac0587ddf448b7", "name": "체크_전체매뉴_기운발현", "w": 57, "words": "기운발현", "x": 59, "y": 11}
 {"exact": true, "h": 17, "key": "1191669d7ffafaf3e86a", "name": "버튼_서브퀘_자동진행", "w": 48, "words": "자동진행", "x": 787, "y": 443}
-{"exact": true, "h": 13, "key": "131903a1bc5e5469a555", "name": "버튼_레이드_매칭입장확인2", "w": 20, "words": "확인", "x": 498, "y": 320}
+{"exact": false, "key": "131903a1bc5e5469a555", "name": "버튼_레이드_매칭입장확인2", "pad": 40, "words": "확인"}
 {"exact": true, "h": 13, "key": "13a320b80512ae0e0a19", "name": "버튼_문파_전투입장", "w": 42, "words": "입장하기", "x": 795, "y": 438}
 {"exact": false, "h": 10, "key": "15111aba98dc7ebcd83c", "name": "체크_보물찾기_타바로2", "w": 47, "words": "영험한청산", "x": 25, "y": 102}
 {"exact": true, "h": 12, "key": "16b4127ffaab07a9a3a7", "name": "버튼_문파_닫기", "w": 26, "words": "닫기", "x": 444, "y": 446}
@@ -19,6 +19,7 @@
 {"exact": false, "h": 12, "key": "250ad6becb46820de1d9", "name": "버튼_보물찾기_바로가기", "w": 37, "words": "바로가기", "x": 157, "y": 78}
 {"exact": true, "h": 14, "key": "28c59584313771545c0f", "name": "버튼_서브퀘_입장하기", "w": 43, "words": "입장하기", "x": 774, "y": 446}
 {"exact": false, "h": 12, "key": "2941aa30f262892abdf1", "name": "버튼_낙화_거점이동부활", "w": 81, "words": "거점이동후부할", "x": 303, "y": 447}
+{"exact": false, "key": "2a1e523cede9f8356de6", "name": "체크_레이드_매칭입장", "pad": 40, "words": "매칭입장"}
 {"exact": false, "h": 13, "key": "2b63fc641c2ad254be10", "name": "버튼_보물찾기_수아리지방열림", "w": 51, "words": "수아리지방", "x": 24, "y": 112}
 {"exact": false, "h": 12, "key": "2b9a98e1c9d1bcedf4a6", "name": "버튼_보물찾기_가모리지방열림", "w": 49, "words": "가모리지방", "x": 24, "y": 79}
 {"exact": false, "h": 11, "key": "2d3518b82c6df33aad7d", "name": "체크_보물찾기_가모리1", "w": 27, "words": "귀명촌", "x": 35, "y": 108}
@@ -26,7 +27,7 @@
 {"exact": false, "h": 9, "key": "30bbcac9f42c020ed724", "name": "버튼_런처_화면을눌러", "w": 67, "words": "화면을눌러주세요", "x": 414, "y": 375}
 {"exact": true, "h": 14, "key": "32bcc792ab6943d6a0fb", "name": "버튼_문파_토벌닫기", "w": 27, "words": "닫기", "x": 443, "y": 367}
 {"exact": false, "h": 13, "key": "32df26d904bf2cf4d50e", "name": "버튼_지도_영험한청산", "w": 54, "words": "영험한청산", "x": 68, "y": 222}
-{"exact": false, "h": 14, "key": "340d78b7aaace92a5017", "name": "체크_레이드_투표부결", "w": 46, "words": "투표부결", "x": 425, "y": 202}
+{"exact": false, "key": "340d78b7aaace92a5017", "name": "체크_레이드_투표부결", "pad": 30, "words": "투표부결"}
 {"exact": false, "h": 10, "key": "357ee732e91d9535858f", "name": "체크_보물찾기_수아리1", "w": 36, "words": "비명통굴", "x": 29, "y": 141}
 {"exact": false, "h": 16, "key": "377ade9311ade4053ed3", "name": "체크_절전모드_전투중", "w": 40, "words": "전투중", "x": 439, "y": 331}
 {"exact": true, "h": 13, "key": "3a6ee0ccb44b1dbaffa7", "name": "버튼_장시간미접속_확인", "w": 24, "words": "확인", "x": 446, "y": 270}
@@ -43,6 +44,7 @@
 {"exact": false, "h": 13, "key": "54e8cde42a02c453d1a9", "name": "체크_문파", "w": 25, "words": "문파", "x": 59, "y": 13}
 {"exact": true, "h": 16, "key": "5631ef3b8ce8c821affb", "name": "버튼_비경_입장확인", "w": 25, "words": "입장", "x": 496, "y": 286}
 {"exact": true, "h": 17, "key": "563624c28306f235cb47", "name": "버튼_문파_전투2", "w": 29, "words": "전투", "x": 758, "y": 43}
+{"exact": true, "key": "575988c9da0b7579139f", "name": "버튼_X_레이드부결", "pad": 0, "words": "×"}
 {"exact": false, "h": 11, "key": "576b51ae5fb7da72ddaf", "name": "체크_영기수련_미진행", "w": 101, "words": "진행중인수렵이없습니다", "x": 398, "y": 433}
 {"exact": true, "h": 11, "key": "57db2497bf5cf5a28f2d", "name": "버튼_나가기_중하", "w": 31, "words": "나가기", "x": 433, "y": 446}
 {"exact": true, "h": 15, "key": "5a0ac636afcfa1fe680b", "name": "버튼_사망상태_나가기", "w": 35, "words": "나가기", "x": 432, "y": 446}

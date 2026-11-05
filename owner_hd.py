@@ -38,7 +38,7 @@ TITLED_SCREENS=(('native:체크_전체매뉴_기운발현','m_energy'),('native:
 STORE=Path(__file__).parent/'assets/hd'
 HIT_LIFE=5.0
 _index=None;_images={};_missing=set();_layouts=None;_words=None;_marks=None
-_current=None;_last_capture=None;_hits=collections.deque(maxlen=64);_lock=threading.Lock()
+_current=None;_last_capture=None;_hits=collections.deque(maxlen=64);_pins=collections.deque(maxlen=16);_lock=threading.Lock()
 
 
 def rule_of(x):
@@ -255,6 +255,8 @@ def to_real_point(x,y,layout=None):
     """A real place for this logical one. Something a picture just found keeps the anchor it was found under."""
     now=time.monotonic()
     with _lock:
+        for seen,x0,y0,x1,y1,rx,ry in reversed(_pins):
+            if now-seen<=HIT_LIFE and x0<=x<=x1 and y0<=y<=y1:return rx,ry
         for seen,x0,y0,x1,y1,shift in reversed(_hits):
             if now-seen<=HIT_LIFE and x0<=x<=x1 and y0<=y<=y1:
                 return min(REAL[0]-1,max(0,round(x*F+shift))),min(REAL[1]-1,max(0,round(y*F)))
@@ -508,19 +510,25 @@ def match_words(image,needle,source,real):
     row=word_table().get(key_of(needle)) or (word_table().get(key_of(array[:,:,::-1])) if array.ndim==3 else None)
     if row is None or source is None or source[2]*source[3]>=LOGICAL[0]*LOGICAL[1]/2:return None
     import owner_text
-    x,y,w,h=owner_text.word_box(source)
-    rows=owner_text.read_area(None,np.asarray(real)[y:y+h,x:x+w],left=x,top=y,scale=3,minimum=.8)
+    x,y,w,h=owner_text.word_box(source,row.get('pad',0))
     wanted=row['words']
+    # A lone X reads at .72 to .85, and it is only asked for inside its own small place.
+    rows=owner_text.read_area(None,np.asarray(real)[y:y+h,x:x+w],left=x,top=y,scale=4 if wanted=='×' else 3,minimum=.6 if wanted=='×' else .8)
     from difflib import SequenceMatcher
     # The table's own reading can be a letter off (전래등화), so close counts, one word against one word.
-    near=[r for r in rows if owner_text.clean(r['text'])==wanted or (not row.get('exact') and (wanted in owner_text.clean(r['text']) or SequenceMatcher(None,owner_text.clean(r['text']),wanted).ratio()>=.75))]
+    if wanted=='×':near=[r for r in rows if owner_text.clean(r['text']) in ('×','X','x','✕')]
+    else:near=[r for r in rows if owner_text.clean(r['text'])==wanted or (not row.get('exact') and (wanted in owner_text.clean(r['text']) or SequenceMatcher(None,owner_text.clean(r['text']),wanted).ratio()>=.75))]
     rows_out=max(1,image.shape[0]-array.shape[0]+1);cols=max(1,image.shape[1]-array.shape[1]+1)
     answer=np.full((rows_out,cols),-1.,np.float32)
     if len(near)!=1:return answer
     layout=getattr(image,'layout',None) or _current or default_layout()
     lx,ly=logical_of(near[0]['rx'],near[0]['ry'],layout)
     # Centre the old picture on the words, in the box that was asked about.
-    answer[min(rows_out-1,max(0,round(ly-array.shape[0]/2-source[1]))),min(cols-1,max(0,round(lx-array.shape[1]/2-source[0])))]=.99
+    py=min(rows_out-1,max(0,round(ly-array.shape[0]/2-source[1])));px=min(cols-1,max(0,round(lx-array.shape[1]/2-source[0])))
+    answer[py,px]=.99
+    # The words can stand outside that box. Whoever clicks what this answer gives must land on them.
+    with _lock:
+        _pins.append((time.monotonic(),source[0]+px-2,source[1]+py-2,source[0]+px+array.shape[1]+2,source[1]+py+array.shape[0]+2,near[0]['rx'],near[0]['ry']))
     return answer
 
 
