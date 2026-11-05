@@ -18,7 +18,8 @@ def _real_cell(row):
 
 
 def real_tile_level(root, real, row):
-    """The +N in a tile's lower right, read on the real screen. No white ink there means +0."""
+    """The +N in a tile's lower right, read on the real screen. No white ink there means +0, ink that cannot be read
+    means not known."""
     import numpy as np
     from owner_text import read_area
     x, y, w, h = _real_cell(row)
@@ -33,7 +34,7 @@ def real_tile_level(root, real, row):
             match = re.search(r'\+\s*(\d{1,2})$', found['text'].strip())
             if match:
                 return int(match[1])
-    return 0
+    return None
 
 
 def tile_level(root, frame, row):
@@ -58,21 +59,37 @@ def tile_level(root, frame, row):
     return 0
 
 
-def levels_of(root, frame, rows, seen=None):
-    """Index to level. A value this visit proved beats a tile reading that came up short."""
+def levels_of(root, frame, rows, seen=None, selected=None):
+    """Index to level, None when not known. A value this visit proved beats a tile reading that came up short.
+
+    The selected tile shows a tick instead of its +N. It read as +0, so whatever the screen opened on was picked as the
+    lowest and took the stones: +13 legs went first with a rare ring at +0 (18:20).
+    """
     seen = seen or {}
-    return {row['index']: max(tile_level(root, frame, row), seen.get(row['index'], 0)) for row in rows}
+    levels = {}
+    for row in rows:
+        index = row['index']
+        read = None if index == selected else tile_level(root, frame, row)
+        known = [value for value in (read, seen.get(index)) if value is not None]
+        levels[index] = max(known) if known else None
+    return levels
 
 
 def lowest_first(rows, levels, priority=None):
+    """Not known goes last. Picking another item uncovers a selected tile for the next turn."""
     priority = priority or {}
-    return sorted(rows, key=lambda row: (levels.get(row['index'], 0), priority.get(row['index'], 3), row['index']))
+
+    def key(row):
+        level = levels.get(row['index'], 0)
+        return (level is None, level or 0, priority.get(row['index'], 3), row['index'])
+    return sorted(rows, key=key)
 
 
 def ceiling_for(chosen, rows, levels):
-    """Stop level for this turn. None means no other item of this grade is waiting."""
+    """Stop level for this turn. None means no other known item of this grade is waiting."""
     others = [levels.get(row['index'], 0) for row in rows
               if row['index'] != chosen['index'] and row.get('grade') == chosen.get('grade')]
+    others = [level for level in others if level is not None]
     return min(others) + STEP if others else None
 
 

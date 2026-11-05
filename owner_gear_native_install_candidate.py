@@ -141,7 +141,7 @@ def native_readers_factory(service,context,identity,targets,*,observation_sink=N
                     priority={matched[p]:i for i,p in enumerate(PRIORITY) if p in matched}
         except (TypeError,ValueError,KeyError,AttributeError):priority={}
     from owner_gear_levels import ceiling_for,levels_of,lowest_first
-    levels=levels_of(service.adapter.project.root,frame,candidates,getattr(service,'_owner_gear_seen_levels',None))
+    levels=levels_of(service.adapter.project.root,frame,candidates,getattr(service,'_owner_gear_seen_levels',None),selected)
     candidates=lowest_first(candidates,levels,priority)
     preferred=_post_equip_preference(frame,candidates,getattr(service.adapter,'_owner_post_equip_target',None))
     chosen=next((r for r in candidates if r['index']==preferred),None) or candidates[0]
