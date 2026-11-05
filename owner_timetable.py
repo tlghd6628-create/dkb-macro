@@ -353,6 +353,12 @@ class Planner:
             # Zero dungeon time was already read today, so a restart has nothing to recheck.
             if status=='processed' and row.get('no_time_left_at') and not row.get('result_unverified'):continue
             if status not in ('processed','failed','pending','calendar_hold'):continue
+            # Tried under 20 minutes ago with nothing sent: every F1 spent three minutes redoing the clan,
+            # blessing and gear visits. Its own retry time still brings it back.
+            if row.get('ended_at') and row.get('last_outcome')!=SENT_UNCONFIRMED and not row.get('interrupted'):
+                try:
+                    if 0<=(at-parse_at(row['ended_at'])).total_seconds()<1200:continue
+                except (TypeError,ValueError):pass
             # A second planner in the same start must not replace the original
             # receipt in startup_previous with its own pending copy.
             if status=='pending' and row.get('startup_recheck'):continue

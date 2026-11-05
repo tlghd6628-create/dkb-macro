@@ -14,8 +14,12 @@ def read_power(adapter,context,inputs,again=False):
     names=list(dict.fromkeys([DUNGEON,EXIT,MENU,'체크_사망상태',*AUTO_NAMES,*NAMES,
                             *market_inventory.INVENTORY_USE_NAMES,*guide_rewards.NAMES,*favorite_hunt.NAMES]))
     service=TownServices(adapter,context,inputs,names)
-    first=scene(service.detector,service.capture());context.wait(.15)
-    second=scene(service.detector,service.capture())
+    # Closing a menu leaves a moment of neither, and a miss here put the gear visit off by ten minutes.
+    for attempt in range(8):
+        first=scene(service.detector,service.capture());context.wait(.15)
+        second=scene(service.detector,service.capture())
+        if first==second and second!='unknown':break
+        context.wait(.4);context.checkpoint()
     if first!=second or second not in ('field','inventory'):
         LOG.info('퀘스트 전투력 확인 보류 · 현재 특수환경/전환 화면=%s/%s',first,second);return False
     started=time.monotonic();previous_observed=state(adapter).observed

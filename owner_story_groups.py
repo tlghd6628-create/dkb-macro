@@ -152,12 +152,15 @@ def quota(ui):
    LOG.warning('퀘스트 개수 원본 보존 · %s',target.name)
   return None
  l,t,r,bt=b[2]
- rows=ui.rows((r+1,t-2,666-r-1,bt-t+5),language='number',pair_minimum=.90)
- values=set()
- for row in rows:
-  m=re.fullmatch(r'\s*(\d{1,2})\s*/\s*20\s*',row['text'])
-  if m and row['score']>=.90 and 0<=int(m[1])<=20:values.add(int(m[1]))
- return next(iter(values)) if len(values)==1 else None
+ # '1/20' reads .86 on the tight crop and .996 with a few more pixels, and missing it stopped the run (11-05).
+ for left in (r+1,r-4):
+  rows=ui.rows((left,t-2,666-left,bt-t+5),language='number',pair_minimum=.90)
+  values=set()
+  for row in rows:
+   m=re.fullmatch(r'\s*(\d{1,2})\s*/\s*20\s*',row['text'])
+   if m and row['score']>=.90 and 0<=int(m[1])<=20:values.add(int(m[1]))
+  if len(values)==1:return next(iter(values))
+ return None
 
 def reviewable_block(block):
  return not block.get('functional_hold') and block.get('reason') in ('condition','prerequisite')

@@ -62,8 +62,14 @@ def attempt(adapter,context,inputs):
      outcome.update(state='confirmed',remaining=remaining,
                     needs_recheck=bool(choices['energies'] and remaining>0),retry_after_seconds=60)
      return 'confirmed'
-   done=run_batched(port,journal,choices,guard=guard,
-                    validated_targets=set(READERS),max_batches=3,max_seconds=90)
+   # Nothing left is the normal end of these boxes, not a hold to retry every minute.
+   if port.no_boxes():outcome['state']='no_claim';outcome['remaining']=0;return 'no_claim'
+   try:
+    done=run_batched(port,journal,choices,guard=guard,
+                     validated_targets=set(READERS),max_batches=3,max_seconds=120)
+   except (Hold,OSError,ValueError,TypeError) as exc:
+    # A failed cleanup below replaces this reason, and it was the only record of what went wrong.
+    LOG.info('기운 선택상자 중단 사유 · %s',exc);raise
    outcome['confirmed'].extend(done);outcome['state']='confirmed' if done else 'no_claim'
    latest=journal.read();last=latest['receipts'][-1] if latest['receipts'] else {}
    remaining=last.get('boxes_after')
@@ -93,7 +99,7 @@ def attempt(adapter,context,inputs):
   if outcome['state']=='starting':outcome['state']='interrupted_unverified'
   # A safely closed UI with unreadable evidence is incomplete, not processed.
   # Any sent/unknown intent changes the *next* visit into result-only recovery.
-  if outcome['state'] not in ('disabled','nothing_pending','confirmed','cleanup_blocked','interrupted_unverified'):
+  if outcome['state'] not in ('disabled','nothing_pending','confirmed','cleanup_blocked','interrupted_unverified') and outcome.get('remaining')!=0:
    outcome.update(retryable=True,retry_mode='recheck')
    if 'journal' in locals():
     try:

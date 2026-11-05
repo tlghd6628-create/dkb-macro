@@ -5,7 +5,7 @@ from io import BytesIO
 import numpy as np
 from PIL import Image
 from owner_energy_box_runtime_candidate import Hold,proof
-from owner_energy_box_detail_candidate import evidence_detail
+from owner_energy_box_detail_candidate import left_shown
 from owner_energy_reward_candidate import READERS,matches as reward_matches
 from owner_ui_foreground import inventory_header
 
@@ -47,14 +47,15 @@ def reconcile(root,journal,current,*,character,scope,guard,refresh_current=None)
    raw=(folder/row['file']).read_bytes()
    with Image.open(BytesIO(raw)) as image:frame=np.asarray(image.convert('RGB'))
   except (OSError,ValueError) as exc:raise Hold('수령 원본 읽기 실패') from exc
-  if inventory_header(frame,character) is None:raise Hold('수령 원본 캐릭터 불일치')
+  # A frame taken while the dialog fades cannot name the character; only named frames count below.
+  if inventory_header(frame,character) is None:continue
   frames.append((row,frame,hashlib.sha256(raw).hexdigest()))
  before_ids=pending.get('before_frame_ids')
  if not isinstance(before_ids,list) or len(before_ids)!=2 or set(ids)&set(before_ids) or set(ids)&set(current['frame_ids']):raise Hold('다른 시점의 화면 확인 필요')
  rewards=[i for i,(_,f,_) in enumerate(frames) if reward_matches(f,name,quantity)]
  if len(rewards)<2:raise Hold('선택한 기운 수령 수량 원본 확인 필요')
  first,second=rewards[0],rewards[1]
- details=[i for i,(_,f,_) in enumerate(frames) if i>second and evidence_detail(f)==before-quantity]
+ details=[i for i,(_,f,_) in enumerate(frames) if i>second and left_shown(f,before-quantity)]
  if len(details)<2:raise Hold('수령 후 상자 잔량 두 화면 확인 필요')
  picked=[frames[i] for i in (first,second,details[0],details[1])]
  if callable(refresh_current):current=refresh_current()

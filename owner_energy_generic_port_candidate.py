@@ -1,8 +1,10 @@
 """Opt-in generic 1/N selection port, separate from frozen recovery build."""
 from owner_energy_box_port_candidate import Port
-from owner_energy_box_detail_candidate import detail,detail_screen,generic_box_detail,box_candidates,stable_box_candidates
-from owner_energy_choice_reader_candidate import read_pair,read_open_pair,layout_screen,layout_variant,asset,_score
+from owner_energy_box_detail_candidate import detail,detail_screen,generic_box_detail,box_candidates,stable_box_candidates,box_gone
+from owner_energy_choice_reader_candidate import read_pair,read_open_pair,layout_screen,layout_variant,rows_of,selected_of,asset,_score
 from owner_energy_box_runtime_candidate import Hold
+import logging
+LOG=logging.getLogger('project_gui.DKB')
 
 class GenericPort(Port):
  def ensure_inventory(self):
@@ -69,11 +71,13 @@ class GenericPort(Port):
   state=pair[0]
   if state.get('selected')!=name:
    index=('생명','여명','몽환','홍염').index(name);offset=layout_variant(self._last_pair[1])
-   self.click(450,(152,188,224,260)[index]+17+offset,guard,lambda f:read_open_pair(f,f.copy())==state)
+   self.click(450,rows_of(self._last_pair[1])[index]+17+offset,guard,lambda f:read_open_pair(f,f.copy())==state)
    pair=self.wait_pair(read_pair)
    if not pair:raise Hold('선택 기운 재확인 필요')
    state=pair[0]
   # Even an exact desired quantity needs independently fresh two-frame proof.
+  # The name is checked before and after the steps; between them it cost 2 s a press and ran out the 90 s.
+  self._stepping=True
   for _ in range(1000):
    if guard() is not True:raise Hold('캐릭터 또는 설정 변경')
    if state.get('selected')!=name or state.get('available_count')!=total:raise Hold('선택 기운 또는 잔량 변경')
@@ -86,15 +90,20 @@ class GenericPort(Port):
    _,kind=min(options,key=lambda p:p[0]);hit=self.quantity_control(frame,kind)
    if not hit:raise Hold('수량 조절 버튼 확인 필요')
    expected=1 if kind=='min' else total if kind=='max' else current+(1 if kind=='plus' else -1)
-   def same(f):return read_pair(f,f.copy())==state and self.quantity_control(f,kind)==hit
+   # Steps are followed by the counter moving, not by reading it: OCR takes 3 for 8 at .90. The total is read at the end.
+   counter=frame[317:337,405:491].copy()
+   def same(f):return selected_of(f)==name and self.quantity_control(f,kind)==hit
    self.click(hit[0],hit[1],guard,same)
    def changed(a,b):
-    value=read_pair(a,b)
-    return value if value and value.get('selected')==name and value.get('available_count')==total and value.get('quantity')==expected else None
+    import numpy as np
+    x,y=a[317:337,405:491],b[317:337,405:491]
+    if not np.array_equal(x,y) or np.array_equal(x,counter) or selected_of(a)!=name or selected_of(b)!=name:return None
+    return dict(state,quantity=expected)
    pair=self.wait_pair(changed)
-   if not pair:raise Hold('수량 변경 결과 재확인 필요')
+   if not pair:raise Hold('수량 변경 결과 재확인 필요 · %s에서 %s 기대'%(current,expected))
    state=pair[0]
   else:raise Hold('수량 조절 한도 초과')
+  self._stepping=False
   final=self.pair(read_pair)
   if not final or final[0].get('selected')!=name or final[0].get('quantity')!=quantity or final[0].get('available_count')!=total:raise Hold('묶음 확정 직전 수량 확인 필요')
   self.last_target=name;self.expected_boxes_before=total;self.expected_quantity=quantity
@@ -122,17 +131,25 @@ class GenericPort(Port):
   x=reference['x']
   return same_dimmed_text(reference['name'],frame[9:25,x:x+33],reference['anchor'],frame[11:23,34:53])
  def pair(self,reader):
-  if not getattr(self,'evidence_identity',None):return super().pair(reader)
+  if getattr(self,'_stepping',False) or not getattr(self,'evidence_identity',None):return super().pair(reader)
   return super().pair(lambda a,b:reader(a,b) if self.same_character(a) and self.same_character(b) else None)
  def click(self,x,y,guard,predicate,on_sent=None):
-  if not getattr(self,'evidence_identity',None):return super().click(x,y,guard,predicate,on_sent=on_sent)
-  return super().click(x,y,guard,lambda frame:self.same_character(frame) and predicate(frame),on_sent=on_sent)
+  if getattr(self,'_stepping',False) or not getattr(self,'evidence_identity',None):return super().click(x,y,guard,predicate,on_sent=on_sent)
+  def proved(frame):
+   same=self.same_character(frame);screen=bool(predicate(frame))
+   if not (same and screen):LOG.info('상자 입력 전 확인 실패 · 캐릭터=%s · 화면=%s',same,screen)
+   return same and screen
+  return super().click(x,y,guard,proved,on_sent=on_sent)
  def __init__(self,adapter,context,inputs):
   super().__init__(adapter,context,inputs)
   # Initialize before capturing an action proof. A cold OCR load must never
   # turn an old screenshot into a supposedly fresh count.
   from owner_energy_box_detail_candidate import warm_count_reader
   context.checkpoint();warm_count_reader(adapter.project.root);context.checkpoint()
+ def no_boxes(self):
+  if self.ensure_inventory() is False:raise Hold('인벤토리 열기 확인 필요')
+  self.opened=True;self.view='inventory'
+  return self.pair(lambda a,b:True if box_gone(a) and box_gone(b) else None) is not None
  def current_detail(self,guard):
   if guard() is not True:raise Hold('캐릭터 또는 설정 변경')
   if self.opened and self.view=='detail':
@@ -142,6 +159,11 @@ class GenericPort(Port):
    pair=self.pair(same_detail)
    if not pair:raise Hold('현재 기운상자 잔량 재확인 필요')
    return dict(verified=True,boxes=pair[0],frame_ids=pair[1],captured_at=pair[2])
+  # After the last batch nothing is left to open a popup on.
+  if self.ensure_inventory() is False:raise Hold('인벤토리 열기 확인 필요')
+  self.opened=True;self.view='inventory'
+  gone=self.pair(lambda a,b:True if box_gone(a) and box_gone(b) else None)
+  if gone:return dict(verified=True,boxes=0,frame_ids=gone[1],captured_at=gone[2])
   return super().current_detail(guard)
  def prepare_one(self,name,guard):
   from project_adapter import market_inventory
@@ -168,7 +190,7 @@ class GenericPort(Port):
   self.view='selection';state=pair[0];total=state.get('available_count')
   if state.get('quantity')!=1 or type(total) is not int or total<1 or (known is not None and known!=total):raise Hold('1개와 현재 상자 개수 확인 필요')
   if state.get('selected')!=name:
-   index=('생명','여명','몽환','홍염').index(name);y=(152,188,224,260)[index]+17
+   index=('생명','여명','몽환','홍염').index(name);y=rows_of(self._last_pair[1])[index]+17
    self.click(450,y,guard,lambda f:read_open_pair(f,f.copy())==state)
    pair=self.wait_pair(read_pair)
    if not pair:raise Hold('선택 기운 재확인 필요')

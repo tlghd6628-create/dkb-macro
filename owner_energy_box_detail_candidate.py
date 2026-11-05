@@ -20,9 +20,13 @@ def close_mark(frame):
  ink=expected.min(axis=2)>190
  return bool(ink.sum()>=8 and np.array_equal(actual.min(axis=2)>190,ink))
 
+def choices_shown(frame):
+ """The four essences. The row sits 4 higher in the current game (seen 11-05)."""
+ return score(frame[236:263,383:513],asset('choices-detail'))>=.97 or score(frame[232:259,383:513],asset('choices-detail-v2'))>=.97
+
 def detail_screen(frame):
  if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or inventory_parts(frame)!=(True,True):return None
- if score(frame[236:263,383:513],asset('choices-detail'))<.97:return None
+ if not choices_shown(frame):return None
  if score(frame[352:374,404:493],asset('open'))<.97:return None
  return True
 
@@ -75,7 +79,7 @@ def evidence_detail(frame):
  """Read detail when a transient click overlay covers its open button."""
  if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or inventory_parts(frame)!=(True,True):return None
  if not close_mark(frame):return None
- if score(frame[236:263,383:513],asset('choices-detail'))<.97:return None
+ if not choices_shown(frame):return None
  return count(frame)
 
 def box_candidates(frame):
@@ -99,15 +103,28 @@ def box_candidates(frame):
   # Existing native artwork differs slightly through the translucent bag.
   # Allow opening at most five plausible details, then require the unchanged
   # exact four contents / title / count / selected quantity before any claim.
-  needle=asset('box-icon-native');work=cv2.matchTemplate(grid,needle,cv2.TM_CCOEFF_NORMED)
-  if not np.isfinite(work).all():return None
-  while True:
-   _,val,_,point=cv2.minMaxLoc(work)
-   if val<.90:break
-   x,y=point;hits.append((x+710+needle.shape[1]//2,y+90+needle.shape[0]//2))
-   cv2.rectangle(work,(max(0,x-12),max(0,y-12)),(min(work.shape[1]-1,x+12),min(work.shape[0]-1,y+12)),-1,-1)
-   if len(hits)>5:return None
+  # 'material' is the 발현 재료 선택 상자 tile on the level-1 account; the native art scored .77 there.
+  for name in ('box-icon-native','box-icon-material'):
+   needle=asset(name);work=cv2.matchTemplate(grid,needle,cv2.TM_CCOEFF_NORMED)
+   if not np.isfinite(work).all():return None
+   while True:
+    _,val,_,point=cv2.minMaxLoc(work)
+    if val<.90:break
+    x,y=point;point=(x+710+needle.shape[1]//2,y+90+needle.shape[0]//2)
+    if not any(abs(point[0]-p[0])<12 and abs(point[1]-p[1])<12 for p in hits):hits.append(point)
+    cv2.rectangle(work,(max(0,x-12),max(0,y-12)),(min(work.shape[1]-1,x+12),min(work.shape[0]-1,y+12)),-1,-1)
+    if len(hits)>5:return None
  return sorted(hits,key=lambda p:(p[1],p[0]))
+
+def box_gone(frame):
+ """The bag on show with neither a popup nor this box left in it: the last batch has no popup to read."""
+ if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or inventory_parts(frame)!=(True,True):return False
+ from owner_energy_choice_reader_candidate import layout_screen
+ return not generic_box_detail(frame) and not layout_screen(frame) and not box_candidates(frame)
+
+def left_shown(frame,left):
+ """This frame shows `left` boxes remaining."""
+ return box_gone(frame) if left==0 else evidence_detail(frame)==left
 
 def box_location(frame):
  """Backward-compatible single candidate; never treats icon as item proof."""
