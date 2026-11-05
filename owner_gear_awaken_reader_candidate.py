@@ -35,6 +35,15 @@ def real_transition(real):
     if int(blue[:,:arrow].sum())>2 or int(blue[:,arrow:].sum())<8:return None
     return {'current':None,'next':None,'kind':'observed_awakening_line','score':1.}
 
+REAL_NOTICE=(480,612,420,40)  # real pixels of the line under the panel
+
+def real_maximum(real):
+    """최대 각성 단계를 달성했습니다, seen the first time a real item reached it (11-05)."""
+    from owner_text import clean,read_area
+    x,y,w,h=REAL_NOTICE
+    if not any('최대각성단계' in clean(row['text']) for row in read_area(None,np.asarray(real)[y:y+h,x:x+w],minimum=.7)):return None
+    return {'current':1,'next':1,'maximum':True,'kind':'validated_single_awakening_maximum','score':1.}
+
 def read_observed_transition(frame):
     if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or frame.dtype!=np.uint8:return None
     if getattr(frame,'hi',None) is not None:return real_transition(frame.hi)
@@ -103,6 +112,8 @@ def read_explicit_stage(root,frame,kind):
     if kind=='awaken':
         base=read_zero_to_one(frame)
         if base is not None:return base
+        real=getattr(frame,'hi',None)
+        if real is not None:return real_maximum(real)
         scores=[]
         for suffix in ('after1','after2'):
             values=[]
