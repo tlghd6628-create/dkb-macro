@@ -157,6 +157,9 @@ class BlessingObserver:
         # A step that opens the next tier can show no counter, but a count that is short stays short.
         material=(level%10==9 and materials!=MATERIAL_SHORT) if opening else materials==MATERIAL_ENOUGH
         active=bool(name and panel['lit'] and type(panel['cost']) is int and panel['cost']>0 and panel['next']==level+1 and material)
+        if active:
+            from owner_coin_reserve import can_spend
+            active=can_spend(frame,'가호 '+str(panel['word']),panel['cost'])
         self.word_hit=panel['hit']
         said=(panel['identity'],level,panel['next'],panel['word'],panel['cost'],materials,active)
         if said!=getattr(self,'_said',None):

@@ -632,6 +632,8 @@ class StyleGrowth:
                     self.ui.context.wait(.3);self._guard()
             if obs['level']!=current or obs['have']<obs['need'] or (obs['funds'] is not None and obs['funds']<obs['price']):
                 raise Pending(name+' 도술 재료·엽전 부족 또는 변경')
+            from owner_coin_reserve import can_spend
+            if not can_spend(self.ui.frame(),name+' 도술',obs['price']):raise Pending(name+' 도술 남길 엽전 도달')
             intents[name]={'status':'prepared','before':current,'target':target,'price':obs['price'],'at':time.time()}
             self.ledger.event('style_growth_intent',style=name,before=current,price=obs['price'])
             def commit_guard(frame):

@@ -426,7 +426,13 @@ def match_real(image,needle,method,ordinary,scorer=None):
     source=getattr(image,'source',None);real=getattr(image,'hi',None)
     if real is None or method!=5:return None  # 5 is TM_CCOEFF_NORMED
     if source is None and image.shape[:2]!=(LOGICAL[1],LOGICAL[0]):return None
-    state=word_table().get(key_of(needle),{}).get('state')
+    entry=word_table().get(key_of(needle),{})
+    if entry.get('spends'):
+        from owner_coin_reserve import can_spend
+        if not can_spend(image,entry.get('name','')):
+            array=np.asarray(needle)
+            return np.full((max(1,image.shape[0]-array.shape[0]+1),max(1,image.shape[1]-array.shape[1]+1)),-1.,np.float32)
+    state=entry.get('state')
     if state and source is not None:return match_state(image,needle,source,real,state)
     found=cut_for(needle)
     if found is None:
@@ -508,7 +514,7 @@ def match_words(image,needle,source,real):
     are a low score, not a look at the scaled frame, where a picture can pass for what it is not."""
     array=np.asarray(needle)
     row=word_table().get(key_of(needle)) or (word_table().get(key_of(array[:,:,::-1])) if array.ndim==3 else None)
-    if row is None or source is None or source[2]*source[3]>=LOGICAL[0]*LOGICAL[1]/2:return None
+    if row is None or 'words' not in row or source is None or source[2]*source[3]>=LOGICAL[0]*LOGICAL[1]/2:return None
     import owner_text
     x,y,w,h=owner_text.word_box(source,row.get('pad',0))
     wanted=row['words']
