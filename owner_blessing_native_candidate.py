@@ -128,6 +128,7 @@ def read_slot_title(root,frame):
     return found[0] if len(found)==1 else None
 
 class BlessingObserver:
+    keep_item=False;word_hit=None  # keep_item: a record sent under its icon is being settled
     def __init__(self,service,context,identity,native,pre,rows,row,slot_reader=read_slot_title,*,clock=time.monotonic):
         self.service=service;self.context=context;self.identity=identity;self.native=native
         self.last_reason='장착 가호 선택 확인 필요'
@@ -139,8 +140,33 @@ class BlessingObserver:
         import json
         root=Path(service.adapter.project.root)
         self.root=root;self.config=json.loads((root/'profiles/DKB/ocr_regions.json').read_text(encoding='utf-8'))['regions']['OCR_성장_장비레벨']
+    def _word_state(self,frame):
+        """Who, what level and what the next step takes, from the words on a real frame. The game's own mark on the
+        list says the selected tile is the one pressed; the words then name it, so nothing compares icons."""
+        from owner_growth_reading import MATERIAL_ENOUGH,MATERIAL_SHORT
+        from owner_growth_words import read_blessing
+        panel,reason=read_blessing(self.root,frame)
+        if panel is None:
+            self.last_reason=reason;return None
+        selected=getattr(self.native,'_growth_selected_slot',None)
+        if not callable(selected) or selected(frame,self.rows)!=self.row['index']:
+            self.last_reason='선택 가호 목록 표시 불일치';return None
+        names=self.native.GROWTH_BLESSING_EXEC_BUTTONS
+        name={'강화':names[0],'개방':names[1]}.get(panel['word']);opening=name==names[1];level=panel['level']
+        materials=MATERIAL_ENOUGH if panel['enough'] is True else MATERIAL_SHORT if panel['enough'] is False else None
+        # A step that opens the next tier can show no counter, but a count that is short stays short.
+        material=(level%10==9 and materials!=MATERIAL_SHORT) if opening else materials==MATERIAL_ENOUGH
+        active=bool(name and panel['lit'] and type(panel['cost']) is int and panel['cost']>0 and panel['next']==level+1 and material)
+        self.word_hit=panel['hit']
+        said=(panel['identity'],level,panel['next'],panel['word'],panel['cost'],materials,active)
+        if said!=getattr(self,'_said',None):
+            self._said=said
+            LOG.info('가호 글자 판독 · %s · %s→%s · %s %s · %s · 입력 가능=%s',panel['name']+str(panel['slot']),level,panel['next'],panel['word'],panel['cost'],materials,active)
+        return {'slot':panel['slot'],'level':level,'active':active,'button':name,'opening':opening,'materials':materials,
+                'identity':panel['identity'],'cost':panel['cost']}
     def _state(self,frame):
         self.context.checkpoint();self.service.check()
+        if getattr(frame,'hi',None) is not None:return self._word_state(frame)
         if not selected_matches(self.native,self.service.detector,self.pre,self.rows,self.row['index'],frame):
             self.last_reason='선택 가호 중앙·목록 아이콘 일치 미확인';return None
         slot=self.slot_reader(self.root,frame)
@@ -165,6 +191,10 @@ class BlessingObserver:
                 'materials':materials}
     def _same_read_view(self,frame,source,state):
         """Re-prove classified text on a NEW frame without repeating OCR."""
+        if getattr(frame,'hi',None) is not None:
+            # A reading of unchanged pixels comes back at once, so the words themselves are the proof.
+            self.last_view_reason='글자 재확인';now=self._word_state(frame)
+            return bool(now) and {k:v for k,v in now.items() if k!='materials'}=={k:v for k,v in state.items() if k!='materials'}
         self.last_view_reason='선택 가호 아이콘'
         if not selected_matches(self.native,self.service.detector,self.pre,self.rows,self.row['index'],frame):return False
         # The slot title occupies70..79. The old crop also contained the
@@ -204,7 +234,9 @@ class BlessingObserver:
             if state is None:
                 self.diagnostic_pair=(*(f.copy() for f in frames[-1:]),frame.copy());return {'screen_proof':False}
             self.sequence+=1;states.append(state);frames.append(frame.copy())
-            obs.append(Observation(self.sequence,stamp,self.identity,self.item,'blessing:'+str(state['slot']),
+            # Words name the item, unless a record sent under its icon is being settled.
+            item=self.item if self.keep_item else state.get('identity',self.item)
+            obs.append(Observation(self.sequence,stamp,self.identity,item,'blessing:'+str(state['slot']),
                 str(state['slot'])+'번',state['level'],None,None,state['active'],None,None))
             self.context.wait(.12)
         a,b=obs
@@ -239,7 +271,7 @@ class BlessingObserver:
             from owner_growth_current import observe_value
             if publish:
                 observe_value(self.root,self.identity,'blessings',a.grade,
-                              {'enhance':a.enhancement},verified=True,item_identity=self.item)
+                              {'enhance':a.enhancement},verified=True,item_identity=a.item)
         except Exception:pass  # display-only, never execution authority
         if not require_resource:return {'screen_proof':True,'first':a,'second':b}
         state=states[0]
@@ -255,6 +287,7 @@ class BlessingObserver:
                         and state['button']==latest.get('button_name') and state['opening']==latest.get('opening')
                         and self._same_read_view(frame,proof,state))
         state=self._state(frame);second=latest.get('second')
+        if state and 'identity' in state and not self.keep_item and (state['identity']!=getattr(second,'item',None) or state.get('cost')!=(self.last_state or {}).get('cost')):return False
         return bool(state and isinstance(second,Observation) and state['active'] and state['level']==second.enhancement
                     and str(state['slot'])+'번'==second.grade and state['button']==latest.get('button_name')
                     and state['opening']==latest.get('opening'))
@@ -273,6 +306,22 @@ def _pending_matches(pending,rows,frame):
         exact='blessing-icon:'+hashlib.sha256(icon.tobytes()).hexdigest()==pending['before'].item
         if exact or (reference is not None and icon.shape==(18,18,3) and _same_stable_icon(reference,icon)):matches.append(row)
     return matches
+
+class PreInputHold(RuntimeError):
+    """The last look before a press did not hold up. Nothing was sent, so this is a read to retry, not a failure."""
+
+
+def _named_by_words(pending):
+    return str(getattr(pending.get('before'),'item','')).startswith('blessing-words:')
+
+
+def _shown_words(root,frame):
+    """(the name of what the panel shows, reason), for finding the tile a sent step belongs to."""
+    if getattr(frame,'hi',None) is None:return None,'실제 화면 없음'
+    from owner_growth_words import read_blessing
+    panel,reason=read_blessing(root,frame)
+    return (panel['identity'],None) if panel else (None,reason)
+
 
 def _ordered_rows(rows,previous):
     return [row for row in rows if row['index']>previous]+[row for row in rows if row['index']<=previous]
@@ -348,7 +397,10 @@ def run_blessing(service,context,identity,targets,*,slot_reader=read_slot_title,
             if attempt<SETTLE_READS-1:context.wait(.3)
         else:
             return hold('hold_worn_list','장착 가호 두 화면 불일치',(a,b))
-        if pending:
+        if pending and _named_by_words(pending):
+            # Its name shows only once selected, so each worn tile is looked at. Selecting spends nothing.
+            selected=list(second)
+        elif pending:
             matches=_pending_matches(pending,second,b)
             if len(matches)!=1:
                 # A restart may leave this item selected, hiding its icon.
@@ -380,6 +432,7 @@ def run_blessing(service,context,identity,targets,*,slot_reader=read_slot_title,
             _cursor[identity]=row['index']
             rows=native.inspect_growth_equipment(service.detector,b,blessing=True)
             observer=BlessingObserver(service,context,identity,native,b,rows,row,slot_reader)
+            observer.keep_item=bool(pending) and not _named_by_words(pending)
             def result_after_glow():
                 # The icon flashes for about a second after a real enhancement.
                 # Same result reader on fresh frames; never a second resource input.
@@ -391,27 +444,34 @@ def run_blessing(service,context,identity,targets,*,slot_reader=read_slot_title,
                     if attempt<RESULT_READS-1:context.wait(.35)
                 return result
             if pending:
+                if _named_by_words(pending):
+                    current();context.wait(.3);shown,_=_shown_words(root,service.capture())
+                    if shown!=pending['before'].item:continue  # not this tile; nothing was sent to it
                 result=result_after_glow()
                 if result!='observed_progress':outcome['state']=result;return False
                 pending=None;outcome['confirmed']+=1
                 if reconcile_only:outcome['state']='observed_progress';return True
             def click(latest,mark_sent):
                 current();frame=service.capture()
-                if not observer.verify_final(frame,latest,'enhance'):raise RuntimeError('가호 입력 직전 확인 실패')
+                if not observer.verify_final(frame,latest,'enhance'):raise PreInputHold('가호 입력 직전 확인 실패')
                 if not current_check():raise RuntimeError('가호 설정 또는 캐릭터 변경')
                 name=latest.get('button_name')
-                if name not in native.GROWTH_BLESSING_EXEC_BUTTONS:raise RuntimeError('가호 실행 버튼 확인 필요')
-                hit=service.detector.find(name,frame,threshold=.95)
-                if not hit:raise RuntimeError('가호 실행 버튼 미확인')
+                if name not in native.GROWTH_BLESSING_EXEC_BUTTONS:raise PreInputHold('가호 실행 버튼 확인 필요')
+                # On a real frame the words verify_final just read on this same frame name the place.
+                hit=observer.word_hit if getattr(frame,'hi',None) is not None else service.detector.find(name,frame,threshold=.95)
+                if not hit:raise PreInputHold('가호 실행 버튼 미확인')
                 current();mark_sent();current();service.click_hit(hit);outcome['actions']+=1
             guard=Guard(context,intents,observer.read_pair);deadline=time.monotonic()+20;status='budget_wait';rereads=0
             for _ in range(50):
                 current()
                 if time.monotonic()>=deadline:break
-                status=guard.run_one('enhance',targets,click)
-                # The number redraws after a step (27 read as 2). Nothing was sent
+                try:status=guard.run_one('enhance',targets,click)
+                except PreInputHold as exc:
+                    observer.last_reason=str(exc);status='hold_boundary_preinput'
+                # The number redraws after a step (37 read as 3). Nothing was sent
                 # on that read; look again before giving up this item.
-                if status=='hold_screen_unverified' and outcome['confirmed'] and rereads<REREADS:
+                on_words=getattr(b,'hi',None) is not None
+                if rereads<REREADS and (status=='hold_screen_unverified' and (outcome['confirmed'] or on_words) or status=='hold_boundary_preinput' and on_words):
                     rereads+=1;context.wait(.5);continue
                 if status!='pending_confirmation':break
                 rereads=0
@@ -431,6 +491,7 @@ def run_blessing(service,context,identity,targets,*,slot_reader=read_slot_title,
                 reason=getattr(observer,'last_reason','화면 확인 필요')
                 enqueue(root,'blessing-'+status,reason,tuple(getattr(observer,'diagnostic_pair',())))
                 report(service.adapter,'gear',Outcome(NOT_ATTEMPTED,'가호 '+reason,stage=status))
+        if pending:return hold('hold_pending_item','이전 입력 대상 가호 글자 확인 실패',(b,))
         outcome['state']='processed_unverified'
         return False
     finally:

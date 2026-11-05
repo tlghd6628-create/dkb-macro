@@ -28,6 +28,7 @@ SIGNATURE=(48,27)
 SAME_SCREEN=.72
 SAME_SIDES=.85;BAG_SCREENS=('inventory','inv_','pc2_bag','pc2_box_detail');SIDE_COLUMNS=(11,37)  # of 48: x<316, x>=1062
 DEFAULT_SCREEN='field'
+TITLED_SCREENS=(('native:체크_전체매뉴_기운발현','m_energy'),('native:체크_영기수련','m_spirit'));TITLE_SLACK=6;TITLE_SCORE=.85
 STORE=Path(__file__).parent/'assets/hd'
 HIT_LIFE=5.0
 _index=None;_images={};_missing=set();_layouts=None
@@ -159,8 +160,35 @@ def default_layout():
     return _PLAIN
 
 
+def _titled_layout(real):
+    """These screens change a lot behind their title (the pot, a scrolled tree, a dimmed dialog), which the small
+    picture of the frame cannot follow, and the field map then tears them apart. Their title's white letters stay."""
+    for label,screen in TITLED_SCREENS:
+        row=next((r for r in index().values() if r.get('label')==label),None)
+        if row is None:continue
+        cut=_load(row['key'],row,bool(row.get('bgr')))
+        area=np.asarray(real)[max(0,row['y']-TITLE_SLACK):row['y']+row['h']+TITLE_SLACK,max(0,row['x']-TITLE_SLACK):row['x']+row['w']+TITLE_SLACK]
+        if area.shape[0]<cut.shape[0] or area.shape[1]<cut.shape[1]:continue
+        if _PLAIN_MATCH[0] is None:
+            import cv2
+            _PLAIN_MATCH[0]=cv2.matchTemplate
+        scores=np.nan_to_num(_PLAIN_MATCH[0](_letters(area),_letters(cut),5),nan=-1)
+        if float(scores.max())>=TITLE_SCORE:
+            found=next((l for l in layouts() if l.name==screen),None)
+            if found is not None:return found
+    return None
+
+
+def _letters(image):
+    """The brightest strokes, by the picture's own brightest, so a dimmed title still counts."""
+    grey=np.asarray(image).min(axis=2).astype(np.float32)
+    return ((grey>=grey.max()*.72)*255).astype(np.uint8)
+
+
 def classify(real):
     """The measured screen this frame looks like, or the field map when it looks like none of them."""
+    titled=_titled_layout(real)
+    if titled is not None:return titled
     known=[l for l in layouts() if l.signature is not None and l.name!=DEFAULT_SCREEN]
     if not known:return default_layout()
     tiny=signature_of(real)
