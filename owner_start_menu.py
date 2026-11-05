@@ -53,6 +53,25 @@ def kind(frame):
   if foreground.sum()>=8 and float((actual.min(axis=2)[foreground]>150).mean())>=.8:return label
  return None
 
+# Menus a stop can leave open, with nothing to lose by backing out. Named by their title words, so a
+# new menu needs one word here and no new picture. A menu not named here is left alone: a running
+# spirit training also has a back button and has its own resume path.
+PLAIN_MENUS=('우편함','이벤트','길라잡이','업적','거래소','잡화상점','보스토벌','상점')
+
+def plain_menu(service,frame):
+ """The title word of a plain menu with its back button showing, or None."""
+ detector,adapter=getattr(service,'detector',None),getattr(service,'adapter',None)
+ if detector is None or adapter is None or not detector.find('버튼_나가기',frame,threshold=.96):return None
+ import numpy as np
+ from tools.ocr_support import get_paddle_engine
+ from owner_progression import resized
+ engine=get_paddle_engine(adapter.project.root,language='korean')
+ for page in engine.predict(resized(frame,(36,4,110,30))):
+  for text,score in zip(page.get('rec_texts',()),page.get('rec_scores',())):
+   text=''.join(str(text).split())
+   if float(score)>=.80 and text in PLAIN_MENUS:return text
+ return None
+
 def normalize(service):
  """No confirmations, claims, purchases, growth actions or unknown ESC."""
  for attempt in range(3):
@@ -73,20 +92,22 @@ def normalize(service):
     if worn_popup(service.capture()):
      service.click_hit((510,106,(503,99,518,113)));service.context.wait(.2)
      LOG.info('시작 위치 정리 · 착용 장비 상세창 닫기');continue
-  first=kind(initial);service.context.wait(.12)
-  second=kind(service.capture())
+  def name(frame):return kind(frame) or plain_menu(service,frame)
+  first=name(initial);service.context.wait(.12)
+  second=name(service.capture())
   if first is None or first!=second:return
   # The second observation and the final guarded frame must still be the
   # same visible foreground menu. Never press a back button behind a popup.
   frame=service.capture()
-  if kind(frame)!=first:return
+  if name(frame)!=first:return
   hit=service.detector.find('버튼_나가기',frame,threshold=.96)
   if not hit:raise RuntimeError(first+' 시작 메뉴의 나가기 위치 확인 필요')
   service.context.checkpoint();service.check()
   service.click_hit(hit);service.context.wait(.25)
   LOG.info('시작 위치 정상화 · %s 메뉴 나가기 · 현재 위치 다시 판독',first)
  service.context.checkpoint()
- if kind(service.capture()) is not None:raise RuntimeError('시작 메뉴 닫힘을 확인하지 못했습니다')
+ frame=service.capture()
+ if (kind(frame) or plain_menu(service,frame)) is not None:raise RuntimeError('시작 메뉴 닫힘을 확인하지 못했습니다')
 
 def install():
  from project_adapter._entry import Adapter

@@ -39,7 +39,7 @@ class UI(Base):
   from owner_settings_layout import GROWTH_SWITCHES
   self.assertEqual(len(buttons),len(TARGETS)+len(set(CHALLENGES)&{item['id'] for item,_ in console.native.controls})+len(GROWTH_SWITCHES))
   self.assertEqual(set(TARGETS),set(TARGETS)&self.visible('보상·정리'))
-  self.assertTrue(all(str(w.cget('style'))=='Dkb.TButton' for w in buttons))
+  self.assertTrue(all(str(w.cget('style'))=='DkbTest.TButton' for w in buttons))
  def test_grade_choices_persist_and_legend_is_absent(self):
   console=SettingsConsole(self.gui,{});console.window.withdraw();self.addCleanup(console.window.destroy)
   for code in ('normal','rare','hero'):self.assertIn(grade_key(code),console.native.vars)
