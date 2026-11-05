@@ -1,5 +1,6 @@
 {"exact": false, "h": 14, "key": "003cd6ac580cd071489b", "name": "체크_전체매뉴_설정", "w": 31, "words": "설정", "x": 56, "y": 13}
 {"exact": true, "h": 15, "key": "035c56d8bf7a0c7db2d7", "name": "버튼_나가기_중하2", "w": 37, "words": "나가기", "x": 430, "y": 445}
+{"key": "053354b0346ba473a7fd", "name": "버튼_AUTO_비활성2", "state": "white"}
 {"exact": false, "h": 22, "key": "060f8bc57dfd464d0563", "name": "체크_비경_전래동화_팥쥐24", "w": 146, "words": "[상시비경]팔쥐네", "x": 712, "y": 73}
 {"exact": true, "h": 11, "key": "072b8332afde21efe309", "name": "버튼_레이드_매칭입장확인", "w": 22, "words": "확인", "x": 498, "y": 313}
 {"exact": false, "h": 13, "key": "09d2380532894c8256ff", "name": "체크_인벤토리_장비귀속", "w": 30, "words": "(귀속)", "x": 436, "y": 100}
@@ -14,6 +15,7 @@
 {"exact": true, "h": 12, "key": "16b4127ffaab07a9a3a7", "name": "버튼_문파_닫기", "w": 26, "words": "닫기", "x": 444, "y": 446}
 {"exact": false, "h": 9, "key": "192c591a0fe639a5b48a", "name": "버튼_보물찾기_바로가", "w": 34, "words": "바로가기", "x": 159, "y": 80}
 {"exact": false, "h": 48, "key": "1ba4f879c15e727dcf12", "name": "체크_장시간미접속", "w": 192, "words": "접속종료안내", "x": 352, "y": 184}
+{"key": "1f41b5f1299e978ae475", "name": "버튼_AUTO_활성", "state": "gold"}
 {"exact": false, "h": 12, "key": "250ad6becb46820de1d9", "name": "버튼_보물찾기_바로가기", "w": 37, "words": "바로가기", "x": 157, "y": 78}
 {"exact": true, "h": 14, "key": "28c59584313771545c0f", "name": "버튼_서브퀘_입장하기", "w": 43, "words": "입장하기", "x": 774, "y": 446}
 {"exact": false, "h": 12, "key": "2941aa30f262892abdf1", "name": "버튼_낙화_거점이동부활", "w": 81, "words": "거점이동후부할", "x": 303, "y": 447}
@@ -36,6 +38,7 @@
 {"exact": true, "h": 17, "key": "45c636429e829dea5c91", "name": "버튼_비경_전래동화_입장", "w": 34, "words": "입장", "x": 779, "y": 445}
 {"exact": false, "h": 11, "key": "48aac11679976eae34ac", "name": "버튼_메인퀘_즉시확인", "w": 45, "words": "즉시확인", "x": 426, "y": 446}
 {"exact": false, "h": 14, "key": "49824f8938c4e3444465", "name": "체크_문파_분신완료", "w": 41, "words": "분신해제", "x": 690, "y": 438}
+{"key": "4b9c0eb6e7a66dc399b0", "name": "버튼_AUTO_비활성", "state": "white"}
 {"exact": true, "h": 15, "key": "54cb31e235e625f1af5e", "name": "버튼_임무_자동진행시작3", "w": 48, "words": "자동진행", "x": 793, "y": 444}
 {"exact": false, "h": 13, "key": "54e8cde42a02c453d1a9", "name": "체크_문파", "w": 25, "words": "문파", "x": 59, "y": 13}
 {"exact": true, "h": 16, "key": "5631ef3b8ce8c821affb", "name": "버튼_비경_입장확인", "w": 25, "words": "입장", "x": 496, "y": 286}
@@ -97,6 +100,7 @@
 {"exact": false, "h": 13, "key": "cf7f523921eae3ee47be", "name": "버튼_길라잡이_보상받기", "w": 49, "words": "보상받기", "x": 595, "y": 344}
 {"exact": false, "h": 12, "key": "d20bab0cf17503c3208e", "name": "체크_기운발현_기운발현", "w": 44, "words": "기운발현", "x": 738, "y": 446}
 {"exact": true, "h": 10, "key": "d22968cb0b3c01059235", "name": "버튼_넘기기_확인", "w": 23, "words": "확인", "x": 487, "y": 272}
+{"key": "d34401877733d2cdcec6", "name": "버튼_AUTO_활성2", "state": "gold"}
 {"exact": false, "h": 20, "key": "d3775d17523e5de4b859", "name": "체크_비경_전래동화_원님5", "w": 99, "words": "[비경]원님고개", "x": 714, "y": 74}
 {"exact": false, "h": 13, "key": "d3d0ef636ef0667e0dd3", "name": "버튼_문파_신기쟁탈전", "w": 52, "words": "신기쟁달전", "x": 29, "y": 176}
 {"exact": true, "h": 13, "key": "d55f8b2e668e8390a0b7", "name": "버튼_낙화_나가기", "w": 32, "words": "나가기", "x": 538, "y": 446}
@@ -115,6 +119,7 @@
 {"exact": true, "h": 15, "key": "f3a336a0b24a11de5454", "name": "버튼_나가기_승천실패", "w": 27, "words": "나가기", "x": 443, "y": 201}
 {"exact": false, "h": 12, "key": "f5a4f6fcc44448c7a8b3", "name": "버튼_거점이동_중하", "w": 79, "words": "거점이통후부할", "x": 410, "y": 447}
 {"exact": false, "h": 24, "key": "f824ca72787b4e5573ca", "name": "체크_문파_미혹의정원", "w": 109, "words": "미혹의정원", "x": 165, "y": 83}
+{"key": "f8613e7cb3e2bca08d8b", "name": "버튼_AUTO_일시정지", "state": "paused"}
 {"exact": false, "h": 9, "key": "f948057f7b735be05492", "name": "체크_보물찾기_수아리3", "w": 47, "words": "비탄의", "x": 24, "y": 194}
 {"exact": false, "h": 14, "key": "f9ab0fb6480585dab8f4", "name": "버튼_우편탭_모두받기", "w": 49, "words": "모두받기", "x": 812, "y": 448}
 {"exact": false, "h": 14, "key": "fcd39414de0596331b2a", "name": "버튼_문파_참가신청", "w": 45, "words": "참가신청", "x": 794, "y": 438}

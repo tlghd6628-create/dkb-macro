@@ -424,6 +424,8 @@ def match_real(image,needle,method,ordinary,scorer=None):
     source=getattr(image,'source',None);real=getattr(image,'hi',None)
     if real is None or method!=5:return None  # 5 is TM_CCOEFF_NORMED
     if source is None and image.shape[:2]!=(LOGICAL[1],LOGICAL[0]):return None
+    state=word_table().get(key_of(needle),{}).get('state')
+    if state and source is not None:return match_state(image,needle,source,real,state)
     found=cut_for(needle)
     if found is None:
         _note_missing(needle)
@@ -466,6 +468,37 @@ def word_table():
                     row=json.loads(line);_words[row['key']]=row
         except (OSError,ValueError):pass
     return _words
+
+
+AUTO_AREA=(1175,695,70,55)  # real pixels; the same on the field and in dungeons
+AUTO_LOGICAL=(794,442)      # where the old pictures of it are looked for
+
+
+def auto_state(real):
+    """AUTO on (gold), off (white) or paused (a thin white II), measured on the real screen. None if it is not there."""
+    import cv2
+    x,y,w,h=AUTO_AREA
+    crop=np.asarray(real)[y:y+h,x:x+w]
+    hsv=cv2.cvtColor(crop,cv2.COLOR_RGB2HSV)
+    gold=int(((hsv[:,:,0]>=12)&(hsv[:,:,0]<=32)&(hsv[:,:,1]>110)&(hsv[:,:,2]>170)).sum())
+    white=int((crop.min(axis=2)>170).sum())
+    if gold>=150:return 'gold'
+    if white>=120:return 'white'
+    if white>=25 and gold<20:return 'paused'
+    return None
+
+
+def match_state(image,needle,source,real,state):
+    """An AUTO picture: colour says the state, which words and scaled pictures cannot tell apart. Only for a search
+    of the place AUTO is really in: the older pictures' place holds the settings icon at this size."""
+    array=np.asarray(needle)
+    rows=max(1,image.shape[0]-array.shape[0]+1);cols=max(1,image.shape[1]-array.shape[1]+1)
+    answer=np.full((rows,cols),-1.,np.float32)
+    x,y=AUTO_LOGICAL
+    if source[0]<=x<source[0]+source[2] and source[1]<=y<source[1]+source[3] and auto_state(real)==state:
+        answer[min(rows-1,y-source[1]),min(cols-1,x-source[0])]=.99
+        _remember_hits(answer,source,array.shape,SHIFTS['right'])
+    return answer
 
 
 def match_words(image,needle,source,real):

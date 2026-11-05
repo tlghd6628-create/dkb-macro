@@ -169,6 +169,24 @@ class Matching(unittest.TestCase):
   self.assertEqual(cv2.matchTemplate(self.frame[100:110,800:820].astype(np.float32),self.needle.astype(np.float32),cv2.TM_CCORR).shape,(1,1))
 
 
+class Auto(unittest.TestCase):
+ def frame(self,colour):
+  r=np.zeros((768,1366,3),np.uint8);r[705:725,1198:1222]=colour
+  return r
+ def test_gold_is_on(self):self.assertEqual(hd.auto_state(self.frame((230,170,40))),'gold')
+ def test_white_is_off(self):self.assertEqual(hd.auto_state(self.frame((240,240,240))),'white')
+ def test_nothing_there(self):self.assertIsNone(hd.auto_state(np.zeros((768,1366,3),np.uint8)))
+ def test_thin_white_is_paused(self):
+  r=np.zeros((768,1366,3),np.uint8);r[705:725,1205:1207]=240;r[705:725,1212:1214]=240
+  self.assertEqual(hd.auto_state(r),'paused')
+ def test_answers_only_for_its_own_state_and_place(self):
+  f=hd.make_frame(self.frame((230,170,40)),GROWTH);needle=np.zeros((13,12,3),np.uint8)
+  yes=hd.match_state(f[442:455,794:806],needle,(794,442,12,13),f.hi,'gold')
+  self.assertGreater(float(yes.max()),.9)
+  self.assertLess(float(hd.match_state(f[442:455,794:806],needle,(794,442,12,13),f.hi,'white').max()),0)
+  self.assertLess(float(hd.match_state(f[441:457,770:786],needle,(770,441,16,16),f.hi,'gold').max()),0)
+
+
 class RealScreen(unittest.TestCase):
  def test_text_reads_right_from_the_real_frame(self):
   path=LIVE/'r_shop.png'

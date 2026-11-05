@@ -41,6 +41,9 @@ for n in names:
     if hangul>=2 and len(word)<=14 and word not in NEVER and (word not in COMMON or n.startswith('버튼_')):
         e=roi[n];rows.append(dict(key=hd.key_of(det.templates[n]),name=n,words=word,exact=word in COMMON,x=e['x'],y=e['y'],w=e['w'],h=e['h']))
 keep=rows
+# AUTO's state is its colour. owner_hd reads that off the real screen.
+STATES={'버튼_AUTO_활성':'gold','버튼_AUTO_활성2':'gold','버튼_AUTO_비활성':'white','버튼_AUTO_비활성2':'white','버튼_AUTO_일시정지':'paused'}
+keep=[r for r in keep if r['name'] not in STATES]+[dict(key=hd.key_of(det.templates[n]),name=n,state=s) for n,s in STATES.items()]
 out=hd.STORE/'words.jsonl'
 out.write_text(''.join(json.dumps(r,ensure_ascii=False,sort_keys=True)+'\n' for r in sorted(keep,key=lambda r:r['key'])),encoding='utf-8')
 print('kept',len(keep),'of',len(rows),'with words, of',len(names))
