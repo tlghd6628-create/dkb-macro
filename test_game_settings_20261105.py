@@ -42,6 +42,20 @@ class Reading(unittest.TestCase):
   self.assertEqual([r['label'] for r in found],['카메라 흔들림']);self.assertEqual([o['text'] for o in found[0]['options']],['사용 안함','사용'])
  def test_resolution_stays_an_option(self):
   self.assertEqual([o['text'] for o in g.panel_rows([word('해상도',300),word('1366×768',900)])[0]['options']],['1366×768'])
+ def test_a_time_is_a_choice_but_a_lone_number_is_not(self):
+  self.assertEqual([o['text'] for o in g.panel_rows([word('절전모드 진입',300),word('사용 안 함',680),word('5분',850),word('10분',1030),word('30분',1210),word('100%',1250)])[0]['options']],['사용 안 함','5분','10분','30분'])
+ def test_sleep_row_is_wanted_off(self):
+  self.assertEqual(g.WANTED[('기능','편의')],(('절전모드 진입','사용 안 함'),))
+ def test_a_new_wanted_row_asks_again_the_same_day(self):
+  import json,tempfile
+  from pathlib import Path
+  with tempfile.TemporaryDirectory() as root:
+   (Path(root)/'settings').mkdir()
+   record=Path(root)/'settings/owner-game-settings.json'
+   record.write_text(json.dumps({'date':'2026-11-06'}),encoding='utf-8')
+   self.assertFalse(g.checked_today(root,'2026-11-06'))
+   record.write_text(json.dumps({'date':'2026-11-06','rows':g._wanted_rows()}),encoding='utf-8')
+   self.assertTrue(g.checked_today(root,'2026-11-06'));self.assertFalse(g.checked_today(root,'2026-11-07'))
  def test_lighter_pill_is_the_chosen_one(self):
   real=np.full((200,1400,3),30,np.uint8);a=word('사용 안함',700);b=word('사용',1000)
   real[90:110,640:760]=90

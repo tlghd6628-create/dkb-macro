@@ -20,6 +20,8 @@ WANTED={
         ('그림자 표시','켜기'),('물 반사 효과','켜기'),('3D 객체 아웃라인 효과','켜기'),('렌더 스케일','높음'),
         ('후처리 효과','사용'),('SSAO','사용'),('DOF','사용'),
     ),
+    # The game asleep hides everything the program reads, so it never goes there by itself.
+    ('기능','편의'):(('절전모드 진입','사용 안 함'),),
 }
 RESOLUTION_WORD=re.compile(r'\d{3,4}\s*[xX×]\s*\d{3,4}')
 LABEL_END=580   # real x: labels are left of this, options right of it
@@ -33,6 +35,13 @@ def _has_word(value):
     return len(re.findall(r'[가-힣A-Za-z]',value))>=2
 
 
+MINUTES=re.compile(r'\d+\s*분')
+
+def _is_option(value):
+    """A word, a resolution, or a time such as 5분, which is one letter and still a choice."""
+    return _has_word(value) or bool(RESOLUTION_WORD.search(value)) or bool(MINUTES.fullmatch(text.clean(value)))
+
+
 def similarity(a,b):
     a,b=text.clean(a),text.clean(b)
     return 1. if a==b else SequenceMatcher(None,a,b).ratio()
@@ -41,7 +50,7 @@ def similarity(a,b):
 def panel_rows(rows):
     """Rows of the settings panel: label, its height and its option words. A label and its options share a height."""
     labels=[r for r in rows if r['rx']<LABEL_END and r['bounds'][0]>=190 and _has_word(r['text'])]
-    options=[r for r in rows if r['bounds'][0]>=LABEL_END and (_has_word(r['text']) or RESOLUTION_WORD.search(r['text']))]
+    options=[r for r in rows if r['bounds'][0]>=LABEL_END and _is_option(r['text'])]
     out=[]
     for label in labels:
         here=[o for o in options if abs(o['ry']-label['ry'])<=ROW_SLACK]
@@ -59,7 +68,7 @@ def _pill_brightness(real,word):
 
 def chosen(real,row):
     """The option word that is on, or None when the difference between them is not clear."""
-    words=[o for o in row['options'] if _has_word(o['text'])]
+    words=[o for o in row['options'] if _has_word(o['text']) or MINUTES.fullmatch(text.clean(o['text']))]
     if len(words)<2:return None
     row=dict(row,options=words)
     values=sorted(((_pill_brightness(real,o),i) for i,o in enumerate(row['options'])),reverse=True)
@@ -197,8 +206,15 @@ def _record(root):
     return Path(root)/'settings/owner-game-settings.json'
 
 
+def _wanted_rows():
+    """What was checked: a row added to WANTED is asked at the next start, not only tomorrow."""
+    return sorted(label for rows in WANTED.values() for label,_ in rows)
+
+
 def checked_today(root,today=None):
-    try:return json.loads(_record(root).read_text(encoding='utf-8')).get('date')==(today or time.strftime('%Y-%m-%d'))
+    try:
+        seen=json.loads(_record(root).read_text(encoding='utf-8'))
+        return seen.get('date')==(today or time.strftime('%Y-%m-%d')) and seen.get('rows')==_wanted_rows()
     except (OSError,ValueError,AttributeError):return False
 
 
@@ -213,5 +229,5 @@ def ensure_once(adapter,context,inputs):
         LOG.warning('게임 설정 확인 중단 · %s',str(exc)[:120]);return
     LOG.info('게임 설정 확인 · 변경 %d개%s',len(changed),' · '+', '.join(changed) if changed else '')
     if failed:LOG.warning('게임 설정 미확인 · %s',', '.join(failed));return
-    try:_record(root).write_text(json.dumps({'date':time.strftime('%Y-%m-%d')}),encoding='utf-8')
+    try:_record(root).write_text(json.dumps({'date':time.strftime('%Y-%m-%d'),'rows':_wanted_rows()},ensure_ascii=False),encoding='utf-8')
     except OSError as exc:LOG.warning('게임 설정 확인 기록 저장 보류 · %s',exc)
