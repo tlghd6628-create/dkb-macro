@@ -19,7 +19,10 @@ def reconcile(root,journal,current,*,character,scope,guard,refresh_current=None)
      or any(ch not in '0123456789abcdef' for ch in operation) or type(before) is not int or not 1<=quantity<=before
      or type(at) not in (int,float) or not math.isfinite(at)):
   raise Hold('검증된 기운 수령 요청 확인 필요')
- if not proof(current) or current.get('boxes')!=before-quantity:raise Hold('현재 상자 잔량 두 화면 확인 필요')
+ # The saved frames below prove the claim's own fall in the box count. Boxes received since then only add to it,
+ # and requiring the old count held this record for hours while quests paid out more boxes (11-05).
+ boxes_now=current.get('boxes') if isinstance(current,dict) else None
+ if not proof(current) or type(boxes_now) is not int or boxes_now<before-quantity:raise Hold('현재 상자 잔량 두 화면 확인 필요 · 현재 %s · 기대 %s 이상'%(boxes_now,before-quantity))
  directory=Path(root)/'logs'/'energy-claim-evidence'
  try:folders=sorted((p for p in directory.iterdir() if p.is_dir()),key=lambda p:p.name)
  except OSError as exc:raise Hold('수령 자료 폴더 확인 필요') from exc
@@ -59,7 +62,7 @@ def reconcile(root,journal,current,*,character,scope,guard,refresh_current=None)
  if len(details)<2:raise Hold('수령 후 상자 잔량 두 화면 확인 필요')
  picked=[frames[i] for i in (first,second,details[0],details[1])]
  if callable(refresh_current):current=refresh_current()
- if (guard() is not True or not proof(current) or current.get('boxes')!=before-quantity
+ if (guard() is not True or not proof(current) or current.get('boxes')<before-quantity
      or set(ids)&set(current['frame_ids'])):raise Hold('현재 캐릭터 또는 화면 갱신 필요')
  again=journal.read()
  if again.get('pending')!=pending:raise Hold('수령 기록 변경')

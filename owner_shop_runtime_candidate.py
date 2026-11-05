@@ -113,6 +113,14 @@ def _coin_like(frame,y):
  patch=frame[y-7:y+5,49:62].astype(int);r,g,b=patch[...,0],patch[...,1],patch[...,2]
  return float(((r>g)&(g>b)&(r-b>40)&(r>120)).mean())>=.10
 
+def _sold_out(frame,y):
+ """The grey 구매 불가 label over the icon of the row whose price line is at y."""
+ import cv2
+ from owner_remote_potion_limit_candidate import _asset
+ patch=frame[max(0,y-10):y+12,6:48];needle=_asset('unavailable')
+ if patch.shape[0]<needle.shape[0] or patch.shape[1]<needle.shape[1]:return False
+ return float(cv2.matchTemplate(patch,needle,cv2.TM_CCOEFF_NORMED).max())>=.92
+
 def _same_patch(frame,sample,box):
  import cv2
  x,y,w,h=box;patch=frame[y:y+h,x:x+w]
@@ -162,7 +170,10 @@ def _read_quote(ui,item):
  # Weekly and daily rows show (used/limit); the potion rows show available/maximum.
  kind,used=('observed_weekly_quote',first_number) if bracketed[0] else ('observed_available_quote',limit-first_number)
  # A row that has used its limit is greyed out, and there is nothing left to buy from it.
- if limit-used>0 and not all(_coin_like(frame,y) for frame in frames):raise Hold('엽전 가격 표시 확인 필요')
+ if limit-used>0 and not all(_coin_like(frame,y) for frame in frames):
+  # The count can still leave room while the row says 구매 불가 (강인 on pc1, 11-05). The row is the answer.
+  if not all(_sold_out(frame,y) for frame in frames):raise Hold('엽전 가격 표시 확인 필요')
+  used=limit
  box=(44,y-22,121,14);samples=[frame[box[1]:box[1]+14,44:165].copy() for frame in frames]
  return {'name':item,'click_y':y-13,'row_proof':lambda frame:all(_same_patch(frame,sample,box) for sample in samples),
          'currency':'엽전','unit_price':values[0],'used':used,'limit':limit,'remaining':limit-used,'kind':kind}

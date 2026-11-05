@@ -450,7 +450,7 @@ def _capture_extra_hold(service,root,phase,reason):
     except (OSError,ValueError,TypeError,AttributeError):pass
 
 
-EXTRA_ITEMS_PER_PASS=8;EXTRA_PASS_SECONDS=120
+EXTRA_ITEMS_PER_PASS=12;EXTRA_PASS_SECONDS=120  # 11 worn slots; 8 never reached the last three
 
 def wrap_extras_decorator(original_decorator,identity_resolver,extra_readers_factory=None,*,clock=None):
     """Keep custom targets from falling through to the native bulk extras.

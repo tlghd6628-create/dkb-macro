@@ -392,16 +392,25 @@ def tab_source(service,context,identity,targets,kind,tab):
     source=Observer(service,context,identity,_TabNative(native),None,None)
     # The list slides in after the tab changes. Read it once two frames agree.
     def shape(rows):return [(r.get('index'),r.get('grade'),r.get('equipped'),r.get('equipped_state')) for r in rows]
-    first=second=None;rows=[]
-    for _ in range(15):
-        _,_,first=source.capture();context.wait(.2);_,_,second=source.capture()
-        rows=source.items(second)
-        if tab_selected(first,kind) and tab_selected(second,kind) and shape(source.items(first))==shape(rows):break
-    else:
-        return None
     grades={'흰':'일반','파랑':'희귀','보라':'영웅'}
+    for attempt in range(3):
+        first=second=None;rows=[]
+        for _ in range(15):
+            _,_,first=source.capture();context.wait(.2);_,_,second=source.capture()
+            rows=source.items(second)
+            if tab_selected(first,kind) and tab_selected(second,kind) and shape(source.items(first))==shape(rows):break
+        else:
+            return None
+        selected=native._growth_selected_slot(second,rows)
+        if selected is None:break
+        # A +0 item selected on the enhance tab comes along, and the list narrows to that item and its duplicates:
+        # '착용 0칸' and no awakening at all (13:18, 13:34). Pressing the selected tile clears it. Selection only.
+        row=next((r for r in rows if r.get('index')==selected),None)
+        if row is None or attempt==2:break
+        slot=row['slot'];x,y=native._click_xy(slot)
+        context.checkpoint();service.check()
+        service.click_hit((x,y,(slot['cell_x'],slot['cell_y'],slot['cell_x']+slot['cell_w'],slot['cell_y']+slot['cell_h'])));context.wait(.8)
     earlier={r.get('index'):r for r in source.items(first)}
-    selected=native._growth_selected_slot(second,rows)
     _report(service,'장비 %s 목록 · 착용 %d칸 · 이번에 본 칸 %s'%(kind,sum(r.get('equipped') is True for r in rows),sorted(done)))
     def wanted(row):
         old=earlier.get(row.get('index'))
@@ -445,6 +454,12 @@ def factory(service,context,identity,targets,kind,*,source=None,stage_reader=rea
         if not isinstance(ticket,dict) or targets.get(ticket.get('grade'),{}).get(goal,0)<1:
             cleanup();return None
         context.checkpoint();service.check();before=service.capture()
+        # Once an item is selected the awaken list shows it and its unworn duplicates. Alone, it has no material.
+        # Reading its stage anyway cost 9 s per item, 65 s per visit (15:15).
+        if kind=='awaken' and skip is False and len(source.items(before))==1:
+            from owner_gear_native_install_candidate import _report
+            _report(service,'장비 각성 재료 없음 · 칸=%s · 동일 장비 없음'%ticket['index'])
+            cleanup();return skip
         # A prior extra may already have selected this same item. Comparison
         # uses its known centre, not a hidden selected-cell E/grade badge.
         probe=ExtraObserver(source,kind,stage_reader=stage_reader)
