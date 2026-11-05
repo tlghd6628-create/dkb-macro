@@ -164,7 +164,8 @@ def _real_quote(ui,item):
  a,b=found
  if any(a[key]!=b[key] for key in ('price','first','limit','bracketed','sold_out')):raise Pending('상점 목록 두 화면 확인 필요')
  limit,first=a['limit'],a['first']
- if limit==0 or first>limit:raise Pending('구매 수량 판독 확인 필요')
+ # A row saying 구매 불가 can hold over its limit (구매 가능 320/250), and is simply used up.
+ if limit==0 or (first>limit and not a['sold_out']):raise Pending('구매 수량 판독 확인 필요')
  kind,used=('observed_weekly_quote',first) if a['bracketed'] else ('observed_available_quote',limit-first)
  if a['sold_out']:used=limit
  # The row's name line, in the 897x479 terms the buying steps click and compare in.
@@ -235,9 +236,24 @@ def popup_from_words(rows,item):
  return named,number('가격'),number('개수')
 
 
+REAL_POPUP_TITLE=(600,252,180,36);REAL_CART_LABEL=(430,618,240,46)
+
+def _quantity_shown(frame):
+ """The quantity popup's title: its words on the real screen, the old picture otherwise."""
+ if getattr(frame,'hi',None) is None:return _asset_match(frame,'quantity-title',TITLE)
+ from owner_text import find,read
+ return bool(find(read(None,frame,REAL_POPUP_TITLE),'수량 입력'))
+
+def _cart_bar(frame):
+ """The cart bar is on screen. Its picture on the old frame also proves it is empty; on the real screen the label says
+ it is there, and every caller reads a total of 0 for the rest."""
+ if getattr(frame,'hi',None) is None:return _asset_match(frame,'cart-empty',(330,315,242,36))
+ from owner_text import find,read
+ return bool(find(read(None,frame,REAL_CART_LABEL),'합계'))
+
 def _popup(ui,price,item):
  """Owned count and a proof of this popup, after reading its name and price from two frames."""
- def title(frame):return _asset_match(frame,'quantity-title',TITLE)
+ title=_quantity_shown
  if getattr(ui.frame(),'hi',None) is not None:
   from owner_text import read
   ui.wait(title,seconds=5)
@@ -298,9 +314,8 @@ def _total(ui):
 
 def _find_quote(ui,item):
  """Bounded list-only navigation; an absent or moving row never buys."""
- from owner_membership import hit
- def list_proof(frame):
-  return hit(frame,'remote-shop-title',(35,4,110,30)) is not None and _asset_match(frame,'cart-empty',(330,315,242,36))
+ from owner_membership import shop_title
+ def list_proof(frame):return shop_title(frame) and _cart_bar(frame)
  if not _paired(ui,list_proof) or _total(ui)!=0:raise Hold('빈 상점 목록 확인 필요')
  def visible():
   # The list keeps gliding after a drag, so a page that does not agree yet is read again.
@@ -390,13 +405,12 @@ class _ShopReached(BaseException):
 def _open_town_shop(adapter,context,inputs):
  """Reuse original town return and merchant detection; require shop header."""
  from owner_skill_ui import SkillUI
- from owner_membership import hit
+ from owner_membership import shop_title as shop
  from project_adapter.town_services import TownServices
  LOG.info('잡화상점 이동 · 마을 복귀 시작')
  if adapter.run_town_return(context,inputs) is False:raise Hold('잡화상점 마을 복귀 미확인')
  context.checkpoint();LOG.info('잡화상점 이동 · 마을 복귀 처리 종료 · 상인 확인')
  ui=SkillUI(adapter,context,inputs)
- def shop(frame):return hit(frame,'remote-shop-title',(35,4,110,30)) is not None
  if _paired(ui,shop):return ui
  # The merchant is an icon at a fixed spot on a map centred on the character, so it only matches right after a
  # return, and the native potion path retries that up to five times. Ride that path and leave at the first shop button.
@@ -475,7 +489,7 @@ def _buy_one(adapter,context,inputs,item,shop):
  affordable=(before['lower']-reserve)//unit
  if affordable<=0:return {'status':'reserve_reached','item':item}
  count=min(wanted,quote['remaining'],affordable)
- if _total(ui)!=0 or not _paired(ui,lambda f:_asset_match(f,'cart-empty',(330,315,242,36))):
+ if _total(ui)!=0 or not _paired(ui,_cart_bar):
   raise Hold('기존 장바구니가 비어 있지 않거나 확인되지 않음')
  ui.click(110,quote['click_y'],lambda f:guard() and quote['row_proof'](f))
  owned,popup_proof=_popup(ui,unit,item);adapter._owner_shop_popup_proof=popup_proof
@@ -484,7 +498,7 @@ def _buy_one(adapter,context,inputs,item,shop):
   for _ in range(count-1):ui.click(*ADD_ONE,lambda f:guard() and popup_proof(f))
  ui.click(*POPUP_CONFIRM,lambda f:guard() and popup_proof(f))
  adapter._owner_shop_popup_proof=None
- ui.wait(lambda f:not _asset_match(f,'quantity-title',TITLE),seconds=5)
+ ui.wait(lambda f:not _quantity_shown(f),seconds=5)
  # The popup's own limit can stop short of the count, so the cart says how many.
  total=_total(ui);quantity=total//unit
  if total%unit or not 1<=quantity<=count:raise Hold('장바구니 합계 불일치')
@@ -510,7 +524,7 @@ def _buy_one(adapter,context,inputs,item,shop):
   # Exit only the proved quantity popup; this is not a purchase action.
   ui.click(*POPUP_CANCEL,proof)
   adapter._owner_shop_popup_proof=None
-  ui.wait(lambda f:not _asset_match(f,'quantity-title',TITLE),seconds=5)
+  ui.wait(lambda f:not _quantity_shown(f),seconds=5)
  _confirm_intent(journal,entry,owned_after,after)
  done=(after_quote['remaining']==0 or (chosen[0]['mode']=='quantity' and bought+quantity>=chosen[0]['quantity']))
  return {'status':'confirmed','quantity':quantity,'item':item,'finished':done}
@@ -521,15 +535,14 @@ def _close_known_shop(adapter,context,inputs):
  adapter._owner_shop_entered=False
  if getattr(getattr(context,'stop',None),'is_set',lambda:False)():return
  from owner_skill_ui import SkillUI
- from owner_membership import hit
+ from owner_membership import shop_title as shop
  ui=SkillUI(adapter,context,inputs)
- def quantity(frame):return _asset_match(frame,'quantity-title',TITLE)
+ quantity=_quantity_shown
  # Cancel buys nothing and needs only the popup itself to be there.
  if _paired(ui,quantity):
   ui.click(*POPUP_CANCEL,quantity)
   ui.wait(lambda f:not quantity(f),seconds=5)
  adapter._owner_shop_popup_proof=None
- def shop(frame):return hit(frame,'remote-shop-title',(35,4,110,30)) is not None
  if not _paired(ui,shop):raise ShopNavigationError('상점 종료 보류 · 화면을 확인해 주세요')
  ui.click(22,19,shop)
  ui.wait(lambda f:ui.normal(),seconds=5)

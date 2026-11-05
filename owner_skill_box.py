@@ -14,6 +14,7 @@ from owner_skill_goal import Pending
 LOG=logging.getLogger('project_gui.DKB')
 ROWS=(395,155,145,155);CLOSE=(510,106);DECIDE=(448,357)
 MANUALS=('절명','연타','강타','척살','저격','주술','파멸','강인','기동','기만','헌신','제압')
+REAL_GRID=(1062,130,1320,768);REAL_CELL_SCORE=.75
 
 
 @lru_cache(maxsize=4)
@@ -26,9 +27,21 @@ def on_dialog(frame):
     return float(cv2.matchTemplate(frame[100:130,400:500],reference('choice-title'),cv2.TM_CCOEFF_NORMED).max())>=.95
 
 
+def _real_cell(real,asset,layout):
+    """A real-size cut over the whole bag grid. Across 156 saved 1366x768 frames a box on screen measured .83 to 1.0
+    and the best other tile .48; the old cut, enlarged or not, misses the 요령서 box."""
+    from owner_hd import logical_of
+    needle=reference(asset+'-real');h,w=needle.shape[:2];x0,y0,x1,y1=REAL_GRID
+    result=cv2.matchTemplate(real[y0:y1,x0:x1],needle,cv2.TM_CCOEFF_NORMED)
+    y,x=np.unravel_index(result.argmax(),result.shape)
+    return logical_of(x0+int(x)+w//2,y0+int(y)+h//2,layout) if float(result.max())>=REAL_CELL_SCORE else None
+
+
 def box_cell(frame,asset='choice-box'):
     """Centre of the box in the bag grid, from the part of its tile the count never covers."""
     if getattr(frame,'shape',None)!=(479,897,3):return None
+    real=getattr(frame,'hi',None)
+    if real is not None:return _real_cell(np.asarray(real),asset,getattr(frame,'layout',None))
     result=cv2.matchTemplate(frame[85:430,712:858],reference(asset),cv2.TM_CCOEFF_NORMED)
     y,x=np.unravel_index(result.argmax(),result.shape)
     return (712+int(x)+14,85+int(y)+15) if float(result.max())>=.90 else None

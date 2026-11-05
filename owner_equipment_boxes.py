@@ -195,6 +195,8 @@ def install(gui):
             return True
         # The native routine opens the inventory itself. Pressing its button on an open panel closes it.
         close_inventory(service);context.wait(.3)
+        # The native line afterwards says 5종 미감지 for the whole list; only these are real, the rest hold places.
+        LOG.info('인벤토리에서 찾는 상자 · %s',','.join(items))
         previous=(inv.INVENTORY_USE_ITEMS,inv.RARE_ARMOR_PRIORITY,inv.RARE_ACCESSORY_PRIORITY)
         inv.INVENTORY_USE_ITEMS=native_items(items);inv.RARE_ARMOR_PRIORITY=armor;inv.RARE_ACCESSORY_PRIORITY=accessories
         try:result=ordinary(adapter,context,inputs)

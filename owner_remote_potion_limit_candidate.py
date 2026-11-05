@@ -36,10 +36,28 @@ def _screen(frame,tier):
     red=((hsv[:,:,0]<12)|(hsv[:,:,0]>165))&(hsv[:,:,1]>60)&(hsv[:,:,2]>28)
     return int(red.sum())>=10
 
+REAL_LIST=(10,90,300,678)
+
+def tier_words(frame,tier):
+    """(first number, second number, says 구매 불가) from this tier's row on the real screen, or None when the row is not
+    all there. Everything is what stands within one row height under the row's name."""
+    from owner_text import clean,read,shows_title
+    if tier not in ('1단물약','2단물약','3단물약') or not shows_title(frame,'잡화 상점'):return None
+    rows=read(None,frame,REAL_LIST,scale=3)
+    names=[r for r in rows if clean(r['text']).startswith(tier[:2]) and '물약' in clean(r['text'])]
+    if len(names)!=1:return None
+    top=names[0]['ry'];below=[r for r in rows if top<r['ry']<=top+60]
+    counts=[m for m in (re.search(r'(\d{1,6})\s*/\s*(\d{1,6})',str(r['text'])) for r in below) if m]
+    if len(counts)!=1:return None
+    return int(counts[0][1]),int(counts[0][2]),any(clean(r['text']).startswith('구매불가') for r in below)
+
 def sold_out(frame,tier):
     """The town merchant's row for this tier says 구매 불가: the weekly amount is used up, so there is nothing to buy.
     The label is the same in every row, one row pitch apart."""
     from owner_membership import hit
+    if getattr(frame,'hi',None) is not None:
+        words=tier_words(frame,tier)
+        return bool(words and words[2])
     if tier not in ('1단물약','2단물약','3단물약') or getattr(frame,'shape',None)!=(479,897,3):return False
     if not hit(frame,'remote-shop-title',(35,4,110,30),.95):return False
     return _fixed(frame,'unavailable',(9,81+round(46.14*'123'.index(tier[0])),35,13))
@@ -59,6 +77,12 @@ def observed_full(ui,tier):
     from owner_skill_goal import Pending
     try:
         first=ui.frame()
+        if getattr(first,'hi',None) is not None:
+            if tier!='1단물약':return None
+            ui.context.wait(.12);words=[tier_words(frame,tier) for frame in (first,ui.frame())]
+            if None in words or words[0]!=words[1]:return None
+            held,limit,sold=words[0]
+            return held if sold and 0<held==limit<=100000 else None
         if not _screen(first,tier):return None
         ui.context.wait(.12);second=ui.frame()
         if not _screen(second,tier):return None

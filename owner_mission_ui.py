@@ -44,6 +44,18 @@ def markers(frame,name,x=45,width=24):
    if all(abs(center-old)>15 for old in points):points.append(center)
  return sorted(points)
 
+def list_rows(ui,frame,name):
+ """Quest rows by their [tag] title on a real frame, plus the icon picture. On a saved 1366 main list the icon
+ found 5 of 8 rows and missed the selected 쉬어가는 길, so a waiting step was not read again."""
+ from owner_story_groups import group_rows,row_words
+ points=markers(frame,name)
+ words=row_words(ui,frame)
+ if not words:return points
+ roots=[r['y'] for r in group_rows(frame)]
+ for row in words:
+  if row['score']>=.60 and re.match(r'\s*\[[^\]]*\]',row['text']) and all(abs(row['y']-y)>6 for y in roots) and all(abs(row['y']-y)>15 for y in points):points.append(row['y'])
+ return sorted(points)
+
 def row_signature(frame,y):
  import cv2,numpy as np
  patch=frame[max(96,y-9):min(438,y+10),70:480]
@@ -205,7 +217,8 @@ class MissionUI(SkillUI):
  def startable_main(self,frame,y):
   """A new chapter's first step stays grey until started, though the game has selected it and offers AUTO.
   A step locked behind another quest shows the same button; its condition text still blocks it in _selected."""
-  if selected_center(frame)!=y:return False
+  center=selected_center(frame)
+  if center is None or abs(center-y)>5:return False
   if auto_button_hit(self.service.detector,frame):return True
   return any('자동진행' in clean(row['text']) and row['score']>=.88 for row in self.rows((674,432,205,40)))
  def selected(self,mode,y,book,power):
@@ -238,7 +251,8 @@ class MissionUI(SkillUI):
   has_prereq=any(s in clean(text) for s in ('선행','임무완료후','임무를완료'))
   # '[4장] 쉬어가는 길' only asks for a side story to be finished; AUTO on it stood still for minutes.
   side=side_story_gate(text)
-  if side:has_prereq=True;prereq=side
+  # The same words can stay on the row after that story is done, which must not hold the step for good.
+  if side and not book.story_finished(side):has_prereq=True;prereq=side
   gated=required is not None and (power is None or power<required)
   objective=clean(text).split('실행조건')[0].split('완료보상')[0].replace('임무목표','')
   objective=re.sub(r'[0-9,]+/[0-9,]+','',objective)
@@ -332,7 +346,7 @@ class MissionUI(SkillUI):
    capacity=accepted_quota(self) if fill else None
    for page in range(100):
     self.context.checkpoint();frame=self.frame()
-    leaves=markers(frame,'leaf-main' if mode=='main_quest' else 'leaf-story')
+    leaves=list_rows(self,frame,'leaf-main' if mode=='main_quest' else 'leaf-story')
     for y in leaves:
      if y<108 or y>424:continue
      import numpy as np

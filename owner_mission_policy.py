@@ -1,9 +1,16 @@
 """Durable individual quest decisions, independent of game input."""
 from pathlib import Path
 import copy,hashlib,json,math,re,time
+from difflib import SequenceMatcher
 from owner_timetable import save
 
 def normalize(title):return re.sub(r'[\s·.,]+','',str(title))
+def hangul(title):return re.sub('[^\uac00-\ud7a3]','',re.sub(r'^\s*\[[^\]]+\]','',str(title)))
+def same_step(a,b):
+    """Same title in another reading: chapter tag and step digits must agree."""
+    a,b=str(a),str(b)
+    if re.findall(r'\[[^\]]+\]',normalize(a))!=re.findall(r'\[[^\]]+\]',normalize(b)) or re.findall(r'\d+',a)!=re.findall(r'\d+',b):return False
+    return SequenceMatcher(None,normalize(a),normalize(b)).ratio()>=.88
 def quest_key(mode,title,objective=''):return mode+':'+hashlib.sha256((normalize(title)+'|'+normalize(objective)).encode()).hexdigest()[:24]
 
 class QuestBook:
@@ -132,8 +139,22 @@ class QuestBook:
     def prerequisite_proved(self,key):
         # Called only after reading the selected quest detail without the
         # prior prerequisite condition, not because a timer elapsed.
-        row=self.item['quests'][key]
-        if row.get('block',{}).get('reason') in ('prerequisite','condition'):row.pop('block',None);row['condition_recovered']=True;self.commit()
+        row=self.item['quests'][key];opened=False
+        if row.get('block',{}).get('reason') in ('prerequisite','condition'):row.pop('block',None);opened=True
+        # The objective is part of a step's key, so a main step whose wait ended comes back under a new key
+        # and the old row stays held. The new row must still count as reopened, or it waits behind the story.
+        if row.get('mode')=='main_quest':
+            for other,entry in self.item['quests'].items():
+                block=entry.get('block',{})
+                if other==key or entry.get('mode')!='main_quest' or entry.get('completed') or block.get('functional_hold'):continue
+                if block.get('reason') in ('prerequisite','condition') and same_step(row.get('title'),entry.get('title')):
+                    entry.pop('block');opened=True
+        if opened:row['condition_recovered']=True;self.commit()
+    def story_finished(self,name):
+        """Has the side story a main step names been seen finished? Its row can read 방랑! 도사, so close names count."""
+        want=hangul(name)
+        if len(want)<4:return False
+        return any(r.get('mode')=='sub_quest' and r.get('completed') and SequenceMatcher(None,want,hangul(r.get('title'))).ratio()>=.86 for r in self.item['quests'].values())
 
 def movement_distance(rows):
     values=set()

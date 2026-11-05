@@ -83,6 +83,12 @@ def hit(frame,name,box,threshold=.94):
  hh,ww=needle.shape[:2];l,t=x+p[0],y+p[1]
  return l+ww//2,t+hh//2,(l,t,l+ww,t+hh)
 
+def shop_title(frame):
+ """The shop's title, by its words on the real screen."""
+ from owner_text import shows_title
+ words=shows_title(frame,'잡화 상점')
+ return hit(frame,'remote-shop-title',(35,4,110,30)) is not None if words is None else words
+
 def remote_shop_screen(frame):
  """Independent foreground title and the existing exact potion-list label."""
  import numpy as np

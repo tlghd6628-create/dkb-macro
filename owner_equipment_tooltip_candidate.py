@@ -88,10 +88,17 @@ def worn_detail_frame(frame,engine):
  if grade not in ('일반','희귀','영웅') or kind not in PART_MAP or button!='장착해제':raise Hold('장착 부위·등급·버튼 확인 필요')
  return {'slot':PART_MAP[kind],'grade':grade,'item':_item_token(frame[97:115,390:502],frame[128:148,434:454].copy())}
 
+def window_open(frame):
+ """Any X of a single or paired item window on the real screen. Plain frames have none to see."""
+ from owner_real_marks import close_at,real_of
+ real=real_of(frame)
+ return real is not None and any(close_at(real,box,rule='center') for box in ((502,99,16,13),(424,99,16,13),(580,99,16,13)))
+
 def _part_name(engine,frame,box):
  """The glyph 찌 reads near .70 and sometimes as 짜, and a lone 검 near .33. Only an exact part name
  passes the caller's check, so a weak reading can only say 'a different part', as 검 beside a fan is."""
- text=_ocr(engine,frame,box,minimum=.30)
+ # The info mark beside the left pane's part reads as a stray ㅇ, and 반지ㅇ against 반지 held every ring upgrade (19:12).
+ text=re.sub(r'[^가-힣]','',_ocr(engine,frame,box,minimum=.30))
  return '팔찌' if text in ('팔짜','팔째','팔쩌') else text
 
 def initial_candidate_frame(frame,engine):
@@ -443,12 +450,12 @@ class Port:
    first=find(a);second=find(b,first[2] if first else None)
    if inventory_parts(a)!=(True,True) or inventory_parts(b)!=(True,True):raise Hold('장비 인벤토리 화면 확인 필요')
    if first is None and second is None:return None
-   if first and first==second:break
+   if first and first==second:
+    final,_=self._frame()
+    if find(final,second[2])==second:break
    self.context.wait(.3)
   else:raise Hold('장착 후보 두 화면 확인 필요 · %s · %s'%(first and first[2][:2],second and second[2][:2]))
   self.before_inventory=(a,b)
-  final,_=self._frame()
-  if find(final,second[2])!=second:raise Hold('장착 후보 선택 직전 변경')
   self.context.checkpoint();self.service.check()
   if self.identity_guard() is not True:raise Hold('장비 후보 선택 전 캐릭터 변경')
   # A selected tile becomes the game's own 장착 button, so a second press equips whatever is on it, with no check at
@@ -464,10 +471,10 @@ class Port:
   # Opening this screen is not proof of either item's grade or slot.
   return second
  def tile_armed(self,frame,hit):
-  from owner_real_marks import close_at,real_box,real_of
+  from owner_real_marks import real_box,real_of
   real=real_of(frame)
   if real is None:return False
-  if any(close_at(real,box) for box in ((502,99,16,13),(424,99,16,13),(580,99,16,13))):return True
+  if window_open(frame):return True
   from owner_text import clean,read_area
   x1,y1,x2,y2=hit[2];x,y,w,h=real_box((x1,y1,x2-x1,y2-y1),rule='right')
   return any('장착' in clean(row['text']) for row in read_area(self.service.adapter.project.root,real[y:y+h,x:x+w],minimum=.5))
@@ -566,7 +573,7 @@ class Port:
            and _badge(frame,420,116,445,135)<.90
            and not same(frame,self.last[0]))
   self.context.wait(.2);after,_=self._frame();self.context.wait(.12);after2,_=self._frame()
-  if not inventory_only(after) or not inventory_only(after2):raise Hold('장비 비교창 종료 후 인벤토리 상태 미확인')
+  if not inventory_only(after) or not inventory_only(after2) or window_open(after) or window_open(after2):raise Hold('장비 비교창 종료 후 인벤토리 상태 미확인')
   self.last=None
   return 'inventory_restored'
  def close_unresolved_known(self):
@@ -602,6 +609,9 @@ class Port:
   self.context.checkpoint();self.service.check();self.service.click_hit((588,106,(581,99,595,113)))
   self.context.wait(.2);x,_=self._frame();self.context.wait(.12);y,_=self._frame()
   if inventory_parts(x)!=(True,True) or inventory_parts(y)!=(True,True) or not equipment_tab_selected(x) or not equipment_tab_selected(y):raise Hold('장비창 종료 후 인벤토리 미확인')
+  # The bag behind a window passes everything above. An X that missed left the window open, and the next press landed
+  # on an armed tile: that is how the sword went on (17:55).
+  if window_open(x) or window_open(y):raise Hold('장비창 종료 후 창이 남음')
   return 'inventory_restored'
  def confirm_worn_detail(self):
   """Confirm after a caller has visibly opened the observed worn detail."""
