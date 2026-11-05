@@ -612,6 +612,16 @@ def ensure_size(hwnd,context=None):
     raise RuntimeError('창 크기 조절 실패: %s (기준 %s)'%(_physical(hwnd),REAL))
 
 
+def _trace_click(logical,real):
+    """Where clicks really go, only while the file assets/hd-clicks.txt exists."""
+    path=STORE.parent/'hd-clicks.txt'
+    if path.exists():
+        try:
+            with path.open('a',encoding='utf-8') as out:
+                out.write('%s %s -> %s map=%s\n'%(time.strftime('%H:%M:%S'),logical,real,getattr(_current,'name',None)))
+        except OSError:pass
+
+
 def install_window():
     """Safe to call again. The rest of the program keeps seeing 897x479."""
     import win32gui,window_resolution,mdt_owned_capture
@@ -635,7 +645,8 @@ def install_window():
     def client_to_screen(hwnd,point):
         point=tuple(point)
         if point!=(0,0) and _is_game(hwnd) and _physical(hwnd)==REAL:
-            point=to_real_point(point[0],point[1],_click_layout())
+            logical=point;point=to_real_point(point[0],point[1],_click_layout())
+            _trace_click(logical,point)
         return plain_point(hwnd,point)
     win32gui.ClientToScreen=client_to_screen
 
