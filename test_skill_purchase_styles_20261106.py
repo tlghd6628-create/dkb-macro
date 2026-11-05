@@ -18,5 +18,23 @@ class Styles(unittest.TestCase):
             self.assertEqual(g.desired_learning_ids(), {1, 3, 4, 6})
 
 
+class LearnAll(unittest.TestCase):
+    """Stand-in screen: the button shows twice, then is gone."""
+
+    def test_pressed_until_the_button_is_gone(self):
+        from types import SimpleNamespace as S
+        from owner_skill_ui import SkillUI, Pending
+        calls, shown = [], [True, True, False]
+
+        def word(text, box, minimum=.9):
+            if shown.pop(0):
+                return {'x': 1, 'y': 2}
+            raise Pending('gone')
+        ui = S(open_skills=lambda: calls.append('open'), context=S(checkpoint=lambda: None, wait=lambda s: None), word=word,
+               click=lambda x, y, proof: calls.append('button'), click_word=lambda text, box, proof, minimum=.9: calls.append(text))
+        self.assertEqual(SkillUI.learn_all(ui), 2)
+        self.assertEqual(calls, ['open', 'button', '확인', 'button', '확인'])
+
+
 if __name__ == '__main__':
     unittest.main()

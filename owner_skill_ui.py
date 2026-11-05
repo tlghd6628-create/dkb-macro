@@ -835,6 +835,18 @@ class SkillUI:
         # Legacy bulk button can learn an unapproved 강인 skill along with the
         # desired ones. Exact individual skill learning is not yet verified.
         raise Pending('선택한 도술만 배우기 확인 필요 · 전체 학습 보류')
+    def learn_all(self):
+        """Press 모두 배우기 until it is gone. Returns how many times it was pressed."""
+        self.open_skills();pressed=0
+        for _ in range(8):
+            self.context.checkpoint()
+            try:button=self.word('모두 배우기',(0,30,897,449),minimum=.85)
+            except Pending:break
+            self.click(button['x'],button['y'],skill_screen);self.context.wait(.8)
+            self.click_word('확인',(430,290,112,55),lambda f:True,minimum=.85)
+            self.context.wait(1.2);pressed+=1
+        LOG.info('도술 모두 배우기 · %d회',pressed)
+        return pressed
     def learn_one(self,sid,ledger,*,tutorial=False,coupon=False):
         """Learn exactly one authorized skill; unknown visual proof is held.
 
@@ -1122,12 +1134,9 @@ class SkillUI:
                 self.drag((117,382),(117,87),lambda f:not skill_screen(f) and not quest_screen(f))
             else:raise Pending(style+' 상점 목록 끝 확인 필요')
             self.close_known()
+        # The user's rule: after buying, 모두 배우기 on the skill tab. One by one needs an icon for each, and 27 have none.
         unavailable=[]
-        for sid in sorted((purchased|pending_learning)-owned):
-            self.context.checkpoint()
-            if str(sid) not in self.public['skills']:
-                unavailable.append(sid);continue
-            self.learn_one(sid,ledger)
+        self.learn_all()
         after=self.scan_owned()
         if not isinstance(after,set):raise Pending('도술 학습 후 목록 확인 필요')
         try:remember_verified_owned(ledger,after)
