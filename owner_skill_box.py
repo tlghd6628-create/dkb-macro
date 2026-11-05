@@ -83,7 +83,14 @@ def _open_bag(ui):
     from owner_inventory_filters import choose
     if inventory_parts(ui.frame())!=(True,True) and open_inventory_by_key(ui.service) is False:
         raise Pending('도술 상자 전 인벤토리 열기 확인 필요')
-    choose(ui.service,ui.context,'consumables');ui.context.wait(.4)
+    from owner_energy_box_runtime_candidate import Hold
+    for attempt in range(4):
+        # The tab highlight can take longer than choose() looks for, and it must not end the job.
+        try:
+            choose(ui.service,ui.context,'consumables');ui.context.wait(.4);return
+        except Hold as exc:
+            if attempt==3:raise Pending(str(exc)) from exc
+            ui.context.wait(.6)
 
 
 def _close_bag(ui):

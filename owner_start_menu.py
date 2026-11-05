@@ -4,7 +4,7 @@ from functools import lru_cache,wraps
 import logging
 LOG=logging.getLogger('project_gui.DKB')
 
-@lru_cache(maxsize=3)
+@lru_cache(maxsize=4)
 def growth_title(name='growth'):
  import numpy as np
  from PIL import Image
@@ -20,6 +20,17 @@ def idle_training(frame):
  import cv2
  return float(cv2.matchTemplate(frame[425:452,380:515],training_banner(),cv2.TM_CCOEFF_NORMED).max())>=.97
 
+def help_card(frame):
+ import cv2
+ if getattr(frame,'shape',None)!=(479,897,3):return False
+ return float(cv2.matchTemplate(frame[432:472,395:505],help_close(),cv2.TM_CCOEFF_NORMED).max())>=.95
+
+@lru_cache(maxsize=1)
+def help_close():
+ import numpy as np
+ from PIL import Image
+ return np.asarray(Image.open(Path(__file__).parent/'assets/start-menu/help-close.png').convert('RGB'))
+
 def kind(frame):
  if getattr(frame,'shape',None)!=(479,897,3):return None
  from owner_skill_ui import skill_screen,quest_screen,map_screen
@@ -31,7 +42,7 @@ def kind(frame):
  # training has no such banner, so it still goes to the existing resume path.
  if idle_training(frame):return '영기 수련'
  import cv2,numpy as np
- for source,label in (('growth','성장'),('blessing','가호'),('treatment','몽련 치료')):
+ for source,label in (('growth','성장'),('blessing','가호'),('treatment','몽련 치료'),('clan','문파')):
   title=growth_title(source);patch=frame[7:30,36:101]
   scores=cv2.matchTemplate(patch,title,cv2.TM_CCOEFF_NORMED)
   scores=np.where(np.isfinite(scores),scores,-1)
@@ -48,6 +59,13 @@ def normalize(service):
   service.context.checkpoint();service.check()
   from owner_worn_stats import popup as worn_popup
   initial=service.capture()
+  # A first visit to a menu shows a picture card that only 닫기 closes.
+  if help_card(initial):
+   service.context.wait(.12)
+   if help_card(service.capture()):
+    service.context.checkpoint();service.check()
+    service.click_hit((450,452,(420,441,480,464)));service.context.wait(.6)
+    LOG.info('시작 위치 정리 · 안내 카드 닫기');continue
   if worn_popup(initial):
    service.context.wait(.12)
    if worn_popup(service.capture()):
