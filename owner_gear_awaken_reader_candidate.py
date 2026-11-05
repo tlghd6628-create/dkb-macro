@@ -22,8 +22,22 @@ def asset_score(frame,name,box):
     if patch.shape!=ref.shape:return -1.
     return float(cv2.matchTemplate(patch,ref,cv2.TM_CCOEFF_NORMED)[0,0])
 
+REAL_LINE=(535,205,130,26);REAL_ARROW=597  # real pixels of the 각성 >>> 각성 line, and where its arrow's middle stands
+
+def real_transition(real):
+    """각성 >>> 각성 with the blue diamond on the next stage only: a plain item about to take its first awakening."""
+    from owner_text import clean,read_area
+    x,y,w,h=REAL_LINE;part=np.asarray(real)[y:y+h,x:x+w]
+    if ''.join(clean(row['text']) for row in read_area(None,part,scale=3,minimum=.5)).count('각성')!=2:return None
+    signed=part.astype(np.int16)
+    blue=(signed[:,:,2]-signed[:,:,0]>60)&(signed[:,:,2]>150)
+    arrow=REAL_ARROW-x
+    if int(blue[:,:arrow].sum())>2 or int(blue[:,arrow:].sum())<8:return None
+    return {'current':None,'next':None,'kind':'observed_awakening_line','score':1.}
+
 def read_observed_transition(frame):
     if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or frame.dtype!=np.uint8:return None
+    if getattr(frame,'hi',None) is not None:return real_transition(frame.hi)
     x1,y1,x2,y2=_BOX;patch=frame[y1:y2,x1:x2]
     if patch.shape!=(14,77,3):return None
     scores=[]
