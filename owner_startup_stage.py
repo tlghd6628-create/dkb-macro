@@ -82,6 +82,9 @@ def scene(detector,frame):
         if hud_dimmed(frame) or choice(frame):return 'unknown'
         return 'unknown' if detector.find(DUNGEON,frame,threshold=.5) or detector.find(EXIT,frame,threshold=.5) else 'field'
     from project_adapter.secret_exploration import AUTO_NAMES
+    # The menu and AUTO stay on screen behind the bag, which then passed for the field.
+    from owner_progression import inventory_parts
+    if all(inventory_parts(frame)):return 'inventory'
     if detector.find(MENU,frame,threshold=.95) and any(detector.find(n,frame,threshold=.95) for n in AUTO_NAMES):return outside()
     from owner_movement import field_hud,hud_anchor
     if field_hud(frame):return outside()
