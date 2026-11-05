@@ -31,7 +31,9 @@ def paused_hit(detector,frame):
 def press(actions,hit):
     click=getattr(actions,'click_hit',None)
     if callable(click):click(hit)
-    else:actions.click(PAUSED,hit,threshold=.90,pre_wait=.1)
+    # Two frames just proved the icon. Its own re-check at .90 can miss while it animates, and that
+    # raises through the whole run, which is too much to pay for a helper (tower TEST 11-05 14:02).
+    else:actions.click(PAUSED,hit,threshold=.90,pre_wait=.1,revalidate_template=False)
 
 def wrap(original,detector_factory):
     @wraps(original)
@@ -51,7 +53,11 @@ def wrap(original,detector_factory):
             hit=paused_hit(detector,capture())
             if hit:
                 LOG.info('자동전투 일시정지 해제')
-                press(actions,hit);context.wait(.6);context.checkpoint()
+                from biol_base.session import Cancelled
+                try:press(actions,hit)
+                except Cancelled:raise
+                except Exception as exc:LOG.warning('자동전투 일시정지 해제 입력 실패 · %s',exc)
+                context.wait(.6);context.checkpoint()
                 options.pop('frame',None)
         return original(actions,context,log,**options)
     ensure._owner_sleep_auto=True
