@@ -862,13 +862,13 @@ class SkillUI:
         ledger.event('individual_learning_intent',skill=sid,name=name)
         self.click_word('확인',(430,290,112,55),lambda f:learn_confirm_for(f,sid),minimum=.94)
         self.context.wait(1.)
+        # Only dismisses a screen that closes on any press; the learn is proved by the row going away.
+        # Its effects keep moving, so two frames rarely agree here and one reading has to do.
         for attempt in range(8):
-            try:
-                # Only dismisses a screen that closes on any press; the learn is proved by the row going away.
-                self.click_word('새로운 도술',(280,70,340,240),lambda f:True,minimum=.80);break
-            except Pending:
-                if attempt==7:raise
-                self.context.wait(.4)
+            if any(r['score']>=.80 and clean('새로운 도술') in clean(r['text']) for r in self.rows((280,70,340,240),pair=False)):
+                self.click(448,190,lambda f:True);break
+            if attempt==7:raise Pending('획득 도술 화면 확인 필요: '+name)
+            self.context.wait(.4)
         self.wait(skill_screen,seconds=8);self.context.wait(.8)
         if len(self.learn_rows())>=before:raise Pending('개별 도술 학습 후 배우기 행 감소 확인 필요: '+name)
         intents[str(sid)].update(status='confirmed',proof='learn_dialog_icon_and_learn_row_gone')
