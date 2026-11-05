@@ -99,14 +99,17 @@ def box_candidates(frame):
   # Existing native artwork differs slightly through the translucent bag.
   # Allow opening at most five plausible details, then require the unchanged
   # exact four contents / title / count / selected quantity before any claim.
-  needle=asset('box-icon-native');work=cv2.matchTemplate(grid,needle,cv2.TM_CCOEFF_NORMED)
-  if not np.isfinite(work).all():return None
-  while True:
-   _,val,_,point=cv2.minMaxLoc(work)
-   if val<.90:break
-   x,y=point;hits.append((x+710+needle.shape[1]//2,y+90+needle.shape[0]//2))
-   cv2.rectangle(work,(max(0,x-12),max(0,y-12)),(min(work.shape[1]-1,x+12),min(work.shape[0]-1,y+12)),-1,-1)
-   if len(hits)>5:return None
+  # 'material' is the 발현 재료 선택 상자 tile on the level-1 account; the native art scored .77 there.
+  for name in ('box-icon-native','box-icon-material'):
+   needle=asset(name);work=cv2.matchTemplate(grid,needle,cv2.TM_CCOEFF_NORMED)
+   if not np.isfinite(work).all():return None
+   while True:
+    _,val,_,point=cv2.minMaxLoc(work)
+    if val<.90:break
+    x,y=point;point=(x+710+needle.shape[1]//2,y+90+needle.shape[0]//2)
+    if not any(abs(point[0]-p[0])<12 and abs(point[1]-p[1])<12 for p in hits):hits.append(point)
+    cv2.rectangle(work,(max(0,x-12),max(0,y-12)),(min(work.shape[1]-1,x+12),min(work.shape[0]-1,y+12)),-1,-1)
+    if len(hits)>5:return None
  return sorted(hits,key=lambda p:(p[1],p[0]))
 
 def box_location(frame):
