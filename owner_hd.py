@@ -28,9 +28,15 @@ SIGNATURE=(48,27)
 SAME_SCREEN=.72
 SAME_SIDES=.85;BAG_SCREENS=('inventory','inv_','pc2_bag','pc2_box_detail');SIDE_COLUMNS=(11,37)  # of 48: x<316, x>=1062
 DEFAULT_SCREEN='field'
+# A window whose inside changes with its tabs looks like no measured screen, and the field map then tears it: its X
+# and its last prize moved, and a torn gold prize passed for a claimable one (11-05 17:32). Its own title or X names
+# it (1.00 on the event screen, under .5 on the other saved real screens), and all of its inside holds one anchor.
+WINDOW_MARKS={'event':('native:체크_이벤트','native:버튼_X_이벤트창')}
+WINDOW_INSIDE={'event':(157,85,740,398)}  # logical x0,y0,x1,y1
+MARK_SCORE=.9
 STORE=Path(__file__).parent/'assets/hd'
 HIT_LIFE=5.0
-_index=None;_images={};_missing=set();_layouts=None;_words=None
+_index=None;_images={};_missing=set();_layouts=None;_words=None;_marks=None
 _current=None;_last_capture=None;_hits=collections.deque(maxlen=64);_lock=threading.Lock()
 
 
@@ -150,6 +156,10 @@ def layouts():
                     row=json.loads(line);rows[row['screen']]=row  # the same screen twice: the later line wins
         except (OSError,ValueError):pass
         _layouts=[load_layout(row) for row in rows.values()]
+        for layout in _layouts:
+            if layout.name in WINDOW_INSIDE:
+                x0,y0,x1,y1=WINDOW_INSIDE[layout.name]
+                layout.grid[y0//CELL:(y1+CELL-1)//CELL,x0//CELL:(x1+CELL-1)//CELL]=RULES.index('center')
     return _layouts
 
 
@@ -163,6 +173,10 @@ def classify(real):
     """The measured screen this frame looks like, or the field map when it looks like none of them."""
     known=[l for l in layouts() if l.signature is not None and l.name!=DEFAULT_SCREEN]
     if not known:return default_layout()
+    marked=marked_window(real)
+    if marked:
+        for layout in known:
+            if layout.name==marked:return layout
     tiny=signature_of(real)
     scores=[float(np.dot(l.signature,tiny)) for l in known]
     best=int(np.argmax(scores))
@@ -172,6 +186,31 @@ def classify(real):
     sides=_side_panels(tiny)
     close=[(scores[i],l) for i,l in enumerate(known) if l.name.startswith(BAG_SCREENS) and float(np.dot(_side_panels(l.signature),sides))>=SAME_SIDES]
     return max(close,key=lambda pair:pair[0])[1] if close else default_layout()
+
+
+def _window_marks():
+    """(screen, picture, row) for each mark that has its new cut."""
+    global _marks
+    if _marks is None:
+        wanted={label:screen for screen,labels in WINDOW_MARKS.items() for label in labels}
+        _marks=[]
+        for key,row in index().items():
+            if row.get('label') in wanted:
+                try:_marks.append((wanted[row['label']],_load(key,row,False),row))
+                except OSError:pass
+    return _marks
+
+
+def marked_window(real):
+    """The screen named by a window's own mark at its own place on this real frame, or None."""
+    import cv2
+    real=np.asarray(real)
+    for screen,cut,row in _window_marks():
+        x,y=row['x'],row['y'];h,w=cut.shape[:2]
+        area=real[max(0,y-6):y+h+6,max(0,x-6):x+w+6]
+        if area.shape[0]<h or area.shape[1]<w:continue
+        if float(np.nan_to_num(cv2.matchTemplate(area,cut,cv2.TM_CCOEFF_NORMED),nan=-1).max())>=MARK_SCORE:return screen
+    return None
 
 
 def _side_panels(tiny):
@@ -235,8 +274,8 @@ def index():
 
 
 def reload_index():
-    global _index,_layouts
-    _index=None;_layouts=None;_images.clear()
+    global _index,_layouts,_marks
+    _index=None;_layouts=None;_marks=None;_images.clear()
     return index()
 
 

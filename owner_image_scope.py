@@ -141,7 +141,10 @@ def window_open(profile,key,frame):
     known=LOCAL.windows
     if key not in known:
         spec=WINDOWS[key]
-        if 'asset' in spec:
+        if key=='move_method' and getattr(frame,'hi',None) is not None:
+            from owner_movement import method_open
+            known[key]=method_open(frame)
+        elif 'asset' in spec:
             name,box=spec['asset'];known[key]=unique_peak(frame,asset(name),box,.92) is not None
         else:
             known[key]=_witnessed(profile,spec['anchors'],spec['need'],frame)
@@ -344,9 +347,25 @@ def summon_already_shown(detector,name,frame):
     if not detector.find('버튼_가호_소환_나가기',frame,threshold=.9):return None
     return (850,440,(845,435,855,445))
 
+# At 1366x768 these are found by their words and nothing else: a softer look at their pictures could take a neighbour.
+REAL_WORDS={'버튼_축지술_가운데':'teleport_word','버튼_귀환':'home_word'}
+
+def real_word_hit(detector,name,frame,candidate_filter):
+    import owner_movement
+    made=getattr(owner_movement,REAL_WORDS[name])(frame)
+    if made is None or (candidate_filter is not None and not candidate_filter(frame,made)):return None
+    note(detector.profile,name,'word')
+    seen=getattr(real_word_hit,'seen',None)
+    if seen is None:seen=real_word_hit.seen=set()
+    if (name,made[:2]) not in seen and len(seen)<256:
+        seen.add((name,made[:2]));LOG.info('이미지 보정 · %s · 글자로 찾음 · 위치 %d,%d',name,made[0],made[1])
+    return made
+
 def recover(detector,name,frame,region,threshold,candidate_filter):
     e=detector.entries.get(name);needle=detector.templates.get(name)
     if e is None or needle is None or e.get('type')!='template':return None
+    if name in REAL_WORDS and not region and getattr(frame,'hi',None) is not None:
+        return real_word_hit(detector,name,frame,candidate_filter)
     shown=summon_already_shown(detector,name,frame)
     if shown:return shown
     if name in GLYPHS and getattr(frame,'shape',None)==(479,897,3):return glyph_hit(name,frame,candidate_filter)

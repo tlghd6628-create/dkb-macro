@@ -113,10 +113,68 @@ def field_hud(frame):
  return int(((g>90)&(g>r*1.20)&(g>b*1.15)).sum())>=40
 def moving_field(frame):
  return bool(moving_bar(frame) and field_hud(frame))
+# The window by its words at 1366x768, real pixels wide enough for both layouts it has had. Its pictures have no cut,
+# and at this size the plain frame scores 축지술 .874 (other PC, 11-05), so a town return never saw the window.
+METHOD_TITLE=(530,235,320,50);METHOD_BODY=(520,240,326,290);METHOD_BUTTONS=(520,465,326,50)  # inside the window: scenery would be read again each frame
+METHOD_WORDS='자동이동방법선택';TELEPORT_WORD='축지술';CLOSE_MARKS=('×','X','x','✕')
+METHOD_DARK=.7  # of the bar dark and grey: .78-.87 with the window open, under .6 on the field and the bag
+
+def method_open(frame):
+ """Its title in its title bar. The dark grey bar is looked at first, only to skip a reading: this is asked on every
+ scene check, and a reading of moving scenery costs about .15 s."""
+ import numpy as np
+ from difflib import SequenceMatcher
+ from owner_text import read,clean
+ x,y,w,h=METHOD_TITLE
+ bar=np.asarray(frame.hi)[y:y+h,x:x+w].astype('int16');top=bar.max(axis=2)
+ if float(((top<70)&(top-bar.min(axis=2)<=12)).mean())<METHOD_DARK:return False
+ return any(SequenceMatcher(None,clean(r['text']),METHOD_WORDS).ratio()>=.7 for r in read(None,frame,METHOD_TITLE))
+
+def method_rows(frame):
+ """Every word in the window, or None when it is not open."""
+ from owner_text import read
+ return read(None,frame,METHOD_BODY) if method_open(frame) else None
+
+def _teleport_row(rows):
+ """The one button reading exactly 축지술. 축지부 사용 costs an item and the sentence above also says 축지술, so a
+ close spelling is not this button: pressing nothing is the safe answer."""
+ from owner_text import clean
+ found=[r for r in rows if clean(r['text'])==TELEPORT_WORD]
+ return found[0] if len(found)==1 else None
+
+def teleport_word(frame):
+ """A hit for the 축지술 button, in the shape a found picture has, or None. Only the button row is read: the native
+ click looks again right before it presses."""
+ from owner_text import read,logical_bounds
+ row=_teleport_row(read(None,frame,METHOD_BUTTONS)) if method_open(frame) else None
+ return (row['x'],row['y'],logical_bounds(row,frame)) if row else None
+
+def home_word(frame):
+ """The Home icon by the word under it. Over scenery its translucent picture scores .60 on the real field."""
+ from owner_text import read,clean
+ from owner_hd import logical_of
+ found=[r for r in read(None,frame,(960,725,110,36),scale=3) if clean(r['text']).lower()=='home']
+ if len(found)!=1:return None
+ x,y=logical_of(found[0]['rx'],found[0]['ry']-20,getattr(frame,'layout',None))
+ return x,y,(x-6,y-6,x+7,y+7)
+
+def _method_window_words(frame):
+ from owner_text import clean
+ rows=method_rows(frame)
+ button=_teleport_row(rows) if rows else None
+ if button is None:return None
+ title=next((r for r in rows if '이동' in clean(r['text']) and r['ry']<=METHOD_TITLE[1]+METHOD_TITLE[3]),None)
+ if title is None:return None
+ l,t=title['x']-49,title['y']-8
+ marks=[r for r in rows if clean(r['text']) in CLOSE_MARKS and r['ry']<=METHOD_TITLE[1]+METHOD_TITLE[3]]
+ close=(marks[0]['x'],marks[0]['y']) if marks else (l+139,t+7)
+ return {'title':(l,t),'close':close,'button':(button['x']-16,button['y']-5),'rows':rows}
+
 def method_window(frame):
  """Title first, then the button inside that window; the layout may change."""
  from owner_image_scope import unique_peak,_clip
  if getattr(frame,'shape',None)!=(479,897,3):return None
+ if getattr(frame,'hi',None) is not None:return _method_window_words(frame)
  title=unique_peak(frame,asset('move-method-title'),(340,125,220,50),.92)
  if not title:return None
  l,t=title[1:]
@@ -158,6 +216,7 @@ def distance(rows,*,bare=False):
 
 def method_distance(ui,window):
  # Only the distance carries the 거리 prefix or a unit; the cost rows do not.
+ if 'rows' in window:return distance(window['rows'])
  l,t=window['title']
  return distance(ui.rows((l-20,t+45,140,75),language='korean'))
 
