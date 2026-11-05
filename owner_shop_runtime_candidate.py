@@ -5,10 +5,10 @@ its current item, quantity, price and cart. Unknown or ambiguous screens hold.
 """
 import json,logging,time,re,uuid,hashlib,math
 from pathlib import Path
-from owner_shop_reader_candidate import scan_current_town,displayed_balance_interval
+from owner_shop_reader_candidate import scan_current_town
 from owner_skill_goal import Pending
 from owner_shop_settings_candidate import ShopSettingsStore
-from owner_shop_settings_candidate import NAMES,DEFAULT_COIN_RESERVE
+from owner_shop_settings_candidate import NAMES
 from owner_shop_transaction_candidate import ShopJournal,Hold
 from biol_base.session import Cancelled
 LOG=logging.getLogger('project_gui.DKB')
@@ -53,44 +53,9 @@ def _paired(ui,proof):
  first=ui.frame();ui.context.wait(.12);second=ui.frame()
  return bool(proof(first) and proof(second))
 
-BALANCE_BOXES=((404,8,40,14),(402,6,44,18))
-# Small header digits over a moving background; compact forms only count with
-# their decimal point, because "20M" and "201M" are the same 2.01M misread.
-BALANCE_TEXT=re.compile(r'\d{1,3}\.\d{1,2}[KMB]|\d{1,3}(?:,\d{3})*')
-
 def _not_read():
  """Coins are not read any more. The purchase record still has its fields, and wants two distinct ids."""
  return {'lower':0,'upper':0,'exact':False,'display':'미확인','frame_ids':[uuid.uuid4().hex,uuid.uuid4().hex]}
-
-def _read_pair(ui,specs):
- """Every box from one fresh pair of frames; the caller compares what it needs."""
- ui.rows_batch([(box,language,0,'original',None,lambda a,b:True) for box,language in specs])
- frames,_,answers=ui._owner_last_rows_raw
- return answers,frames
-
-def _balance(ui):
- """A conservative interval from repeated reads. A lower bound for the reserve, not a receipt."""
- seen=[];frames=None
- for attempt in range(5):
-  if attempt:ui.context.wait(.25)  # the pickup counter under the digits comes and goes
-  answers,frames=_read_pair(ui,[(box,language) for box in BALANCE_BOXES for language in ('korean','number')])
-  for pair in answers:
-   for rows in pair:
-    for row in rows:
-     # A leading 1 in this font reads as a letter ("L.93M").
-     text=re.sub(r'^[LlI|]','1',str(row.get('text','')).strip().lstrip(':;.,'))
-     text=re.sub(r'^(\d{1,3}),(\d{1,2}[KMB])$',r'\1.\2',text)
-     if row.get('score',0)>=.70 and BALANCE_TEXT.fullmatch(text):
-      value=displayed_balance_interval(text)
-      if value:seen.append(value)
-  groups={}
-  for value in seen:groups.setdefault(re.sub(r'\..*(?=[KMB])','',value['display']),[]).append(value)
-  best=max(groups.values(),key=len,default=[])
-  if len(best)>=3 and len(best)*2>len(seen):
-   return {'lower':min(v['lower'] for v in best),'upper':max(v['upper'] for v in best),'exact':False,'display':best[0]['display'],
-           'frame_ids':[hashlib.sha256(frame.tobytes()).hexdigest() for frame in frames]}
- LOG.info('상점 엽전 판독 보류 · %s',[v['display'] for v in seen][:12])
- raise Hold('현재 엽전 잔액 두 화면 확인 필요')
 
 def _name_candidate(text,extra=()):
  from difflib import SequenceMatcher
@@ -102,28 +67,8 @@ def _name_candidate(text,extra=()):
  if len(rank)<2 or rank[0][0]<.66 or rank[0][0]-rank[1][0]<.10:return None
  return rank[0][1]
 
-LIST=(44,61,153,370)
-ROW_PITCH=46.14
 TITLE=(421,162,59,15)
-POPUP_NAME=(408,186,125,18);POPUP_PRICE=(450,200,70,15);POPUP_OWNED=(445,212,75,15)
 ADD_ONE=(489,247);ADD_ALL=(507,247);POPUP_CANCEL=(408,302);POPUP_CONFIRM=(490,302)
-
-def _hangul_line(rows,extra):
- best=max((r for r in rows if re.search(r'[가-힣]',str(r.get('text','')))),key=lambda r:r.get('score',0),default=None)
- return _name_candidate(best['text'],extra) if best else None
-
-def _coin_like(frame,y):
- """The row's currency icon is the only warm icon here; the two other currencies are not sold for."""
- patch=frame[y-7:y+5,49:62].astype(int);r,g,b=patch[...,0],patch[...,1],patch[...,2]
- return float(((r>g)&(g>b)&(r-b>40)&(r>120)).mean())>=.10
-
-def _sold_out(frame,y):
- """The grey 구매 불가 label over the icon of the row whose price line is at y."""
- import cv2
- from owner_remote_potion_limit_candidate import _asset
- patch=frame[max(0,y-10):y+12,6:48];needle=_asset('unavailable')
- if patch.shape[0]<needle.shape[0] or patch.shape[1]<needle.shape[1]:return False
- return float(cv2.matchTemplate(patch,needle,cv2.TM_CCOEFF_NORMED).max())>=.92
 
 def _same_patch(frame,sample,box):
  import cv2
@@ -136,6 +81,7 @@ def _price(text):
  return int(text.replace(',','')) if re.fullmatch(r'\d{1,3}(?:,\d{3})*',text) else None
 
 REAL_LIST=(10,90,300,678)
+ROW_SHIFT=8  # real pixels a row may have glided since it was read; the rows are 74 apart
 
 def quote_from_words(rows,item):
  """This item's row from the words of the list, top to bottom: name, price, then the limit under it. None when it
@@ -154,78 +100,43 @@ def quote_from_words(rows,item):
  return words
 
 
-def _real_quote(ui,item):
- """The whole list as words: every name, price and limit in two seconds, and no fixed row places."""
+def row_on_screen(frame,item,ry):
+ """The list is in front, no popup is over it, and this item's name stands where it was read. Words, because the rows are
+ see-through and the world moves behind them: comparing their pictures failed a list that had not changed."""
+ from owner_membership import shop_title
  from owner_text import read
- frames=[ui.frame()]
- ui.context.wait(.12);frames.append(ui.frame())
- pages=[read(ui.adapter.project.root,frame,REAL_LIST,scale=3) for frame in frames]
- ui._owner_shop_last_page=[r['text'] for r in pages[-1] if re.search(r'[가-힣]{2}',r['text']) and '한정' not in r['text'] and '구매' not in r['text']]
- found=[quote_from_words(rows,item) for rows in pages]
- if found[0] is None or found[1] is None:
-  if found[0] is None and found[1] is None:return None
-  raise Pending('상점 목록 두 화면 확인 필요')
- a,b=found
- if any(a[key]!=b[key] for key in ('price','first','limit','bracketed','sold_out')):raise Pending('상점 목록 두 화면 확인 필요')
- limit,first=a['limit'],a['first']
+ if not shop_title(frame) or _quantity_shown(frame):return False
+ rows=read(None,frame,(REAL_LIST[0],max(0,ry-22),REAL_LIST[2],44),scale=3)
+ names=[r for r in rows if r['bounds'][0]>=60 and re.search(r'[가-힣]{2}',r['text']) and _name_candidate(r['text'],(item,))==item]
+ return len(names)==1 and abs(names[0]['ry']-ry)<=ROW_SHIFT
+
+
+def _real_quote(ui,item):
+ """The whole list once, for the words of every row. A name that is not there needs no second look; a row that is gets
+ its second frame from its own band, which reads in a fraction of the two seconds the whole list takes."""
+ from owner_text import read
+ first=ui.frame()
+ if getattr(first,'hi',None) is None:raise Hold('상점 구매는 실제 화면에서만 합니다')
+ rows=read(ui.adapter.project.root,first,REAL_LIST,scale=3)
+ ui._owner_shop_last_page=[r['text'] for r in rows if re.search(r'[가-힣]{2}',r['text']) and '한정' not in r['text'] and '구매' not in r['text']]
+ a=quote_from_words(rows,item)
+ if a is None:return None
+ ui.context.wait(.12)
+ top=a['name_row']['ry']-18
+ b=quote_from_words(read(ui.adapter.project.root,ui.frame(),(REAL_LIST[0],max(0,top),REAL_LIST[2],84),scale=3),item)
+ if b is None or any(a[key]!=b[key] for key in ('price','first','limit','bracketed','sold_out')):raise Pending('상점 목록 두 화면 확인 필요')
+ limit,first_number=a['limit'],a['first']
  # A row saying 구매 불가 can hold over its limit (구매 가능 320/250), and is simply used up.
- if limit==0 or (first>limit and not a['sold_out']):raise Pending('구매 수량 판독 확인 필요')
- kind,used=('observed_weekly_quote',first) if a['bracketed'] else ('observed_available_quote',limit-first)
+ if limit==0 or (first_number>limit and not a['sold_out']):raise Pending('구매 수량 판독 확인 필요')
+ kind,used=('observed_weekly_quote',first_number) if a['bracketed'] else ('observed_available_quote',limit-first_number)
  if a['sold_out']:used=limit
- # The row's name line, in the 897x479 terms the buying steps click and compare in.
- y=a['name_row']['y'];box=(44,y-8,121,14)
- samples=[frame[box[1]:box[1]+14,44:165].copy() for frame in frames]
- return {'name':item,'click_y':y+8,'row_proof':lambda frame:all(_same_patch(frame,sample,box) for sample in samples),
+ # The row's name line, in the 897x479 terms the buying steps click in.
+ ry=a['name_row']['ry']
+ return {'name':item,'click_y':a['name_row']['y']+8,'row_proof':lambda frame:row_on_screen(frame,item,ry),
          'currency':'엽전','unit_price':a['price'],'used':used,'limit':limit,'remaining':limit-used,'kind':kind}
 
 
-def _read_quote(ui,item):
- """The item's row on the visible page, or None. Rows are found by their price line.
-
- A line that does not read yet is Pending, so the caller reads a fresh pair.
- """
- if getattr(ui.frame(),'hi',None) is not None:return _real_quote(ui,item)
- answers,_=_read_pair(ui,[(LIST,'number')])
- def prices(rows):return {r['y']:_price(r['text']) for r in rows if r.get('score',0)>=.85 and _price(r.get('text')) is not None}
- first,second=(prices(rows) for rows in answers[0])
- agreed=[y for y,value in sorted(first.items()) if any(abs(y-o)<=2 and second[o]==value for o in second)]
- if not agreed:raise Pending('상점 목록 두 화면 확인 필요')
- # Rows sit on a fixed pitch, so one price line that read gives the rows that did not.
- ys=sorted({round(agreed[0]+ROW_PITCH*n) for n in range(-9,10)})
- ys=[y for y in ys if y-22>=61 and y+19<=435]
- if not ys:raise Pending('상점 목록 두 화면 확인 필요')
- answers,_=_read_pair(ui,[((46,y-22,135,18),'korean') for y in ys])
- # One frame may not settle on a name; the popup reads the name again before anything is added.
- def names(pair):return {_hangul_line(rows,(item,)) for rows in pair}-{None}
- hits=[y for y,pair in zip(ys,answers) if names(pair)=={item}]
- if len(hits)>1:raise Hold('같은 상품으로 읽힌 행이 둘 이상입니다')
- if not hits:return None
- y=hits[0]
- (price_pair,quota_pair),frames=_read_pair(ui,[((60,y-7,70,14),'number'),((46,y+5,135,14),'number')])
- values=[]
- for rows in price_pair:
-  found=[_price(r['text']) for r in rows if r.get('score',0)>=.85 and _price(r.get('text')) is not None]
-  if len(found)!=1:raise Pending('가격 판독 확인 필요')
-  values.append(found[0])
- if values[0]!=values[1]:raise Pending('가격 판독 확인 필요')
- quotas=[];bracketed=[]
- for rows in quota_pair:
-  text=' '.join(str(r.get('text','')) for r in rows)
-  match=re.search(r'(\d{1,4})\s*/\s*(\d{1,4})',text)
-  if not match:raise Pending('구매 수량 판독 확인 필요')
-  quotas.append((int(match[1]),int(match[2])));bracketed.append('(' in text)
- first_number,limit=quotas[0][0],max(q[1] for q in quotas)
- if quotas[0][0]!=quotas[1][0] or bracketed[0]!=bracketed[1] or limit==0 or first_number>limit:raise Pending('구매 수량 판독 확인 필요')
- # Weekly and daily rows show (used/limit); the potion rows show available/maximum.
- kind,used=('observed_weekly_quote',first_number) if bracketed[0] else ('observed_available_quote',limit-first_number)
- # A row that has used its limit is greyed out, and there is nothing left to buy from it.
- if limit-used>0 and not all(_coin_like(frame,y) for frame in frames):
-  # The count can still leave room while the row says 구매 불가 (강인 on pc1, 11-05). The row is the answer.
-  if not all(_sold_out(frame,y) for frame in frames):raise Hold('엽전 가격 표시 확인 필요')
-  used=limit
- box=(44,y-22,121,14);samples=[frame[box[1]:box[1]+14,44:165].copy() for frame in frames]
- return {'name':item,'click_y':y-13,'row_proof':lambda frame:all(_same_patch(frame,sample,box) for sample in samples),
-         'currency':'엽전','unit_price':values[0],'used':used,'limit':limit,'remaining':limit-used,'kind':kind}
+_read_quote=_real_quote
 
 REAL_POPUP=(540,290,420,80)
 
@@ -257,46 +168,36 @@ def _cart_bar(frame):
 
 def _popup(ui,price,item):
  """Owned count and a proof of this popup, after reading its name and price from two frames."""
+ from owner_text import read
  title=_quantity_shown
- if getattr(ui.frame(),'hi',None) is not None:
-  from owner_text import read
-  ui.wait(title,seconds=5)
-  reason='수량창 판독 확인 필요'
-  for attempt in range(6):
-   if attempt:ui.context.wait(.3)
-   frames=[ui.frame()];ui.context.wait(.12);frames.append(ui.frame())
-   if not all(title(frame) for frame in frames):raise Hold('수량 화면 변경')
-   a,b=(popup_from_words(read(ui.adapter.project.root,frame,REAL_POPUP,scale=3),item) for frame in frames)
-   if not (a[0] and b[0]):reason='수량창 상품명 두 화면 확인 필요';continue
-   if None in a or a!=b:reason='수량 또는 금액 판독 확인 필요';continue
-   if a[1]!=price:raise Hold('상품 개당 가격 불일치')
-   x,y,w,h=POPUP_NAME;samples=[frame[y:y+h,x:x+w].copy() for frame in frames]
-   return a[2],lambda frame:title(frame) and all(_same_patch(frame,sample,POPUP_NAME) for sample in samples)
-  raise Hold(reason)
- def number(rows):
-  # A long price pushes its colon out of the box, so only the trailing digits count.
-  found=[re.search(r'([0-9][0-9,]*)$',str(r.get('text','')).strip()) for r in rows if r.get('score',0)>=.85]
-  found=[m for m in found if m]
-  return int(found[0][1].replace(',','')) if len(found)==1 else None
+ def words(frame):return popup_from_words(read(ui.adapter.project.root,frame,REAL_POPUP,scale=3),item)
  ui.wait(title,seconds=5)
  reason='수량창 판독 확인 필요'
  for attempt in range(6):
   if attempt:ui.context.wait(.3)
-  (names,prices,owned,owned_words),frames=_read_pair(ui,[(POPUP_NAME,'korean'),(POPUP_PRICE,'number'),(POPUP_OWNED,'number'),(POPUP_OWNED,'korean')])
+  frames=[ui.frame()];ui.context.wait(.12);frames.append(ui.frame())
   if not all(title(frame) for frame in frames):raise Hold('수량 화면 변경')
-  if not all(_hangul_line(rows,(item,))==item for rows in names):reason='수량창 상품명 두 화면 확인 필요';continue
-  shown=[number(rows) for rows in prices]
-  if None in shown:reason='수량 또는 금액 판독 확인 필요';continue
-  if any(value!=price for value in shown):raise Hold('상품 개당 가격 불일치')
-  # Each reader misses a different digit: one takes 0 for a letter, the other scores 4 low.
-  counts=[number(a) if number(a) is not None else number(b) for a,b in zip(owned,owned_words)]
-  if None in counts or counts[0]!=counts[1]:reason='수량 또는 금액 판독 확인 필요';continue
-  x,y,w,h=POPUP_NAME;samples=[frame[y:y+h,x:x+w].copy() for frame in frames]
-  return counts[0],lambda frame:title(frame) and all(_same_patch(frame,sample,POPUP_NAME) for sample in samples)
+  a,b=(words(frame) for frame in frames)
+  if not (a[0] and b[0]):reason='수량창 상품명 두 화면 확인 필요';continue
+  if None in a or a!=b:reason='수량 또는 금액 판독 확인 필요';continue
+  if a[1]!=price:raise Hold('상품 개당 가격 불일치')
+  def proof(frame):
+   # The bag count can rise while the character picks things up, so only the name and the price must still stand.
+   shown=words(frame)
+   return title(frame) and shown[0] and shown[1]==price
+  return a[2],proof
  raise Hold(reason)
 
 # The town merchant totals two currencies side by side, which pushes the coin total left of the remote shop's.
 TOTAL_BOXES={'remote':(428,388,80,20),'town':(380,388,85,24)}
+
+def _total_values(root,frame,box):
+ """The numbers in the cart's total. A lone 0 is only read reliably at 3 times, and it comes back at any place in the pill."""
+ from owner_text import read
+ from owner_hd import real_box
+ x,y,w,h=real_box(box,frame.layout)
+ rows=read(root,frame,(max(0,x-10),max(0,y-6),w+20,h+12),language='number',scale=3)
+ return [v for v in (_price(r['text']) for r in rows if r['score']>=.85) if v is not None]
 
 def _total(ui):
  """The cart total, once two frames agree. It counts up right after an item goes in."""
@@ -305,19 +206,18 @@ def _total(ui):
   if attempt:ui.context.wait(.3)
   frames=[ui.frame()]
   ui.context.wait(.12);frames.append(ui.frame())
-  if getattr(frames[0],'hi',None) is not None:
-   # On real pixels: a lone 0 is only read reliably at 3 times, and it comes back at any place in the pill.
-   from owner_text import read
-   from owner_hd import real_box
-   x,y,w,h=real_box(box,frames[0].layout)
-   answers=[[read(ui.adapter.project.root,frame,(max(0,x-10),max(0,y-6),w+20,h+12),language='number',scale=3) for frame in frames]]
-  else:answers,_=_read_pair(ui,[(box,'number')])
-  values=[[_price(r['text']) for r in rows if r.get('score',0)>=.85 and _price(r.get('text')) is not None] for rows in answers[0]]
-  if len(values[0])==1 and values[0]==values[1]:return values[0][0]
+  if getattr(frames[0],'hi',None) is None:raise Hold('상점 구매는 실제 화면에서만 합니다')
+  values=[_total_values(ui.adapter.project.root,frame,box) for frame in frames]
+  if len(values[0])==1 and values[0]==values[1]:
+   ui.last_text_frame=frames[-1];ui.last_text_tick=time.monotonic()
+   return values[0][0]
  raise Hold('장바구니 합계 판독 확인 필요')
 
+TOP_ROW='1단 체력 회복 물약'
+
 def _find_quote(ui,item):
- """Bounded list-only navigation; an absent or moving row never buys."""
+ """Bounded list-only navigation; an absent or moving row never buys. Goes on down from where the last item left the
+ list, and back to the top only for an item already passed or when the end was reached without starting at the top."""
  from owner_membership import shop_title
  def list_proof(frame):return shop_title(frame) and _cart_bar(frame)
  if not _paired(ui,list_proof) or _total(ui)!=0:raise Hold('빈 상점 목록 확인 필요')
@@ -329,36 +229,50 @@ def _find_quote(ui,item):
    except Pending:
     if attempt==3:raise
     ui.context.wait(.5)
+ def on_page():
+  return {_name_candidate(text) for text in getattr(ui,'_owner_shop_last_page',None) or ()}-{None}
+ def to_top():
+  ui.drag((120,110),(120,400),list_proof);ui.drag((120,110),(120,400),list_proof)
+  ui._owner_shop_passed=set();ui._owner_shop_from_top=True
+  ui.context.checkpoint();ui.context.wait(.4)
  quote=visible()
  if quote:return quote
- ui.drag((120,110),(120,400),list_proof);ui.drag((120,110),(120,400),list_proof)
+ if TOP_ROW in on_page():ui._owner_shop_passed=set();ui._owner_shop_from_top=True
+ if item in getattr(ui,'_owner_shop_passed',()):
+  to_top();quote=visible()
+  if quote:return quote
+ before=getattr(ui,'_owner_shop_last_page',None)
  # The list flings: the same drag moved it 65 to 206 px and a long one skipped whole rows.
  # This one always leaves the rows of the page before on screen.
- real=getattr(ui.frame(),'hi',None) is not None
- before=None
  for _ in range(14):
   ui.context.checkpoint()
+  ui._owner_shop_passed=set(getattr(ui,'_owner_shop_passed',()))|on_page()
+  ui.drag((120,400),(120,130),list_proof,hold=.3)
   ui.context.wait(.4)
   quote=visible()
   if quote:return quote
-  if real:
-   # A page unchanged by a drag is the end of the list.
+  page=getattr(ui,'_owner_shop_last_page',None)
+  # A page unchanged by a drag is the end of the list.
+  if page and page==before:
+   if getattr(ui,'_owner_shop_from_top',False):break
+   to_top();quote=visible()
+   if quote:return quote
    page=getattr(ui,'_owner_shop_last_page',None)
-   if page and page==before:break
-   before=page
-  ui.drag((120,400),(120,130) if real else (120,180),list_proof,hold=.3) if real else ui.drag((120,300),(120,180),list_proof,hold=.3)
+  before=page
  LOG.info('상점 목록 마지막 화면 · %s',getattr(ui,'_owner_shop_last_page',None))
  raise Hold('선택 상품을 현재 보이는 상점 목록에서 찾지 못했습니다')
 
-def _same_cart(frame,verified_cart):
- """The cart bar's icons shimmer and the label beside the total sits on a moving background,
- so the bar may differ a little and only the total itself must match."""
+def _same_cart(frame,verified_cart,total=None,box=TOTAL_BOXES['remote']):
+ """On the real screen the bar is see-through and the world moves behind it: its label and the total itself say it is the
+ same cart. On a frame with no real pixels, the bar may differ a little and only the total itself must match."""
  import numpy as np
+ if getattr(frame,'hi',None) is not None:
+  return total is not None and _cart_bar(frame) and _total_values(None,frame,box)==[total]
  if getattr(frame,'shape',None)!=(479,897,3) or getattr(verified_cart,'shape',None)!=(479,897,3):return False
  l,t,r,b=(330,315,572,351)
  changed=float(np.mean(np.max(np.abs(verified_cart[t:b,l:r].astype(np.int16)-frame[t:b,l:r].astype(np.int16)),axis=2)>8))
- box=(430,392,75,16);x,y,w,h=box
- if changed>.10 or not _same_patch(frame,verified_cart[y:y+h,x:x+w],box):
+ x,y,w,h=(430,392,75,16)
+ if changed>.10 or not _same_patch(frame,verified_cart[y:y+h,x:x+w],(x,y,w,h)):
   LOG.info('상점 장바구니 화면 차이 · %.3f',changed);return False
  return True
 
@@ -453,8 +367,14 @@ def _buy_one(adapter,context,inputs,item,shop):
  chosen=[r for r in document['items'] if r['shop']==shop and r['name']==item and r['enabled'] is True]
  if len(chosen)!=1:raise Hold('체크한 상품 확인 필요')
  if shop=='remote' and not paid(root):raise Hold('멤버십 설정 확인 필요')
- began=time.monotonic();read_power(adapter,context,inputs);progress=state(adapter)
- if not progress.character or progress.observed<began:raise Hold('현재 캐릭터 화면 확인 필요')
+ visit=getattr(adapter,'_owner_shop_visit',None)
+ if visit is not None and visit.ui is not None and (visit.shop!=shop or not character_read_recently(adapter,context)):
+  # A character read needs the field, and another shop is another trip.
+  visit.ui=None;_leave_shop(adapter,context,inputs)
+ if character_read_recently(adapter,context):progress=state(adapter)
+ else:
+  began=time.monotonic();read_power(adapter,context,inputs);progress=state(adapter)
+  if not progress.character or progress.observed<began:raise Hold('현재 캐릭터 화면 확인 필요')
  observed_character=progress.character
  def guard():
   try:
@@ -464,11 +384,14 @@ def _buy_one(adapter,context,inputs,item,shop):
            and not getattr(getattr(context,'stop',None),'is_set',lambda:False)())
   except (OSError,ValueError,TypeError):return False
  fingerprint=profile+' | '+progress.character;journal=_journal(root)
- probe=SkillUI(adapter,context,inputs)
- if not probe.normal():raise Hold('원격 상점 진입 전 일반 화면 확인 필요')
- ui=open_remote(adapter,context,inputs) if shop=='remote' else _open_town_shop(adapter,context,inputs)
- ui._owner_shop_kind=shop
- adapter._owner_shop_entered=True
+ ui=visit.ui if visit is not None else None
+ if ui is None:
+  probe=SkillUI(adapter,context,inputs)
+  if not probe.normal():raise Hold('원격 상점 진입 전 일반 화면 확인 필요')
+  ui=open_remote(adapter,context,inputs) if shop=='remote' else _open_town_shop(adapter,context,inputs)
+  ui._owner_shop_kind=shop
+  adapter._owner_shop_entered=True
+  if visit is not None:visit.ui=ui;visit.shop=shop
  quote=_find_quote(ui,item)
  # '구매 가능' is only an observed current limit; the game's reset semantics
  # are unknown. Its configured quantity is applied per scheduled game day.
@@ -503,7 +426,8 @@ def _buy_one(adapter,context,inputs,item,shop):
  total_now=_total(ui)
  if total_now!=total:raise Hold('장바구니 합계 불일치')
  verified_cart=ui.last_text_frame.copy()
- ui.click_word('구매',(730,430,65,40),lambda f:guard() and _same_cart(f,verified_cart),minimum=.90)
+ total_box=TOTAL_BOXES[getattr(ui,'_owner_shop_kind','remote')]
+ ui.click_word('구매',(730,430,65,40),lambda f:guard() and _same_cart(f,verified_cart,total,total_box),minimum=.90)
  ui.context.wait(1)
  # Coins are not read: without enough of them the game's button does nothing and the cart stays full.
  if _total(ui)!=0:return {'status':'no_coins','item':item}
@@ -542,18 +466,44 @@ def _close_known_shop(adapter,context,inputs):
  ui.wait(lambda f:ui.normal(),seconds=5)
  if not ui.normal():raise ShopNavigationError('상점 종료 후 일반 화면 미확인')
 
+def _leave_shop(adapter,context,inputs):
+ try:_close_known_shop(adapter,context,inputs)
+ except Cancelled:raise
+ except Exception as exc:
+  LOG.warning('상점 화면 정리 미확인 · %s',str(exc))
+  raise ShopNavigationError('상점 화면 정리 확인 필요') from exc
+
+class _Visit:
+ """One trip into the shop for every selected item. The shop stays open only after an item that ended with an empty cart."""
+ ui=None;shop=None
+
+# Ended with nothing in the cart and no popup. 'no_coins' leaves the cart full, and only leaving the shop empties it.
+LEAVES_SHOP_READY=('target_reached','quota_empty','settled','confirmed')
+# The buying guard allows a character read 180 s old. This leaves room to finish the item that starts just under it.
+CHARACTER_READ_SECONDS=100
+
+def character_read_recently(adapter,context):
+ """A paired bag read from this very run, of the character the program still has. Opening the bag again says nothing new."""
+ from owner_progression import state
+ receipt=getattr(adapter,'_owner_progression_observation',None)
+ if not receipt or receipt[0] is not context:return False
+ progress=state(adapter)
+ return bool(progress.character) and receipt[1]==progress.observed and receipt[2]==progress.character and 0<=time.monotonic()-progress.observed<=CHARACTER_READ_SECONDS
+
 def buy_one(adapter,context,inputs,item,shop):
  from owner_skill_goal import Pending
  adapter._owner_shop_popup_proof=None
+ visit=getattr(adapter,'_owner_shop_visit',None);stay=False
  try:
-  try:return _buy_one(adapter,context,inputs,item,shop)
+  try:
+   result=_buy_one(adapter,context,inputs,item,shop)
+   stay=visit is not None and result.get('status') in LEAVES_SHOP_READY
+   return result
   except Pending as exc:raise Hold('상점 판독 확인 필요 · '+str(exc)) from exc
  finally:
-  try:_close_known_shop(adapter,context,inputs)
-  except Cancelled:raise
-  except Exception as exc:
-   LOG.warning('상점 화면 정리 미확인 · %s',str(exc))
-   raise ShopNavigationError('상점 화면 정리 확인 필요') from exc
+  if not stay:
+   if visit is not None:visit.ui=None
+   _leave_shop(adapter,context,inputs)
 
 def buy_remote_one(adapter,context,inputs,item):return buy_one(adapter,context,inputs,item,'remote')
 
@@ -576,27 +526,33 @@ def dispatch_configured(adapter,context,inputs):
  names={(r['shop'],r['name']) for r in selected}
  supported=[r for r in selected if r['shop']==route or (('remote' if r['shop']=='town' else 'town',r['name']) not in names)]
  holds=[];confirmed=0
- for setting in supported:
-  # Bound the native weekly limit; each item gets its own fresh recheck,
-  # durable intent and receipt, and the same input thread can yield to Stop.
-  for _ in range(50):
-   context.checkpoint()
-   reason=hold_reason(adapter)
-   if reason:LOG.info('원격 상점 구매 보류 · %s',reason);return {'status':'reservation_hold'}
-   try:result=buy_one(adapter,context,inputs,setting['name'],setting['shop'])
-   except ShopNavigationError:raise
-   except Hold as exc:
-    LOG.warning('상점 품목 미완료 · %s · %s',setting['name'],str(exc));holds.append(setting['name']);break
-   status=result.get('status')
-   if status in ('target_reached','quota_empty'):break
-   if status=='no_coins':
-    LOG.info('상점 구매 멈춤 · %s · 엽전 부족',setting['name']);break
-   if status=='settled':continue
-   if status!='confirmed':return result
-   confirmed+=result.get('quantity',1)
-   if result.get('finished'):break
-  else:
-   LOG.warning('상점 품목 50회 제한 · %s',setting['name']);holds.append(setting['name'])
+ visit=_Visit();adapter._owner_shop_visit=visit
+ try:
+  for setting in supported:
+   # Bound the native weekly limit; each item gets its own fresh recheck,
+   # durable intent and receipt, and the same input thread can yield to Stop.
+   for _ in range(50):
+    context.checkpoint()
+    reason=hold_reason(adapter)
+    if reason:LOG.info('원격 상점 구매 보류 · %s',reason);return {'status':'reservation_hold'}
+    try:result=buy_one(adapter,context,inputs,setting['name'],setting['shop'])
+    except ShopNavigationError:raise
+    except Hold as exc:
+     LOG.warning('상점 품목 미완료 · %s · %s',setting['name'],str(exc));holds.append(setting['name']);break
+    status=result.get('status')
+    if status in ('target_reached','quota_empty'):break
+    if status=='no_coins':
+     LOG.info('상점 구매 멈춤 · %s · 엽전 부족',setting['name']);break
+    if status=='settled':continue
+    if status!='confirmed':return result
+    confirmed+=result.get('quantity',1)
+    if result.get('finished'):break
+   else:
+    LOG.warning('상점 품목 50회 제한 · %s',setting['name']);holds.append(setting['name'])
+ finally:
+  adapter._owner_shop_visit=None
+  entered=visit.ui is not None;visit.ui=None
+  if entered:_leave_shop(adapter,context,inputs)
  summary={'status':('partial' if holds else 'processed'),'held_items':holds,'confirmed':confirmed,
           'retryable':bool(holds),'retry_mode':'recheck',
           'reason':'상점 품목 미완료: '+', '.join(holds) if holds else ''}

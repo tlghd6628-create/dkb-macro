@@ -93,7 +93,10 @@ class SceneArchive(logging.Handler):
                 'game_input':False,'automatic_upload':False,'automatic_training':False,
                 'classification_status':'unreviewed','confirmed_location':None,'reviewed_label':None,
                 'forced_evidence':bool(force),'activity_epoch':activity_epoch}
-            self.pending.put_nowait((frame.copy(),receipt))
+            # Plain pixels: a frame that keeps its real screen sends every check of this worker to the word reader,
+            # which the input worker's reads then queue behind.
+            import numpy as np
+            self.pending.put_nowait((np.array(frame),receipt))
             return True
         except queue.Full:
             with self.stats_lock:self.stats['dropped_busy']+=1

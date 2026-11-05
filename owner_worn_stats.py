@@ -37,9 +37,11 @@ def real_table(real):
   if field:hits[field]=(REAL_NUMBER[0],row['ry']-REAL_NUMBER[2]//2,REAL_NUMBER[1],REAL_NUMBER[2])
  return {field:hits[field] for field in FIELDS if field in hits} if 'enhance' in hits and 'awaken' in hits else None
 
-def real_read(real):
+def real_read(real,hits=None):
+ """Each row's number. `hits` are the rows' places from a frame of the same open tooltip: they do not move, and finding
+ them again was a whole table read per frame."""
  from owner_text import clean,read_area
- hits=real_table(real)
+ hits=hits or real_table(real)
  if hits is None:return None
  result={}
  for field,(x,y,w,h) in hits.items():
@@ -64,8 +66,8 @@ def table(frame):
  if any(abs(a-x)>2 or abs(b-(y+17*i))>2 for i,(a,b,_,_) in enumerate(hits.values())):return None
  return hits
 
-def read(frame,engine):
- if getattr(frame,'hi',None) is not None:return real_read(np.asarray(frame.hi))
+def read(frame,engine,hits=None):
+ if getattr(frame,'hi',None) is not None:return real_read(np.asarray(frame.hi),hits)
  hits=table(frame)
  if hits is None:return None
  result={}
@@ -151,7 +153,9 @@ def inspect_slot(service,context,inputs,profile,character,slot='무기'):
   context.checkpoint();service.check();b=service.capture().copy()
   result=[];done=threading.Event()
   def recognize():
-   try:result.extend((read(a,engine),read(b,engine)))
+   try:
+    places=real_table(np.asarray(a.hi)) if getattr(a,'hi',None) is not None else None
+    result.extend((read(a,engine,places),read(b,engine,places)))
    except Exception:pass
    finally:done.set()
   threading.Thread(target=recognize,name='worn-stats-ocr',daemon=True).start()
@@ -162,7 +166,7 @@ def inspect_slot(service,context,inputs,profile,character,slot='무기'):
   context.checkpoint()
   first,second=result if len(result)==2 else (None,None)
   if not popup(a) or not popup(b) or not first or first!=second:
-   LOG.info('착용 %s 현재값 미확인 · 재시도 대기',slot);return False
+   LOG.info('착용 %s 현재값 미확인 · 재시도 대기 · %s / %s',slot,first,second);return False
   # Grade/type are a separate paired OCR reading, not inferred from rarity
   # colour or from the character's previous weapon.
   try:rows=ui.rows((385,123,136,37),pair_minimum=.94)
@@ -220,9 +224,10 @@ def refresh_when_stale(adapter,context,inputs):
  if getattr(adapter,'_owner_worn_refresh_context',None) is context:return False
  adapter._owner_worn_refresh_context=context
  try:
-  if not stale_slots(adapter.project.root,configured_identity(adapter.project.root)):return False
-  LOG.info('장비 현재값 갱신 · 오래됐거나 비어 있는 칸 확인')
-  inspect_equipped(adapter,context,inputs,max_seconds=FULL_SECONDS);return True
+  stale=stale_slots(adapter.project.root,configured_identity(adapter.project.root))
+  if not stale:return False
+  LOG.info('장비 현재값 갱신 · 오래됐거나 비어 있는 칸 확인 · %s',stale)
+  inspect_equipped(adapter,context,inputs,max_seconds=FULL_SECONDS,only=stale);return True
  except (RuntimeError,ValueError,OSError,ChoreYield,ReadOnlyViewUnavailable) as exc:
   LOG.info('장비 현재값 갱신 보류 · %s',str(exc)[:100]);return False
 
@@ -240,8 +245,9 @@ def settle_after_popup(service,context):
   context.wait(.1)
  return False
 
-def inspect_equipped(adapter,context,inputs,max_seconds=15):
- """Refresh other slots during the existing growth opportunity, bounded."""
+def inspect_equipped(adapter,context,inputs,max_seconds=15,only=None):
+ """Refresh other slots during the existing growth opportunity, bounded. `only` names the slots wanted; none opens nothing."""
+ if only is not None and not only:return
  from owner_progression import state,open_inventory_by_key,inventory_parts
  from owner_equipment_boxes import SLOTS,close_inventory
  from owner_hunt_rules_candidate import configured_identity
@@ -255,7 +261,7 @@ def inspect_equipped(adapter,context,inputs,max_seconds=15):
  if open_inventory_by_key(service) is False:return
  end=time.monotonic()+max_seconds
  resume=getattr(adapter,'_owner_worn_resume',None)
- slots=list(SLOTS)
+ slots=[slot for slot in SLOTS if only is None or slot in only]
  if resume and resume[:2]==(profile,progress.character) and resume[2] in slots:
   slots=slots[slots.index(resume[2]):]
  try:

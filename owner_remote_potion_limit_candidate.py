@@ -78,11 +78,11 @@ def observed_full(ui,tier):
     try:
         first=ui.frame()
         if getattr(first,'hi',None) is not None:
-            if tier!='1단물약':return None
             ui.context.wait(.12);words=[tier_words(frame,tier) for frame in (first,ui.frame())]
             if None in words or words[0]!=words[1]:return None
             held,limit,sold=words[0]
-            return held if sold and 0<held==limit<=100000 else None
+            # 구매 불가 with more than the limit in the bag (796/651 on the 11-05 screen) is just as finished.
+            return held if sold and 0<limit<=held<=100000 else None
         if not _screen(first,tier):return None
         ui.context.wait(.12);second=ui.frame()
         if not _screen(second,tier):return None
