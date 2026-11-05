@@ -166,6 +166,10 @@ def read_short_power(engine,frame):
     patch=cv2.copyMakeBorder(frame[y:y+h,x:x+w],8,8,8,8,cv2.BORDER_CONSTANT,value=(40,40,40))
     a=parse_power(engine.predict(cv2.resize(patch,None,fx=4,fy=4,interpolation=cv2.INTER_CUBIC)),.92)
     b=parse_power(engine.predict(cv2.resize(patch,None,fx=3,fy=3,interpolation=cv2.INTER_LINEAR)),.92)
+    if a is not None and a==b:return a
+    # 59,623 stayed under the line on those two and held F1 for three minutes (.92 cubic). Two linear sizes read it .98.
+    a=parse_power(engine.predict(cv2.resize(patch,None,fx=4,fy=4,interpolation=cv2.INTER_LINEAR)),.95)
+    b=parse_power(engine.predict(cv2.resize(patch,None,fx=6,fy=6,interpolation=cv2.INTER_LINEAR)),.95)
     return a if a is not None and a==b else None
 
 
