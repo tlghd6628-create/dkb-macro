@@ -92,6 +92,16 @@ def remaining_on_screen(ui):
  if hit(first,'quota-five',(343,438,34,27),.97) and hit(second,'quota-five',(343,438,34,27),.97):return 5
  return parse_remaining(ui.rows((345,440,30,22),language='number'))
 
+def fit_rows_left(frame):
+ """Rows tagged green (strong enough) that lack the round in-progress mark on the right."""
+ left=0
+ for n in range(9):
+  y=112+round(38.3*n);tag=frame[y-8:y+8,588:612].astype('int16')
+  green=((tag[...,1]-tag[...,0]>25)&(tag[...,1]-tag[...,2]>25)).sum()
+  mark=(frame[y-9:y+10,628:650].min(axis=2)>190).sum()
+  if green>=15 and mark<25:left+=1
+ return left
+
 def instant_left(ui):
  """멤버십 즉시 완료 남은 횟수 N/5, on the daily tab only."""
  values=[]
@@ -255,6 +265,15 @@ class MissionUI(SkillUI):
    from owner_story_groups import pick
    return pick(self,book,power)
   return self._pick_legacy(book,requested,power,fill=fill,reconcile_depth=reconcile_depth)
+ def to_list_top(self):
+  """A long list left at its end needs more than one sweep; a second scan used to read nothing."""
+  import hashlib
+  def view():return hashlib.sha256((self.frame()[100:436,70:490].min(axis=2)>145).tobytes()).hexdigest()
+  self.wheel(1,35);self.context.wait(.35);previous=view()
+  for _ in range(4):
+   self.wheel(1,35);self.context.wait(.35);current=view()
+   if current==previous:return
+   previous=current
  def _pick_legacy(self,book,requested,power,*,fill=False,reconcile_depth=0):
   active=book.item.get('active');modes=('main_quest','sub_quest') if requested=='main_quest' else ('sub_quest',)
   if requested=='sub_quest' and active and book.item['quests'][active]['mode']=='main_quest':book.item['active']=None;book.commit();active=None
@@ -270,10 +289,18 @@ class MissionUI(SkillUI):
   keys=[];seen=set();expanded=set();unknown=0;partial=False
   for mode in modes:
    if mode=='sub_quest' and requested=='main_quest':
+    # A finished main quest turns grey and the scan skips it, so it can stay saved as active.
+    # It then blocks the current row it just read, and the block at the end of this function is never reached.
+    stale=book.item.get('active')
+    LOG.info('본편 목록 확인 결과 · 읽은 행=%d · 판독 보류=%d · 저장된 진행 임무=%s',len(keys),unknown,book.item['quests'][stale]['title'] if stale else '없음')
+    if stale and book.item['quests'][stale]['mode']=='main_quest' and stale not in keys and book.choose(keys,'main_quest',power) and reconcile_depth<2:
+     book.defer(stale,'condition',detail='본편 목록 밝은 행에 없음 · 완료로 단정하지 않음')
+     LOG.info('본편 이전 진행 임무 미표시 · 완료 처리 없이 보류 · 현재 임무 재선택')
+     return self._pick_legacy(book,requested,power,reconcile_depth=reconcile_depth+1)
     from owner_story_groups import pick
     return pick(self,book,power)
    if mode=='sub_quest' and not fill and book.batch_needs_fill(power):self._pick_legacy(book,'sub_quest',power,fill=True,reconcile_depth=reconcile_depth)
-   self.open(mode);self.wheel(1,35);last=None;still=0
+   self.open(mode);self.to_list_top();last=None;still=0
    capacity=accepted_quota(self) if fill else None
    for page in range(100):
     self.context.checkpoint();frame=self.frame()

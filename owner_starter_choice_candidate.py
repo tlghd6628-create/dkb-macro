@@ -11,7 +11,20 @@ from tkinter import ttk,messagebox
 LOG=logging.getLogger('project_gui.DKB');LOCAL=threading.local()
 ENERGIES=('생명','여명','몽환','홍염')
 SKILLS=('생명의 흐름','방패 밀기','공간 결계')
+# The rows of the 기념 도술 조각 box and the 강화 요령서 box, read from the game on 2026-11-05.
+BOX_SKILLS=('방패 치기','방패 밀기','방패 충격파','방패 내려찍기','강인한 의지',
+            '생명의 흐름','산들 바람','생명의 축복','불굴','최후의 저항',
+            '부적 던지기','살 날리기','저주 내리기','신벌의 영역','영혼 소용돌이',
+            '슬쩍 베기','어지럼 유발','광기의 칼놀림','솟아오르는 창','간파의 눈','공간 결계',
+            '급소 관통','도약 찌르기','휩쓸어 베기','후퇴 사격','쌍검 가르기')
+MANUALS=('절명','연타','강타','척살','저격','주술','파멸','강인','기동','기만','헌신','제압')
 class ChoiceNavigationError(RuntimeError):pass
+
+def chosen_skills(root,profile):
+ """(id, name) of the skills picked for the fragment box; the three named ones until changed."""
+ from owner_skill_goal import catalog
+ names=Choices(root,profile).snapshot()[0].get('skills',SKILLS);known=catalog()['all_skill_names']
+ return [(known[name]['id'],name) for name in names if name in known]
 
 class SkillAttestation:
  """Separate evidence for three skills seen under the proved owned filter."""
@@ -55,8 +68,12 @@ def owned_filter_frame(frame):
 
 def owned_filter_proved(ui):
  """Require a positively observed unchecked filter, not absent checkmark."""
- first=ui.frame();ui.context.wait(.12);second=ui.frame()
- return owned_filter_frame(first) and owned_filter_frame(second)
+ # The list is still settling right after a scroll or filter press, so give it a moment.
+ for attempt in range(5):
+  first=ui.frame();ui.context.wait(.12);second=ui.frame()
+  if owned_filter_frame(first) and owned_filter_frame(second):return True
+  ui.context.wait(.4)
+ return False
 
 def positive_skill_icons(first,second):
  """Find target icons with full-catalog competition in two saved frames.
@@ -83,6 +100,22 @@ def positive_skill_icons(first,second):
   return result
  a,b=page(first),page(second)
  return [(sid,y) for sid,y in a if any(other==sid and abs(y-y2)<=3 for other,y2 in b)]
+
+def _icons_to_end(ui,Pending):
+ """Target icons on every page of the proved owned-only list, until the list stops moving."""
+ import numpy as np
+ from owner_skill_ui import skill_screen
+ ui.open_skills();ui.all_filter(True)
+ for _ in range(3):ui.drag((762,118),(762,424),skill_screen)
+ found=set();previous=None
+ for _ in range(30):
+  ui.context.wait(1.);first=ui.frame();ui.context.wait(.12);second=ui.frame()
+  if not owned_filter_frame(first) or not owned_filter_frame(second):raise Pending('보유 도술 필터 변경')
+  found.update(sid for sid,_y in positive_skill_icons(first,second))
+  page=second[79:440,695:840].astype('int16')
+  if previous is not None and float(np.abs(page-previous).mean())<4:return found
+  previous=page;ui.drag((762,425),(762,117),skill_screen)
+ raise Pending('보유 도술 목록 끝 확인 실패')
 
 class _RequiredSkillsFound(Exception):
  def __init__(self,owned):self.owned=set(owned)
@@ -126,6 +159,9 @@ class Choices:
   if data['energy_mode']=='single' and len(names)!=1:raise ValueError('한 가지 모드는 기운을 한 개만 선택해 주세요')
   from owner_energy_allocation_candidate import weights
   weights(data)
+  skills=data.get('skills',SKILLS)
+  if not isinstance(skills,(list,tuple)) or len(skills)>5 or any(x not in BOX_SKILLS for x in skills):raise ValueError('도술 조각은 5개까지 고를 수 있습니다')
+  if data.get('manual') not in (None,)+MANUALS:raise ValueError('요령서 종류 확인 필요')
  def write(self,data,expected):
   self.validate(data);_,revision=self.snapshot()
   if revision!=expected:raise ValueError('다른 창에서 설정이 바뀌었습니다. 다시 열어 주세요')
@@ -199,8 +235,17 @@ def open_settings(parent,root,profile,*,embedded=False):
  if embedded:win.pack(fill='both',expand=True)
  else:win.title('선택 상자 설정');win.transient(parent)
  body=ttk.Frame(win,padding=12);body.pack(fill='both',expand=True)
- ttk.Label(body,text='도술 조각: 30레벨 이후 생명의 흐름 · 방패 밀기 · 공간 결계').pack(anchor='w')
- grid=ttk.Frame(body);grid.pack(fill='x',pady=(12,8))
+ ttk.Label(body,text='기념 도술 조각 선택 상자').pack(anchor='w')
+ skill_box=tk.Listbox(body,selectmode='multiple',height=8,exportselection=False)
+ skill_box.pack(fill='x',pady=(4,10))
+ for index,name in enumerate(BOX_SKILLS):
+  skill_box.insert('end',name)
+  if name in data.get('skills',SKILLS):skill_box.selection_set(index)
+ ttk.Label(body,text='강화 요령서 선택 첩').pack(anchor='w')
+ manual=tk.StringVar(win,value=data.get('manual') or '사용 안 함')
+ ttk.Combobox(body,textvariable=manual,values=('사용 안 함',)+MANUALS,state='readonly',width=14).pack(anchor='w',pady=(4,10))
+ ttk.Label(body,text='발현 재료 선택 상자').pack(anchor='w')
+ grid=ttk.Frame(body);grid.pack(fill='x',pady=(4,8))
  for column,label in enumerate(('기운','비율 (%)','')):ttk.Label(grid,text=label).grid(row=0,column=column,padx=6,sticky='w')
  initial=data.get('energy_percentages') if data['energy_mode']=='percent' else equal_display(data['energies'])
  choices={name:tk.StringVar(win,value=str(initial[name])) for name in ENERGIES};equal=[data['energy_mode'] in ('balanced','single')]
@@ -236,7 +281,8 @@ def open_settings(parent,root,profile,*,embedded=False):
   try:
    values={n:choices[n].get() for n in ENERGIES};units=percent_units(values)
    updated=dict(data,energy_mode='balanced' if equal[0] else 'percent',energies=[n for n in ENERGIES if units[n]>0],
-                energy_percentages={n:f'{units[n]//100}.{units[n]%100:02d}' for n in ENERGIES})
+                energy_percentages={n:f'{units[n]//100}.{units[n]%100:02d}' for n in ENERGIES},
+                skills=[BOX_SKILLS[i] for i in skill_box.curselection()],manual=None if manual.get()=='사용 안 함' else manual.get())
    store.write(updated,revision)
    data,revision=store.snapshot()
   except (OSError,ValueError) as exc:messagebox.showerror('상자 설정 확인',str(exc),parent=win);return
@@ -269,7 +315,12 @@ def scan_learned(adapter,context,inputs):
  try:
   try:owned=ui.scan_owned()
   except _RequiredSkillsFound as done:owned=done.owned
+  except Pending as exc:
+   # List names are too small to agree on every read, and an empty page used to end the check.
+   LOG.info('보유 도술 이름 판독 보류 · 아이콘으로 끝까지 확인 · %s',exc)
+   owned=_icons_to_end(ui,Pending)
   if not owned_filter_proved(ui):raise Pending('보유 도술 전용 필터 확인 필요')
+  adapter._owner_starter_owned=(context,set(owned))
  finally:
   try:ui.close_known()
   except Exception as exc:raise ChoiceNavigationError('도술 화면을 닫고 일반 화면으로 돌아왔는지 확인 필요') from exc
@@ -284,6 +335,22 @@ def scan_learned(adapter,context,inputs):
   LOG.info('선택상자 도술 3종 보유 확인 · 도술 상자 생략');return 'all_known'
  LOG.info('선택상자 도술 미확인 · 보유 목록에 없는 항목을 미학습으로 단정하지 않음')
  return 'unknown'
+
+def open_chosen_manual(adapter,context,inputs):
+ """The 강화 요령서 box follows the setting; nothing is opened until one is picked."""
+ from owner_progression import state
+ from owner_skill_goal import runtime_ledger
+ from owner_hunt_rules_candidate import configured_identity
+ from owner_skill_ui import SkillUI
+ from owner_skill_box import open_manuals
+ if getattr(adapter,'_owner_manual_checked',None) is context:return
+ progress=state(adapter)
+ if not progress.character or type(progress.level) is not int or progress.level<30:return
+ style=Choices(adapter.project.root,configured_identity(adapter.project.root)).snapshot()[0].get('manual')
+ if not style:return
+ result=open_manuals(SkillUI(adapter,context,inputs),runtime_ledger(adapter,progress.character),style)
+ adapter._owner_manual_checked=context
+ LOG.info('요령서 상자 · %s · %s',style,result)
 
 def install(gui):
  """Wrap the already installed inventory path; never replace its behavior."""
@@ -313,6 +380,8 @@ def install(gui):
         from owner_coupon_skills_candidate import process
         process(adapter,context,inputs)
       except (Pending,OSError,ValueError) as exc:LOG.info('선택상자 도술 확인 보류 · %s',str(exc))
+      try:open_chosen_manual(adapter,context,inputs)
+      except (Pending,OSError,ValueError) as exc:LOG.info('요령서 상자 확인 보류 · %s',str(exc))
      finally:priority.feature=previous
     return result
    finally:LOCAL.active=False

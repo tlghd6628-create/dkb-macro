@@ -54,7 +54,7 @@ def compare_frame(frame,engine):
  worn=_score(frame[116:135,345:365],badge());candidate=_score(frame[116:135,500:520],badge())
  if candidate>=.90:raise Hold('착용 표시 확인 필요')
  grades=(_ocr(engine,frame,(311,130,33,23)),_ocr(engine,frame,(467,130,33,23)))
- kinds=(_ocr(engine,frame,(404,128,38,22)),_ocr(engine,frame,(559,128,39,22)))
+ kinds=(_part_name(engine,frame,(404,128,38,22)),_part_name(engine,frame,(559,128,39,22)))
  buttons=(_ocr(engine,frame,(370,350,72,26)),_ocr(engine,frame,(526,350,72,26)))
  if any(grade not in ('일반','희귀','영웅') for grade in grades):raise Hold('장비 등급 글자 확인 필요')
  if kinds[0]!=kinds[1] or kinds[0] not in PART_MAP:raise Hold('같은 부위 장비 확인 필요')
@@ -71,15 +71,20 @@ def worn_detail_frame(frame,engine):
  """Read the observed single equipped-weapon tooltip; no input."""
  if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or frame.dtype!=np.uint8:raise Hold('장착 장비 상세 확인 필요')
  if _score(frame[116:135,420:445],badge())<.96:raise Hold('장착 표시 확인 필요')
- grade=_ocr(engine,frame,(390,130,35,23));kind=_ocr(engine,frame,(483,128,33,22));button=_ocr(engine,frame,(450,350,70,26))
+ grade=_ocr(engine,frame,(390,130,35,23));kind=_part_name(engine,frame,(483,128,33,22));button=_ocr(engine,frame,(450,350,70,26))
  if grade not in ('일반','희귀','영웅') or kind not in PART_MAP or button!='장착해제':raise Hold('장착 부위·등급·버튼 확인 필요')
  return {'slot':PART_MAP[kind],'grade':grade,'item':_item_token(frame[97:115,390:502],frame[128:148,434:454].copy())}
+
+def _part_name(engine,frame,box):
+ """The glyph 찌 reads near .70 and sometimes as 짜. Only an exact part name passes the caller's check."""
+ text=_ocr(engine,frame,box,minimum=.60)
+ return '팔찌' if text=='팔짜' else text
 
 def initial_candidate_frame(frame,engine):
  """Single un-worn tooltip; blank slot must be proved separately."""
  if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or frame.dtype!=np.uint8:raise Hold('초기 장비 상세 확인 필요')
  if _score(frame[116:135,420:445],badge())>=.90:raise Hold('이미 착용한 장비')
- grade=_ocr(engine,frame,(390,130,35,23));kind=_ocr(engine,frame,(483,128,33,22));button=_ocr(engine,frame,(450,350,70,26))
+ grade=_ocr(engine,frame,(390,130,35,23));kind=_part_name(engine,frame,(483,128,33,22));button=_ocr(engine,frame,(450,350,70,26))
  if grade not in ('일반','희귀','영웅') or kind not in PART_MAP or button!='장착':raise Hold('초기 장비 부위·등급·장착 버튼 확인 필요')
  return {'slot':PART_MAP[kind],'candidate_grade':grade,
          'candidate_item':_item_token(frame[97:115,390:502],frame[128:148,434:454].copy()),
@@ -516,14 +521,19 @@ class Port:
   from owner_progression import inventory_parts
   a,_=self._frame();self.context.wait(.12);b,_=self._frame()
   from owner_worn_stats import popup
-  if popup(a) and popup(b):
-   # The clicked cell opened a single worn-item detail, not a comparison.
+  from owner_energy_box_detail_candidate import close_mark
+  # One X at this spot: a worn-item detail, or an unworn item on a blank slot.
+  def single(frame):return popup(frame) or (inventory_parts(frame)==(True,True) and close_mark(frame) and not comparison_shell(frame))
+  if single(a) and single(b):
    # It has only one X and nothing to equip; same close as the start menu's.
    final,_=self._frame()
-   if not popup(final):raise Hold('장비창 종료 전 화면 변경')
+   if not single(final):raise Hold('장비창 종료 전 화면 변경')
    self.context.checkpoint();self.service.check();self.service.click_hit((510,106,(503,99,518,113)))
    self.context.wait(.2);x,_=self._frame();self.context.wait(.12);y,_=self._frame()
-   if popup(x) or popup(y) or inventory_parts(x)!=(True,True) or inventory_parts(y)!=(True,True):raise Hold('장비창 종료 후 인벤토리 미확인')
+   if single(x) or single(y) or inventory_parts(x)!=(True,True) or inventory_parts(y)!=(True,True):raise Hold('장비창 종료 후 인벤토리 미확인')
+   return 'inventory_restored'
+  # The clicked cell opened nothing (an empty cell read as occupied after a scroll). Nothing to close.
+  if all(inventory_parts(f)==(True,True) and not close_mark(f) and not comparison_shell(f) and _score(f[116:135,345:365],badge())<.90 and _score(f[116:135,420:445],badge())<.90 for f in (a,b)):
    return 'inventory_restored'
   if not same_comparison_for_close(a,b):raise Hold('판독 불가 장비창 형태 확인 필요')
   for frame in (a,b):
@@ -577,10 +587,15 @@ class Port:
   if not pending or pending.get('phase')!='sent':raise Hold('확인할 장비 교체 기록 없음')
   slot=pending['proof']['slot'];bounds=SLOTS.get(slot)
   if bounds is None:raise Hold('장착 슬롯 위치 확인 필요')
-  a,_=self._frame();self.context.wait(.12);b,_=self._frame()
-  if inventory_parts(a)!=(True,True) or inventory_parts(b)!=(True,True) or agree(a,b).get(slot) is not True:raise Hold('장착 슬롯 확인 필요')
   x,y,w,h=bounds
-  if not np.array_equal(a[y:y+h,x:x+w],b[y:y+h,x:x+w]):raise Hold('장착 슬롯 화면 변경')
+  # The worn mark and the power toast animate for a moment right after equipping.
+  end=time.monotonic()+4
+  while True:
+   a,_=self._frame();self.context.wait(.12);b,_=self._frame()
+   if (inventory_parts(a)==(True,True) and inventory_parts(b)==(True,True) and agree(a,b).get(slot) is True
+       and np.array_equal(a[y:y+h,x:x+w],b[y:y+h,x:x+w])):break
+   if time.monotonic()>=end:raise Hold('장착 슬롯 확인 필요')
+   self.context.wait(.25)
   final,_=self._frame()
   if inventory_parts(final)!=(True,True) or not np.array_equal(b[y:y+h,x:x+w],final[y:y+h,x:x+w]):raise Hold('장착 슬롯 재확인 필요')
   self.context.checkpoint();self.service.check()
@@ -590,10 +605,10 @@ class Port:
   if known is None:raise Hold('착용 상세 종료 위치 확인 필요')
   if not _same_single_anchors(frame,known):
    def same_worn(f):
+    # Long names scroll, so the title cannot prove sameness here. Closing any worn detail through
+    # its one X changes nothing, and the worn mark and 장착해제 button prove that is what is open.
     try:return (single_shell(f) and _score(f[116:135,420:445],badge())>=.96
-      and _ocr(self.engine,f,(450,350,70,26))=='장착해제'
-      and same_item(_item_token(known[97:115,390:502],known[128:148,434:454].copy()),
-                    _item_token(f[97:115,390:502],f[128:148,434:454].copy())))
+      and _ocr(self.engine,f,(450,350,70,26))=='장착해제')
     except Hold:return False
    self.context.wait(.12);other,_=self._frame()
    if not same_worn(frame) or not same_worn(other):raise Hold('착용 상세 종료 위치 확인 필요')
@@ -612,14 +627,24 @@ class Port:
   def bare(frame):
    return (self.identity_guard() is True and inventory_parts(frame)==(True,True) and equipment_tab_selected(frame)
      and all(_score(frame[116:135,l:r],badge())<.90 for l,r in ((345,365),(420,445),(500,520))))
-  before,_=self._frame();self.context.wait(.12);other,_=self._frame()
-  if not bare(before) or not bare(other) or not same_equipment_inventory(self.service.detector,before,other):raise Hold('장비 목록 스크롤 전 화면 확인 필요')
+  # A tooltip that just closed and the moving upgrade arrow can differ between two frames.
+  end=time.monotonic()+3
+  while True:
+   before,_=self._frame();self.context.wait(.12);other,_=self._frame()
+   if bare(before) and bare(other) and same_equipment_inventory(self.service.detector,before,other):break
+   if time.monotonic()>=end:raise Hold('장비 목록 스크롤 전 화면 확인 필요')
+   self.context.wait(.25)
   area=self.service.detector.entries.get('범위_인벤토리')
   if not isinstance(area,dict):raise Hold('장비 목록 범위 확인 필요')
   x,y,w,h=(area[k] for k in ('x','y','w','h'));cx=x+w//2
   ui.drag((cx,y+h-35),(cx,y+35),bare);self.context.wait(.2)
-  after,_=self._frame();self.context.wait(.12);final,_=self._frame()
-  if not bare(after) or not bare(final) or not same_equipment_inventory(self.service.detector,after,final):raise Hold('장비 목록 스크롤 후 화면 확인 필요')
+  # The list keeps gliding after a drag, so give it a moment to settle.
+  end=time.monotonic()+3
+  while True:
+   after,_=self._frame();self.context.wait(.12);final,_=self._frame()
+   if bare(after) and bare(final) and same_equipment_inventory(self.service.detector,after,final):break
+   if time.monotonic()>=end:raise Hold('장비 목록 스크롤 후 화면 확인 필요')
+   self.context.wait(.25)
   return not same_equipment_inventory(self.service.detector,other,final)
 
 def run_in_open_inventory(adapter,context,inputs):
@@ -714,8 +739,14 @@ def run_in_open_inventory(adapter,context,inputs):
   if status=='pending_confirmation':
    try:confirmed=port.confirm_worn_detail()
    except Hold:
-    try:port.open_worn_for_confirmation();confirmed=port.confirm_worn_detail()
+    try:port.open_worn_for_confirmation()
     except Hold:return 'pending_confirmation'
+    # Moving scenery behind the detail can fail one look. Every check passes on a still frame.
+    confirmed=None
+    for _ in range(4):
+     try:confirmed=port.confirm_worn_detail();break
+     except Hold:context.wait(.5)
+    if confirmed is None:return 'pending_confirmation'
    port.close_worn_detail()
    adapter._owner_equipment_upgrade_growth_pending={'character':character,'at':time.monotonic()}
    confirmed_count+=1;excluded=[];inventory,_=port._frame()

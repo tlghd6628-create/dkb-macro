@@ -14,6 +14,9 @@ def inventory_header(frame,character):
     for x in (62,68):
         name=frame[9:25,x:x+33];ink=name.min(axis=2)>150
         if ink.sum()>=8 and hashlib.sha256(ink.tobytes()).hexdigest()[:24]==character:matches.append((x,name))
+    if not matches:
+        from owner_character_binding import shown_on
+        if shown_on(frame,character):return 62,frame[9:25,62:95]
     return matches[0] if len(matches)==1 else None
 
 def same_dimmed_text(reference,current,anchor_reference,anchor_current):

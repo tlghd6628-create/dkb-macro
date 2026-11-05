@@ -94,7 +94,14 @@ def read_required_if_present(path,default):
     return value
 def save(path,data):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
-    tmp=path.with_suffix('.tmp');tmp.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8');os.replace(tmp,path)
+    import threading,time as clock
+    tmp=path.with_name('%s.%d.tmp'%(path.stem,threading.get_ident()));tmp.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+    # Windows refuses the swap while anything has the file open for a moment, and that ended a run (11-05).
+    for attempt in range(8):
+        try:os.replace(tmp,path);return
+        except PermissionError:
+            if attempt==7:raise
+            clock.sleep(.1*(attempt+1))
 def day_at(at):return (at-timedelta(hours=5)).date()
 def period(job,at):
     if job.once:return 'all'
@@ -895,6 +902,18 @@ def appointment(root,catalog_key,when,values=None):
     spread=jitter_range(cfg,BY_KEY[key])
     return (prefix+value.strftime('%m/%d %H:%M:%S') if value>when else '지연 · 현재 작업 종료 후')+(' · 랜덤 ±%d초'%spread if spread else '')
 
+def timed_invoke(adapter,job,context,inputs):
+    # A story scene blocks every menu a job would open, so each job after it failed too.
+    from owner_mission_controller import finish_scene
+    finish_scene(adapter,context,inputs)
+    try:return invoke(adapter,job,context,inputs)
+    finally:
+        # A job that gave up inside its menu (clan, 09:31) made every later job fail too.
+        from owner_start_menu import normalize
+        from project_adapter.town_services import TownServices
+        try:normalize(TownServices(adapter,context,inputs,['버튼_나가기']))
+        except RuntimeError as exc:LOG.info('일정 후 메뉴 정리 보류 · %s',exc)
+
 def invoke(adapter,job,context,inputs):
     if job.key in ('shop','shop_weekly_verify'):
         from owner_shop_runtime_candidate import dispatch_configured
@@ -1065,7 +1084,7 @@ def catch_up_overdue(adapter,context,inputs):
         if not ancillary_field_ready(adapter,context,inputs):return ran
         LOG.info('시작 일정 우선 처리 · %s · 예약 시간이 지나 먼저 실행',job.label)
         old_values=adapter.values;adapter.values=dict(plan.values)
-        try:scheduled_call(lambda:invoke(adapter,job,context,inputs),job.label,(),{},adapter,timed_dispatch=True,run_context=context,run_inputs=inputs)
+        try:scheduled_call(lambda:timed_invoke(adapter,job,context,inputs),job.label,(),{},adapter,timed_dispatch=True,run_context=context,run_inputs=inputs)
         except (ResumeWork,ChoreYield):return ran
         except Exception as exc:
             context.checkpoint()

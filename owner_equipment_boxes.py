@@ -9,6 +9,7 @@ SLOTS={'무기':(17,211,26,27),'반지':(160,241,23,22),'팔찌':(160,211,23,22)
  '장갑':(126,179,26,27),'투구':(17,152,25,26),'허리띠':(127,149,25,25)}
 WEAPON='버튼_인벤토리_희귀무기상자';ARMOR='버튼_인벤토리_희귀방어구상자';ACCESSORY='버튼_희귀_장신구상자'
 ARMOR_PARTS=('갑옷','다리','신발','장갑','투구','허리띠')
+BOX_POSITION={WEAPON:2,ARMOR:3,ACCESSORY:4};UNUSED_ITEM='버튼_인벤토리_상자열기'
 
 @lru_cache(maxsize=2)
 def _weapon_grade_detector(profile):
@@ -46,7 +47,8 @@ def inspect(frame):
         patch=frame[y-3:y+12,x+w-11:x+w+5]
         score=max(float(cv2.minMaxLoc(cv2.matchTemplate(patch,needle,cv2.TM_CCOEFF_NORMED))[1]) for needle in needles)
         if score>=.94:answer[part]=True
-        elif score<.35 and float(np.max(patch.std(axis=(0,1))))<14 and float(patch.mean())<100:answer[part]=False
+        # Real level-1 blanks measure score .46-.53, std 8-16, mean 32-42; worn slots score .99, std 50+.
+        elif score<.60 and float(np.max(patch.std(axis=(0,1))))<20 and float(patch.mean())<100:answer[part]=False
         else:answer[part]=None
     return answer
 
@@ -59,10 +61,36 @@ def plan(worn,level=None,rare_weapon=None):
     # The coupon rare fan is a level-30 task; unknown level never opens it.
     if (worn.get('무기') is False or (worn.get('무기') is True and rare_weapon is False)) and type(level) is int and level>=30:items.append(WEAPON)
     armor=[p for p in ARMOR_PARTS if worn.get(p) is False]
-    accessories=[p for p in ('팔찌','반지','목걸이','귀걸이') if worn.get(p) is False]
+    # The accessory box opens on the same turn as the rare fan, under the same known-level rule.
+    accessories=[p for p in ('팔찌','반지','목걸이','귀걸이') if worn.get(p) is False] if type(level) is int and level>=30 else []
     if armor:items.append(ARMOR)
     if accessories:items.append(ACCESSORY)
     return items,armor,accessories
+
+def story_dialogue(adapter,service):
+    """Two frames showing a known scene-skip control prove a quest scene is on screen."""
+    from project_adapter.main_quest import StateROIs
+    mode=adapter.mode if adapter.mode in ('main_quest','sub_quest') else 'sub_quest'
+    slots=StateROIs(Path(adapter.project.root)/'profiles/DKB',mode=mode)
+    def seen(frame):return any(slots.match(key,frame).get('hit') for key in ('skip','skip_confirm','skip_confirm2'))
+    if not seen(service.capture()):return False
+    service.context.wait(.12)
+    return seen(service.capture())
+
+def visit_interrupted(adapter,service):
+    """The panel could not open because a scene or a zone change took the screen. Spent nothing.
+    Five in a row is a real fault, so it stops the run as before."""
+    from owner_progression import inventory_parts
+    skips=getattr(adapter,'_owner_inventory_skips',0)+1;adapter._owner_inventory_skips=skips
+    if skips>=5:return False
+    return story_dialogue(adapter,service) or not any(inventory_parts(service.capture()))
+
+def native_items(items):
+    """The native routine compares fixed list positions: 2 weapon, 3 armor, 4 accessory.
+    A shorter list raises IndexError, so unused positions hold a name that is never a bag item."""
+    result=[UNUSED_ITEM]*5
+    for name in items:result[BOX_POSITION[name]]=name
+    return result
 
 def close_inventory(service):
     from owner_progression import inventory_parts
@@ -84,6 +112,11 @@ def energy_after_inventory(adapter,context,inputs,skip_before):
     if reason:
         LOG.info('기운 선택상자 보류 · %s',reason)
         return 'priority_hold'
+    # The bag check above reads the character but leaves no receipt, and then the claim quietly skipped (11-05).
+    from owner_progression import state
+    from owner_energy_box_runtime_candidate import fresh_character
+    from owner_quest_preflight import read_power
+    if not fresh_character(adapter,context,state(adapter)):read_power(adapter,context,inputs)
     from owner_energy_next_integration_candidate import attempt
     return attempt(adapter,context,inputs)
 
@@ -106,7 +139,14 @@ def install(gui):
             LOG.info('초반 장비 장착 완료 · 상자 탐색·개봉 생략');return True
         if not getattr(adapter,'_owner_preparing_gears',False) and now-getattr(adapter,'_owner_inventory_completed',-1e30)<interval:return True
         service=TownServices(adapter,context,inputs,inv.INVENTORY_USE_NAMES)
-        if inv.open_inventory(service) is False:raise RuntimeError('상자 처리 전 장착 상태를 확인하지 못했습니다.')
+        try:
+            if inv.open_inventory(service) is False:raise RuntimeError('상자 처리 전 장착 상태를 확인하지 못했습니다.')
+        except RuntimeError as exc:
+            if not visit_interrupted(adapter,service):raise
+            LOG.info('인벤토리 방문 건너뜀 · 대화 장면 또는 지역 이동 · 퀘스트로 복귀 · %s',str(exc)[:40])
+            adapter._owner_inventory_skip_generation=getattr(adapter,'_owner_inventory_skip_generation',0)+1
+            return True
+        adapter._owner_inventory_skips=0
         first=service.capture();context.wait(.15);service.check();second=service.capture()
         worn=agree(first,second)
         rare_weapon=paired_rare_weapon(Path(adapter.project.root)/'profiles/DKB',first,second) if worn.get('무기') is True else None
@@ -132,10 +172,18 @@ def install(gui):
                 LOG.info('무기 등급 미확인 · 부채 상자 처리 완료 여부를 판단하지 않음')
             else:LOG.info('필요한 장비 상자 없음 · 상자 탐색·개봉 생략')
             return True
+        # The native routine opens the inventory itself. Pressing its button on an open panel closes it.
+        close_inventory(service);context.wait(.3)
         previous=(inv.INVENTORY_USE_ITEMS,inv.RARE_ARMOR_PRIORITY,inv.RARE_ACCESSORY_PRIORITY)
-        inv.INVENTORY_USE_ITEMS=items;inv.RARE_ARMOR_PRIORITY=armor;inv.RARE_ACCESSORY_PRIORITY=accessories
-        try:return ordinary(adapter,context,inputs)
+        inv.INVENTORY_USE_ITEMS=native_items(items);inv.RARE_ARMOR_PRIORITY=armor;inv.RARE_ACCESSORY_PRIORITY=accessories
+        try:result=ordinary(adapter,context,inputs)
         finally:inv.INVENTORY_USE_ITEMS,inv.RARE_ARMOR_PRIORITY,inv.RARE_ACCESSORY_PRIORITY=previous
+        if result is False and story_dialogue(adapter,service):
+            # A quest scene took over the screen. Let the quest loop finish it; the next visit retries.
+            LOG.info('인벤토리 사용 중 대화 장면 시작 · 중단하지 않고 퀘스트로 복귀')
+            adapter._owner_inventory_skip_generation=getattr(adapter,'_owner_inventory_skip_generation',0)+1
+            return True
+        return result
     @wraps(use)
     def with_energy(adapter,context,inputs):
         skip_before=getattr(adapter,'_owner_inventory_skip_generation',0)
@@ -144,8 +192,7 @@ def install(gui):
         from owner_energy_box_runtime_candidate import Hold
         try:
             outcome=energy_after_inventory(adapter,context,inputs,skip_before)
-            if outcome not in ('disabled','character_unknown'):
-                LOG.info('기운 선택상자 · %s',outcome)
+            if outcome!='disabled':LOG.info('기운 선택상자 · %s',outcome)
         except Hold as exc:
             LOG.info('기운 선택상자 확인 보류 · %s',str(exc))
         return result

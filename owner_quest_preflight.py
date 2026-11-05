@@ -4,7 +4,7 @@ from owner_progression import state,inventory_parts,observe_inventory,resized,te
 LOG=logging.getLogger('project_gui.DKB')
 
 
-def read_power(adapter,context,inputs):
+def read_power(adapter,context,inputs,again=False):
     from project_adapter import market_inventory,guide_rewards,favorite_hunt
     from project_adapter.town_services import TownServices
     from project_adapter.secret_exploration import AUTO_NAMES
@@ -31,14 +31,24 @@ def read_power(adapter,context,inputs):
     success=progress.observed>=started or observe_inventory(service,force=True)
     # A combat effect can spoil the one look that decides to press the key, and
     # the panels then stay open. Press again only on a fresh proof both are up.
-    end=time.monotonic()+6;pressed=-9.
+    # A dimmed guide can start once the bag opens: it blocks the key and spoils
+    # what was just read, so it is answered and the read is done again.
+    from owner_startup_stage import guide_visible,guide_handler
+    end=time.monotonic()+6;pressed=-9.;guided=False;limit=time.monotonic()+60
     while time.monotonic()<end:
-        context.checkpoint();parts=inventory_parts(service.capture())
+        context.checkpoint();frame=service.capture();parts=inventory_parts(frame)
+        if time.monotonic()<limit and guide_visible(adapter,frame,service.capture()):
+            if guide_handler(adapter,context,inputs,service).handle_tutorial_if_present() in ('FAILED','DETECTED_BUT_UNSAFE'):
+                raise RuntimeError('인벤토리 위 안내 입력을 확인하지 못했습니다.')
+            guided=True;end=time.monotonic()+6;context.wait(.6);continue
         if not any(parts):break
         if parts==(True,True) and time.monotonic()-pressed>=1.5:
             service.check();service.key(0x49);pressed=time.monotonic()
         context.wait(.1)
     else:raise RuntimeError('전투력 확인 후 인벤토리가 닫히지 않아 퀘스트 입력을 보류합니다.')
+    if guided and not again:
+        LOG.info('인벤토리 위 안내 처리 · 캐릭터·전투력 다시 확인')
+        context.wait(1);return read_power(adapter,context,inputs,again=True)
     # This receipt belongs to this running worker's context and only a newly
     # paired inventory read. A later safe growth opportunity may reuse it
     # briefly instead of reopening inventory during a zone transition.

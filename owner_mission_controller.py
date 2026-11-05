@@ -108,6 +108,8 @@ def release_functional_hold(book,key):
  row.pop('block');book.commit();return True
 
 STORY_RECHECK_SECONDS=300
+# Real minimap change at level 17: about 4 while standing with monsters around, 22 while walking.
+IDLE_MINIMAP_CHANGE=10;IDLE_SECONDS=120;PREPARE_SECONDS=180
 
 def pending_death_baselines(book):
  return [row for row in book.item.get('quests',{}).values() if row.get('block',{}).get('reason')=='death' and row['block'].get('baseline') is None and row.get('completed') is not True]
@@ -148,13 +150,58 @@ def defer_full_queue(book,power):
 def hunt_started(result):
  return result is True or result in ('HUNTING_RESUMED','HUNTING_STARTED')
 
+def restart_idle_quest(ui,idle):
+ """Auto-move can drop after a boss fight, and the native runner then only clicks empty ground.
+ A minimap unchanged for two minutes on the bare field presses the quest's own auto-progress again.
+ Observed only on a main quest. The same applies to story quests, since the risk does not depend on mode."""
+ import numpy as np
+ frame=ui.frame()
+ if getattr(frame,'shape',None)!=(479,897,3):return False
+ # A guide can open a known full-screen menu mid-quest, like the treatment screen. Nothing moves until it closes.
+ from owner_start_menu import kind as menu_kind,normalize as leave_menu
+ if menu_kind(frame) in ('몽련 치료','지도','성장','가호','영기 수련','문파') and not ui.opened:
+  ui.context.wait(.12)
+  if menu_kind(ui.frame()):
+   leave_menu(ui.service);idle.update(crop=None,at=time.monotonic());return True
+ now=time.monotonic();crop=frame[18:100,12:95].mean(axis=2)
+ if idle.get('crop') is None or float(np.abs(crop-idle['crop']).mean())>IDLE_MINIMAP_CHANGE:
+  idle.update(crop=crop,at=now);return False
+ if now-idle['at']<IDLE_SECONDS or not ui.normal():return False
+ LOG.info('임무 자리 정체 %d초 · 자동 진행 다시 누름 · %s',now-idle['at'],ui.adapter.mode)
+ ui.open(ui.adapter.mode);ui.start_selected();idle.update(crop=None,at=now)
+ return True
+
+def finish_scene(adapter,context,inputs):
+ """F1 during a quest scene or dimmed guide: no panel can open until it ends. Uses the start stage's handlers."""
+ from project_adapter.main_quest import StateROIs
+ from project_adapter.town_services import TownServices
+ from project_adapter import market_inventory as native
+ from owner_startup_stage import known_dialog,press_dialog,guide_visible,guide_handler
+ mode=adapter.mode if adapter.mode in ('main_quest','sub_quest') else 'sub_quest'
+ slots=StateROIs(adapter.project.root/'profiles/DKB',mode=mode)
+ service=TownServices(adapter,context,inputs,native.INVENTORY_USE_NAMES)
+ handled=False;end=time.monotonic()+30
+ while time.monotonic()<end:
+  context.checkpoint();first=service.capture();context.wait(.12);second=service.capture()
+  key=known_dialog(slots,first,second)
+  if key:press_dialog(adapter,context,inputs,service,slots,key,second)
+  elif not guide_visible(adapter,first,second):break
+  elif guide_handler(adapter,context,inputs,service).handle_tutorial_if_present() in ('FAILED','DETECTED_BUT_UNSAFE'):break
+  handled=True;context.wait(.6)
+ if handled:
+  LOG.info('임무 시작 전 대화·안내 정리 · 전투력 다시 확인')
+  context.wait(1.5)
+ return handled
+
 def prepare(adapter,context,inputs):
  from owner_progression import state
  from owner_quest_preflight import read_power
  from owner_task_flow import bootstrap,defer
  from project_adapter._entry import Adapter
  context.checkpoint();adapter.exit_sleep_mode(context,inputs)
- for attempt in range(3):
+ # A quest fight or scene can hold the screen for minutes, and three quick tries used to stop the run.
+ attempt=0;deadline=time.monotonic()+PREPARE_SECONDS
+ while True:
   context.checkpoint()
   observed_after=time.monotonic()
   if read_power(adapter,context,inputs):break
@@ -162,9 +209,11 @@ def prepare(adapter,context,inputs):
   if getattr(adapter,'_owner_requested_quest_mode',getattr(adapter,'mode',None))=='sub_quest' and fresh.character and fresh.level is not None and fresh.observed>=observed_after and fresh.power is None:
    LOG.warning('전투력 숫자 미확인 · 캐릭터 새 화면 확인 완료 · 현재 단계 적합 표시 임무만 진행 · 성장 재시도 보류')
    break
-  if attempt==2:raise Pending('임무 선택 전 캐릭터·전투력 두 화면 확인 필요 · 재확인 3회 실패')
-  LOG.info('임무 시작 전 화면 재확인 · %d/3 · 잘못된 전투력으로 진행하지 않음',attempt+1)
-  context.wait(.5)
+  finish_scene(adapter,context,inputs)
+  if time.monotonic()>=deadline:raise Pending('임무 선택 전 캐릭터·전투력 두 화면 확인 필요 · %d초 재확인 실패'%PREPARE_SECONDS)
+  attempt+=1
+  if attempt==1 or attempt%10==0:LOG.info('임무 시작 전 화면 재확인 · %d회 · 잘못된 전투력으로 진행하지 않음',attempt)
+  context.wait(3)
  if getattr(adapter,'_owner_initial_context',None) is not context:
   from owner_growth_recovery import recover
   recover(adapter,context,inputs)
@@ -259,6 +308,11 @@ def run(adapter,context,inputs):
    context.checkpoint()
    try:
     require_cleanup_closed(ui)
+    # A dimmed guide or scene blocks every menu, so clear it before opening the quest list.
+    finish_scene(adapter,context,inputs)
+    # The next main quest stays locked behind this guide, so check before picking one.
+    from owner_guide_skill import run as run_guide_skill
+    run_guide_skill(ui)
     from owner_quest_position_recovery import resume_pending
     if resume_pending(ui,book):adapter._owner_restore_story_once=True
     if pending_death_baselines(book) and time.monotonic()>=baseline_retry_at:
@@ -356,9 +410,17 @@ def run(adapter,context,inputs):
     runner=BoundedMainQuestRunner(StateROIs(profile,mode=adapter.mode),**deps)
     from project_adapter.reservations import QuestBossReservation
     boss_reservation=QuestBossReservation(adapter,runner)
-    started=time.monotonic();next_teleport=started+1;next_emote=started+1;scene_changes=[];emote_failed_since=None
+    started=time.monotonic();next_teleport=started+1;next_emote=started+1;next_guide=started+5;idle_quest={};scene_changes=[];emote_failed_since=None
     while True:
      context.checkpoint()
+     if time.monotonic()>=next_guide:
+      next_guide=time.monotonic()+15
+      from owner_guide_skill import run as run_guide_skill
+      if run_guide_skill(ui) or restart_idle_quest(ui,idle_quest):
+       runner=BoundedMainQuestRunner(StateROIs(profile,mode=adapter.mode),**deps)
+       boss_reservation=QuestBossReservation(adapter,runner);scene_changes=[]
+       LOCAL.active=(adapter,context,key,time.monotonic()+6)
+       continue
      if time.monotonic()>=next_emote:
       next_emote=time.monotonic()+(.3 if getattr(adapter,'_owner_emote_requested',None)==key else 2)
       from owner_quest_emote_candidate import run as run_observed_emote

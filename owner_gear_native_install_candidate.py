@@ -285,7 +285,7 @@ def _row_shows(frame,row,before,reference):
 
 def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner=None):
     @wraps(original)
-    def guarded(service,*,blessing=False):
+    def guarded(service,*,blessing=False,_tried=frozenset()):
         context=service.context;context.checkpoint();service.check()
         try:
             root=service.adapter.project.root
@@ -378,7 +378,7 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
             # any unreadable result stops immediately with the intent retained.
             deadline=time.monotonic()+20
             status='hold_time_limit'
-            numeric_retry=False
+            numeric_retry=False;rereads=0
             for _ in range(50):
                 context.checkpoint();service.check()
                 if time.monotonic()>=deadline:break
@@ -396,6 +396,11 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
                     # relax confidence, or retry a sent resource operation.
                     numeric_retry=True;observer.use_raw_input_numbers=True;context.wait(.15)
                     continue
+                # One digit read .83 just after an enhance and ended the visit (+3 on 11-05). No input was sent.
+                if (status=='hold_screen_unverified' and rereads<4 and intent.pending() is None
+                    and getattr(observer,'last_reason',None)=='강화 수치 판독 실패'):
+                    rereads+=1;context.wait(.4)
+                    continue
                 if status!='pending_confirmation':break
                 for attempt in range(6):
                     context.wait(.35 if attempt==0 else .30)
@@ -412,6 +417,12 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
                 _candidate_continuation[identity]=(index,observer.ticket['identity'],revision)
             else:
                 _candidate_continuation.pop(identity,None)
+            # A rare weapon with no stones has a dim button and sends nothing, and it used to
+            # end the visit with white gear still ready. Each worn item gets one look.
+            if (status=='hold_screen_unverified' and getattr(observer,'last_reason',None)=='재료 또는 실행 버튼 미확인'
+                and intent.pending() is None and index not in _tried):
+                _report(service,f"성장 재료 없음 · 칸={index} · 다음 착용 장비 확인")
+                return guarded(service,_tried=_tried|{index})
             # Native caller result semantics are unverified; do not assert full
             # completion when one item advanced or an item was held.
             return False
