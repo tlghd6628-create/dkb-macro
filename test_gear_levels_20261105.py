@@ -48,5 +48,25 @@ class Order(unittest.TestCase):
         self.assertLessEqual(max(levels.values()) - min(levels.values()), STEP)
 
 
+class CornerRead(unittest.TestCase):
+    """A stand-in reader, not the real one: it only shows the corner gets its turn after the wide crop."""
+
+    def test_the_corner_is_tried_when_the_wide_crop_fails(self):
+        import numpy as np
+        from unittest.mock import patch
+        from owner_gear_levels import real_tile_level
+        real = np.full((768, 1366, 3), 40, dtype=np.uint8)
+        real[220:230, 1095:1115] = 255
+        row = {'slot': {'cell_x': 709, 'cell_y': 110.6, 'cell_w': 35, 'cell_h': 35}}
+        sizes = []
+
+        def reader(root, area, **_):
+            sizes.append(area.shape[:2])
+            return [{'text': '+14'}] if len(sizes) == 4 else [{'text': '"T14'}]
+        with patch('owner_text.read_area', reader):
+            self.assertEqual(real_tile_level(None, real, row), 14)
+        self.assertEqual(sizes[-1], (15, 32))
+
+
 if __name__ == '__main__':
     unittest.main()

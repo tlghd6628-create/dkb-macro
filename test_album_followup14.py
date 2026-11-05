@@ -50,4 +50,28 @@ class AlbumTests(unittest.TestCase):
   detector=RoiDetector(root/'profiles/DKB',(a.CHECK,a.COMPLETE))
   self.assertIsNotNone(a.completion_hit(S(detector=detector),frame))
 
+class LooksTests(unittest.TestCase):
+ """Saved shapes only: a fake log line and a fake screen, not a real album visit."""
+ def look(self,watch,text='화첩 추가·동물탭 빨점 없음 · 다른 빨점 재확인'):
+  watch.emit(a.logging.LogRecord('x',20,'x',1,text,(),None))
+ def test_clear_screen_ends_at_the_first_look(self):
+  with self.assertRaises(a.AlbumNothingLeft):self.look(a.NoDots(lambda:True))
+ def test_dots_on_screen_leave_it_to_the_count(self):
+  watch=a.NoDots(lambda:False);self.look(watch)
+  with self.assertRaises(a.AlbumNothingLeft):self.look(watch)
+ def test_other_album_lines_ask_nothing(self):
+  asked=Mock(return_value=True);self.look(a.NoDots(asked),'화첩 보상 시작');asked.assert_not_called()
+ def screen(self,found=True):
+  frame=np.zeros((479,897,3),dtype=np.uint8).view(type('F',(np.ndarray,),{}))
+  frame.hi=np.zeros((768,1366,3),dtype=np.uint8);frame.layout=None
+  return S(capture=lambda:frame,detector=S(find=lambda *_,**__:(1,1) if found else None))
+ def test_real_pixels_decide(self):
+  service=self.screen();self.assertTrue(a.screen_clear(service))
+  service.capture().hi[300:310,700:710]=(220,30,30);self.assertFalse(a.screen_clear(service))
+ def test_not_the_album_or_no_real_pixels_says_nothing(self):
+  self.assertFalse(a.screen_clear(self.screen(False)))
+  self.assertFalse(a.screen_clear(S(capture=lambda:np.zeros((479,897,3),dtype=np.uint8),detector=S(find=lambda *_,**__:(1,1)))))
+ def test_a_failed_read_says_nothing(self):
+  self.assertFalse(a.screen_clear(S(capture=Mock(side_effect=RuntimeError('no')),detector=None)))
+
 if __name__=='__main__':unittest.main()

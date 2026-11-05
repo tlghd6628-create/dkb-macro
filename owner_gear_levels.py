@@ -9,6 +9,7 @@ STEP = 3
 GRID_RULE = 'right'  # the item grid keeps to the right edge at any width
 # A two-digit +31 needs the wide crop and a lone +5 only reads on the narrow one (897x479 frames).
 CROPS = ((12, 22, 24, 13), (18, 24, 16, 10))
+INK = 175
 
 
 def _real_cell(row):
@@ -24,17 +25,23 @@ def real_tile_level(root, real, row):
     from owner_text import read_area
     x, y, w, h = _real_cell(row)
     part = real[y + h // 2:y + h, x + 8:x + w + 2]
-    ink = part.min(axis=2) > 175
-    if int(ink.sum()) < 30:
+    if int((part.min(axis=2) > INK).sum()) < 30:
         return 0
     # Plain reads 3 and 1 best and white digits over a pale icon worst. Lifted out on white, the other way round.
-    lifted = np.stack([255 - ink.astype(np.uint8) * 255] * 3, axis=2)
-    for area, scale, floor in ((part, 2, .75), (lifted, 3, .9)):
+    # A pale icon can also reach into the crop and join the digits, so the last tries hold to the corner they sit in,
+    # real pixels at the tile's lower right: +14 on white trousers was unknown on every run with the wider crop (18:47).
+    corner = real[y + h - 17:y + h - 2, x + w - 32:x + w]
+    for area, scale, floor in ((part, 2, .75), (_lifted(part), 3, .9), (corner, 2, .75), (_lifted(corner), 3, .9)):
         for found in read_area(root, area, language='number', scale=scale, minimum=floor):
             match = re.search(r'\+\s*(\d{1,2})$', found['text'].strip())
             if match:
                 return int(match[1])
     return None
+
+
+def _lifted(part):
+    import numpy as np
+    return np.stack([255 - (part.min(axis=2) > INK).astype(np.uint8) * 255] * 3, axis=2)
 
 
 def tile_level(root, frame, row):
