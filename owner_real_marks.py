@@ -5,8 +5,11 @@ are given in the old terms with the anchor they hold to, so callers keep their b
 """
 from functools import lru_cache
 from pathlib import Path
+import logging
 import numpy as np
 from owner_hd import real_box
+
+LOG=logging.getLogger('project_gui.DKB')
 
 CLOSE_INK=190;BADGE_MOST=24
 
@@ -94,7 +97,10 @@ def install_merchant():
         frame=service.capture()
         if real_of(frame) is None:return ordinary(service)
         service.check()
-        return map_merchant(frame)
+        hit=map_merchant(frame)
+        # The native one presses what it finds: returning only the place left the map unselected and 축지술 never came.
+        if hit is not None:service.click_hit(hit)
+        return hit
     merchant._owner_real_merchant=True
     TownServices.merchant=merchant
 
