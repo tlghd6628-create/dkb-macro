@@ -39,6 +39,19 @@ def _reward(original,should_fence):
     wrapped._owner_blessing_reward_fence=True
     return wrapped
 
+def _bound(original):
+    """On a real frame the owner's rule answers: any blessing without 귀속 stops 일괄 획득. The tile colours it replaces do not survive 1366."""
+    @wraps(original)
+    def wrapped(*args,**kwargs):
+        service=args[0] if args else None
+        capture=getattr(service,'capture',None)
+        if callable(capture) and getattr(capture(),'hi',None) is not None:
+            from owner_blessing_bound import skip_reason
+            return skip_reason(service)
+        return original(*args,**kwargs)
+    wrapped._owner_blessing_protection_fence=True
+    return wrapped
+
 def install(reward_module,market_module,*,should_fence,alias_modules=()):
     if not callable(should_fence):raise ValueError('가호 정책 확인기가 필요합니다')
     from owner_gear_native_install_candidate import _rebind_aliases
@@ -48,7 +61,8 @@ def install(reward_module,market_module,*,should_fence,alias_modules=()):
         _rebind_aliases(alias_modules,old,replacement)
     for name in ('_blessing_tradeable_candidates','_blessing_bulk_skip_reason'):
         old=getattr(reward_module,name)
-        if not getattr(old,'_owner_blessing_protection_fence',False):setattr(reward_module,name,_protected(old))
+        if not getattr(old,'_owner_blessing_protection_fence',False):
+            setattr(reward_module,name,_bound(_protected(old)) if name=='_blessing_bulk_skip_reason' else _protected(old))
     old=reward_module.run_blessing_rewards
     if not getattr(old,'_owner_blessing_reward_fence',False):
         replacement=_reward(old,should_fence);reward_module.run_blessing_rewards=replacement
