@@ -260,11 +260,12 @@ class GearSettings:
             self.blessing_rank.append(v)
             ttk.Label(ranks,text=str(index+1)).grid(row=0,column=index,padx=3)
             ttk.Combobox(ranks,textvariable=v,values=('',)+PATTERNS,state='readonly',width=7).grid(row=1,column=index,padx=3)
-        self.worn_heading(blessings,'착용 가호 · 최근 확인값',row=13,columnspan=6)
+        # Beside the targets: below the reward box the page runs out of height.
+        self.worn_heading(blessings,'착용 가호 · 최근 확인값',row=0,column=6,columnspan=1,padx=(24,0))
         worn_blessings=ttk.Treeview(blessings,columns=('slot','kind','grade','enhance','opening','awaken'),show='headings',height=5)
-        for key,text in zip(worn_blessings['columns'],('칸','종류','등급','강화','개방','각성')):
-            worn_blessings.heading(key,text=text);worn_blessings.column(key,width=78,anchor='center',stretch=True)
-        worn_blessings.grid(row=14,column=0,columnspan=6,sticky='nsew')
+        for key,text,width in zip(worn_blessings['columns'],('칸','종류','등급','강화','개방','각성'),(44,62,52,46,46,46)):
+            worn_blessings.heading(key,text=text);worn_blessings.column(key,width=width,anchor='center',stretch=False)
+        worn_blessings.grid(row=1,column=6,rowspan=6,sticky='n',padx=(24,0))
         self._blessing_display=None
         energies=ttk.Frame(tabs,padding=8);tabs.add(energies,text='기운')
         self.feature_switch(energies,'energies')
@@ -330,8 +331,8 @@ class GearSettings:
         """Set by the settings console; alone in a separate window it has no worker to run on."""
         result.set('세부설정 창에서 실행해 주세요')
 
-    def worn_heading(self,parent,title,*,row,columnspan):
-        line=ttk.Frame(parent);line.grid(row=row,column=0,columnspan=columnspan,sticky='w',pady=(9,3))
+    def worn_heading(self,parent,title,*,row,columnspan,column=0,padx=0):
+        line=ttk.Frame(parent);line.grid(row=row,column=column,columnspan=columnspan,sticky='w',pady=(9,3),padx=padx)
         ttk.Label(line,text=title).pack(side='left')
         result=tk.StringVar(self.window,value='')
         ttk.Button(line,text='TEST',width=6,command=lambda:self.worn_test(result)).pack(side='left',padx=(10,8))
