@@ -151,14 +151,27 @@ class ReadAgain(Exception):
  """The last look before a press did not hold. Nothing was sent."""
 
 def settled_read(service,context):
- """The numbers once two looks in a row agree. The list slides after the wheel and the 1 can read 7 while it does (23:54)."""
- last=None
+ """The numbers once two looks in a row agree. The list slides after the wheel and the 1 can read 7 while it does (23:54).
+ A lone 1 can also go unread on a look (02:06), so failing that each row takes what most looks gave it, and a row with no
+ clear winner leaves the whole reading unread."""
+ from collections import Counter
+ last=None;votes={};rows=None
  for _ in range(READ_TRIES):
   context.checkpoint();service.check();real=np.asarray(service.capture().hi);hits=real_table(real)
   now=real_read(real,hits) if hits else None
   if now and len(now)==len(hits) and now==last:return now
+  if hits:
+   rows=list(hits)
+   for field,value in (now or {}).items():votes.setdefault(field,Counter())[value]+=1
   last=now;context.wait(.25)
- return None
+ if not rows:return None
+ result={}
+ for field in rows:
+  top=votes.get(field,Counter()).most_common(2)
+  if not top or top[0][1]<2 or (len(top)>1 and top[1][1]==top[0][1]):
+   LOG.info('현재값 숫자 판독 불명확 · %s · %s',field,dict(votes.get(field,{})));return None
+  result[field]=top[0][0]
+ return result
 
 def inspect_real(service,context,inputs,profile,character,slot,*,decide=None):
  """A worn tile's details at 1366x768: click its fixed place once, read, close with X. No E mark is read, so a spare can
@@ -228,16 +241,16 @@ def inspect_real(service,context,inputs,profile,character,slot,*,decide=None):
   return True
  finally:
   context.checkpoint();service.check()
-  if left:return
   # The X can take a while, and a press can be lost. Pressing it again is safe; the tile is never pressed again.
-  for attempt in range(3):
+  for attempt in range(0 if left else 3):
    service.click_hit(hd.real_hit(*REAL_CLOSE))
    for _ in range(12):
     context.wait(.2);context.checkpoint();service.check()
     if not popup(service.capture()):break
    else:continue
    break
-  else:raise RuntimeError('장비 상세창 종료 결과 미확인')
+  else:
+   if not left:raise RuntimeError('장비 상세창 종료 결과 미확인')
 
 def inspect_slot(service,context,inputs,profile,character,slot='무기'):
  """One short, guarded tooltip inspection during an existing inventory visit.

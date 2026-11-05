@@ -87,8 +87,13 @@ class Settled(unittest.TestCase):
   self.assertEqual(self.run_reads([{'enhance':50,'awaken':7},{'enhance':50,'awaken':1},{'enhance':50,'awaken':1}]),{'enhance':50,'awaken':1})
  def test_never_agreeing_is_nothing(self):
   self.assertIsNone(self.run_reads([{'enhance':50,'awaken':n} for n in range(9)]))
- def test_a_missing_row_never_answers(self):
+ def test_a_row_unread_on_some_looks_takes_what_most_gave(self):
+  reads=[{'enhance':50},{'enhance':50,'awaken':1},{'enhance':50},{'enhance':50,'awaken':1},{'enhance':50,'awaken':7},{'enhance':50}]
+  self.assertEqual(self.run_reads(reads),{'enhance':50,'awaken':1})
+ def test_a_row_seen_once_never_answers(self):
   self.assertIsNone(self.run_reads([{'enhance':50}]*9))
+ def test_a_tie_never_answers(self):
+  self.assertIsNone(self.run_reads([{'enhance':50,'awaken':1},{'enhance':50,'awaken':7}]*3))
 
 
 class Inspect(unittest.TestCase):
@@ -131,6 +136,17 @@ class Inspect(unittest.TestCase):
   self.assertIs(self.run_slot('가호2',values={}),False)
   self.assertEqual(current.blessing_rows(self.root,'profile')[1][1],'미확인');self.assertEqual(self.clicks[-1],CLOSE)
  matches=True
+ def test_leaving_by_the_growth_button_keeps_the_answer_and_presses_no_x(self):
+  self.assertIs(self.run_decide(lambda values,grade,title:True),True)
+  self.assertEqual(len(self.clicks),1)
+ def test_not_leaving_closes_with_x(self):
+  self.assertIs(self.run_decide(lambda values,grade,title:False),True)
+  self.assertEqual(self.clicks[-1],CLOSE)
+ def run_decide(self,decide):
+  with patch.object(w,'popup',side_effect=lambda f:self.open),patch('owner_progression.inventory_parts',return_value=(True,False)),\
+       patch.object(w,'settled_read',return_value={'enhance':20,'opening':2,'awaken':0}),patch.object(w,'real_heading',return_value=('토끼가호장식2(귀속)','일반')),patch.object(w,'real_matches',return_value=True),\
+       patch('owner_mission_ui.MissionUI.wheel'),patch('owner_skill_ui.SkillUI',lambda *a:NS()):
+   return w.inspect_real(self.service,self.context,self.inputs,'profile','c','가호2',decide=decide)
  def test_a_window_of_another_tile_saves_nothing_and_closes(self):
   self.matches=False
   self.assertIs(self.run_slot('가호2'),False)

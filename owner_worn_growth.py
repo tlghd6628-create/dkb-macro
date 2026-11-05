@@ -170,6 +170,7 @@ class Route:
             LOG.info('착용 %s %s 수치 그대로 · %s',item.slot,LABEL[kind],'돌파 실패' if kind==BREAK else '입력 효과 없음')
     def read(self,item,enter):
         """Open the details and read. With enter, go on to the growth screen if this item is short of something."""
+        self.leave_growth()
         if not self.open_bag():
             LOG.info('착용 %s 건너뜀 · 인벤토리 안 열림',item.slot);return None
         # The window just closed fades out, and a click into the fade is lost.
