@@ -36,7 +36,9 @@ def restore(adapter,context,inputs,change):
  """Back to the everyday preset. A stop or re-route never reaches a caller of this."""
  if not getattr(adapter,'_owner_raid_preset_applied',False):return
  adapter._owner_raid_preset_applied=False
- if adapter.values.get(COMMON) is True:guarded(change,adapter,context,inputs)
+ if adapter.values.get(COMMON) is True and guarded(change,adapter,context,inputs):
+  from owner_single_preset import mark
+  mark(adapter,False)
 
 def install_on(flow_class,module,change):
  """Patch one flow class. Entry and matching are never touched: the preset can
@@ -66,7 +68,11 @@ def install_on(flow_class,module,change):
     flow._owner_raid_pending=False
     adapter,context,inputs=flow._owner_raid_args
     LOG.info('레이드 입장 확인 · 레이드 스킬 프리셋 불러오기')
-    if guarded(change,adapter,context,inputs,enabled_key=ENABLED,choice_key=CHOICE):adapter._owner_raid_preset_applied=True
+    if guarded(change,adapter,context,inputs,enabled_key=ENABLED,choice_key=CHOICE):
+     adapter._owner_raid_preset_applied=True
+     # A stop inside the raid never reaches restore below; the next run goes back from this.
+     from owner_single_preset import mark
+     mark(adapter,True)
    return _ordinary(flow,*args,**kwargs)
   setattr(flow_class,name,checked)
  ordinary_run=module._run
