@@ -31,6 +31,19 @@ def help_close():
  from PIL import Image
  return np.asarray(Image.open(Path(__file__).parent/'assets/start-menu/help-close.png').convert('RGB'))
 
+@lru_cache(maxsize=1)
+def back_arrow():
+ import numpy as np
+ from PIL import Image
+ return np.asarray(Image.open(Path(__file__).parent/'assets/start-menu/back-arrow.png').convert('RGB'))
+
+def full_menu(service,frame):
+ """Any full-screen menu: its back arrow and its exit icon, both bright. A stop can leave any of them open (shop, 12:28)."""
+ import cv2
+ if getattr(frame,'shape',None)!=(479,897,3):return False
+ if float(cv2.matchTemplate(frame[8:32,10:36],back_arrow(),cv2.TM_CCOEFF_NORMED).max())<.95:return False
+ return service.detector.find('버튼_나가기',frame,threshold=.96) is not None
+
 def kind(frame):
  if getattr(frame,'shape',None)!=(479,897,3):return None
  from owner_skill_ui import skill_screen,quest_screen,map_screen
@@ -73,13 +86,14 @@ def normalize(service):
     if worn_popup(service.capture()):
      service.click_hit((510,106,(503,99,518,113)));service.context.wait(.2)
      LOG.info('시작 위치 정리 · 착용 장비 상세창 닫기');continue
-  first=kind(initial);service.context.wait(.12)
-  second=kind(service.capture())
+  def seen(frame):return kind(frame) or ('전체 화면' if full_menu(service,frame) else None)
+  first=seen(initial);service.context.wait(.12)
+  second=seen(service.capture())
   if first is None or first!=second:return
   # The second observation and the final guarded frame must still be the
   # same visible foreground menu. Never press a back button behind a popup.
   frame=service.capture()
-  if kind(frame)!=first:return
+  if seen(frame)!=first:return
   hit=service.detector.find('버튼_나가기',frame,threshold=.96)
   if not hit:raise RuntimeError(first+' 시작 메뉴의 나가기 위치 확인 필요')
   service.context.checkpoint();service.check()
