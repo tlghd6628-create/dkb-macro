@@ -181,14 +181,26 @@ def route_potion_purchase(ordinary,adapter,context,inputs):
   import time
   if time.monotonic()-getattr(adapter,'_owner_potion_full_at',-1e30)<3600:
    LOG.info('물약 한도 확인 후 1시간 대기 · 상인 이동 없음');return True
+  from project_adapter.town_services import TownServices
+  from owner_remote_potion_limit_candidate import sold_out
+  tier=str(adapter.values.get('common.potion_and_favorite.potion_tier','1단물약'))
+  look=TownServices(adapter,context,inputs,[])
   class Full(logging.Handler):
-   said=False
+   said=False;sold=False
    def emit(self,record):
-    if '물약구매 불가' in record.getMessage():self.said=True
+    if '물약구매 불가' not in record.getMessage():return
+    self.said=True
+    # The shop is still open when the first of these lines is written.
+    if not self.sold:
+     try:self.sold=sold_out(look.capture(),tier)
+     except (OSError,ValueError,RuntimeError):pass
   watch=Full();LOG.addHandler(watch)
   try:result=ordinary(adapter,context,inputs)
   finally:LOG.removeHandler(watch)
   if watch.said:adapter._owner_potion_full_at=time.monotonic()
+  # 구매 불가 means the amount is used up. Reporting a failure made the falling-battle return skip its re-entry.
+  if watch.sold:
+   LOG.info('물약 구매 끝 · %s 구매 가능 수량 없음',tier);return True
   return result
  previous=getattr(LOCAL,'potion',None);LOCAL.potion=(adapter,context,inputs)
  try:return remote_purchase(adapter,context,inputs)

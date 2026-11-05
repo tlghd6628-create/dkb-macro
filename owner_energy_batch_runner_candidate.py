@@ -14,8 +14,16 @@ def ensure_plan(journal,settings,available):
    raise Hold('저장된 기운 분배 계획 확인 필요')
   left=sum(old['remaining'].values())
   if old.get('weights')==stamp and left:
-   if left!=available:raise Hold('상자 잔량과 저장된 분배 계획이 다릅니다')
-   return old
+   if left==available:return old
+   # Quests keep paying out boxes between batches, and a plan for the old count then held them all for good.
+   if left<available:
+    extra,rounding_after=allocation(available-left,settings,dict(state,energy_ratio_rounding=old.get('rounding_after')))
+    for name in NAMES:
+     old['remaining'][name]+=extra[name];old['allocated'][name]=old['allocated'].get(name,0)+extra[name]
+    old['rounding_after']=rounding_after;old['boxes_before']=old.get('boxes_before',0)+available-left
+    journal.save(state);return old
+   # Fewer than planned means something else opened them, and this plan can no longer be trusted.
+   raise Hold('상자 잔량과 저장된 분배 계획이 다릅니다')
   history=state.setdefault('energy_batch_history',[])
   history.append(dict(old,archived_at=time.time(),reason='settings_changed' if left else 'completed'))
   state['energy_batch_history']=history[-64:]

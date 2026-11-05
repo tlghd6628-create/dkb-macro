@@ -113,6 +113,14 @@ def _coin_like(frame,y):
  patch=frame[y-7:y+5,49:62].astype(int);r,g,b=patch[...,0],patch[...,1],patch[...,2]
  return float(((r>g)&(g>b)&(r-b>40)&(r>120)).mean())>=.10
 
+def _sold_out(frame,y):
+ """The grey 구매 불가 label over the icon of the row whose price line is at y."""
+ import cv2
+ from owner_remote_potion_limit_candidate import _asset
+ patch=frame[max(0,y-10):y+12,6:48];needle=_asset('unavailable')
+ if patch.shape[0]<needle.shape[0] or patch.shape[1]<needle.shape[1]:return False
+ return float(cv2.matchTemplate(patch,needle,cv2.TM_CCOEFF_NORMED).max())>=.92
+
 def _same_patch(frame,sample,box):
  import cv2
  x,y,w,h=box;patch=frame[y:y+h,x:x+w]
@@ -162,7 +170,10 @@ def _read_quote(ui,item):
  # Weekly and daily rows show (used/limit); the potion rows show available/maximum.
  kind,used=('observed_weekly_quote',first_number) if bracketed[0] else ('observed_available_quote',limit-first_number)
  # A row that has used its limit is greyed out, and there is nothing left to buy from it.
- if limit-used>0 and not all(_coin_like(frame,y) for frame in frames):raise Hold('엽전 가격 표시 확인 필요')
+ if limit-used>0 and not all(_coin_like(frame,y) for frame in frames):
+  # The count can still leave room while the row says 구매 불가 (강인 on pc1, 11-05). The row is the answer.
+  if not all(_sold_out(frame,y) for frame in frames):raise Hold('엽전 가격 표시 확인 필요')
+  used=limit
  box=(44,y-22,121,14);samples=[frame[box[1]:box[1]+14,44:165].copy() for frame in frames]
  return {'name':item,'click_y':y-13,'row_proof':lambda frame:all(_same_patch(frame,sample,box) for sample in samples),
          'currency':'엽전','unit_price':values[0],'used':used,'limit':limit,'remaining':limit-used,'kind':kind}
@@ -192,11 +203,15 @@ def _popup(ui,price,item):
   return counts[0],lambda frame:title(frame) and all(_same_patch(frame,sample,POPUP_NAME) for sample in samples)
  raise Hold(reason)
 
+# The town merchant totals two currencies side by side, which pushes the coin total left of the remote shop's.
+TOTAL_BOXES={'remote':(428,388,80,20),'town':(380,388,85,24)}
+
 def _total(ui):
  """The cart total, once two frames agree. It counts up right after an item goes in."""
+ box=TOTAL_BOXES[getattr(ui,'_owner_shop_kind','remote')]
  for attempt in range(6):
   if attempt:ui.context.wait(.3)
-  answers,_=_read_pair(ui,[((428,388,80,20),'number')])
+  answers,_=_read_pair(ui,[(box,'number')])
   values=[[_price(r['text']) for r in rows if r.get('score',0)>=.85 and _price(r.get('text')) is not None] for rows in answers[0]]
   if len(values[0])==1 and values[0]==values[1]:return values[0][0]
  raise Hold('장바구니 합계 판독 확인 필요')
@@ -281,29 +296,34 @@ def _settle_pending(journal,character,shop,item,used):
   data['transactions']=kept;journal._write(data)
  journal._under_lock(write)
 
+class _ShopReached(BaseException):
+ """Leaves the native potion path once it has opened the shop, before any purchase input."""
+
 def _open_town_shop(adapter,context,inputs):
  """Reuse original town return and merchant detection; require shop header."""
  from owner_skill_ui import SkillUI
  from owner_membership import hit
- from project_adapter.town_services import TownServices,POTION_NAMES
+ from project_adapter.town_services import TownServices
  LOG.info('잡화상점 이동 · 마을 복귀 시작')
  if adapter.run_town_return(context,inputs) is False:raise Hold('잡화상점 마을 복귀 미확인')
  context.checkpoint();LOG.info('잡화상점 이동 · 마을 복귀 처리 종료 · 상인 확인')
- service=TownServices(adapter,context,inputs,list(POTION_NAMES));ui=SkillUI(adapter,context,inputs)
+ ui=SkillUI(adapter,context,inputs)
  def shop(frame):return hit(frame,'remote-shop-title',(35,4,110,30)) is not None
  if _paired(ui,shop):return ui
- original_check=service.check;deadline=time.monotonic()+8
- def bounded_check():
-  original_check()
-  if time.monotonic()>=deadline:raise Hold('마을 상인 탐색 시간 초과 · 구매 미완료')
- service.check=bounded_check
- try:found=service.merchant()
- finally:service.check=original_check
+ # The merchant is an icon at a fixed spot on a map centred on the character, so it only matches right after a
+ # return, and the native potion path retries that up to five times. Ride that path and leave at the first shop button.
+ from project_adapter.town_services import run_potion_purchase
+ previous=TownServices.button
+ def button(service,name,*a,**k):
+  if getattr(service,'context',None) is context and str(name).startswith('버튼_물약상인_'):raise _ShopReached()
+  return previous(service,name,*a,**k)
+ TownServices.button=button
+ try:run_potion_purchase(adapter,context,inputs)
+ except _ShopReached:pass
+ finally:TownServices.button=previous
  context.checkpoint()
- if not found:raise Hold('마을 상인 위치를 확인하지 못했습니다')
  adapter._owner_shop_entered=True
- service.click_hit(found)
- try:ui.wait(shop,seconds=10)
+ try:ui.wait(shop,seconds=5)
  except Cancelled:raise
  except Exception as exc:raise ShopNavigationError('마을 상점 진입 화면 미확인') from exc
  if not _paired(ui,shop):raise ShopNavigationError('마을 상점 두 화면 확인 필요')
@@ -347,6 +367,7 @@ def _buy_one(adapter,context,inputs,item,shop):
  probe=SkillUI(adapter,context,inputs)
  if not probe.normal():raise Hold('원격 상점 진입 전 일반 화면 확인 필요')
  ui=open_remote(adapter,context,inputs) if shop=='remote' else _open_town_shop(adapter,context,inputs)
+ ui._owner_shop_kind=shop
  adapter._owner_shop_entered=True
  quote=_find_quote(ui,item)
  # '구매 가능' is only an observed current limit; the game's reset semantics

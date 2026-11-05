@@ -31,6 +31,23 @@ def help_close():
  from PIL import Image
  return np.asarray(Image.open(Path(__file__).parent/'assets/start-menu/help-close.png').convert('RGB'))
 
+@lru_cache(maxsize=1)
+def panel_header():
+ import numpy as np
+ from PIL import Image
+ return np.asarray(Image.open(Path(__file__).parent/'assets/start-menu/menu-panel.png').convert('RGB'))
+
+def menu_panel(frame):
+ """The side menu from the top-right icon. A job that stopped left it open, and F1 then read an unknown screen for 40 s and quit (14:33)."""
+ import cv2,numpy as np
+ if getattr(frame,'shape',None)!=(479,897,3):return False
+ needle=panel_header();area=frame[46:72,632:694]
+ _,score,_,pos=cv2.minMaxLoc(cv2.matchTemplate(area,needle,cv2.TM_CCOEFF_NORMED))
+ if score<.95:return False
+ # A guide dims this same panel and points into it. That one belongs to the guide handler.
+ h,w=needle.shape[:2];patch=area[pos[1]:pos[1]+h,pos[0]:pos[0]+w]
+ return float(np.abs(patch.astype('int16')-needle.astype('int16')).mean())<=15
+
 def kind(frame):
  if getattr(frame,'shape',None)!=(479,897,3):return None
  from owner_skill_ui import skill_screen,quest_screen,map_screen
@@ -92,6 +109,12 @@ def normalize(service):
     if worn_popup(service.capture()):
      service.click_hit((510,106,(503,99,518,113)));service.context.wait(.2)
      LOG.info('시작 위치 정리 · 착용 장비 상세창 닫기');continue
+  if menu_panel(initial):
+   service.context.wait(.12)
+   if menu_panel(service.capture()):
+    service.context.checkpoint();service.check()
+    service.click_hit((875,19,(865,9,885,29)));service.context.wait(.4)
+    LOG.info('시작 위치 정리 · 전체 메뉴 닫기');continue
   def name(frame):return kind(frame) or plain_menu(service,frame)
   first=name(initial);service.context.wait(.12)
   second=name(service.capture())

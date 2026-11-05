@@ -1050,7 +1050,18 @@ def idle_once(adapter,context,inputs):
         from owner_chore_transition import ancillary_field_ready
         if not ancillary_field_ready(adapter,context,inputs):return False
         LOG.info('시간표 실행 · %s · 예약=%s',job.label,plan.state[job.key]['at'])
-        scheduled_call(lambda:invoke(adapter,job,context,inputs),job.label,(),{},adapter,timed_dispatch=True,run_context=context,run_inputs=inputs)
+        try:scheduled_call(lambda:invoke(adapter,job,context,inputs),job.label,(),{},adapter,timed_dispatch=True,run_context=context,run_inputs=inputs)
+        except RuntimeError as exc:
+            # A story scene opened over the album and the whole run ended (14:22). The job keeps its retry.
+            # Only the plain error a job reports: subclasses unwind routes and stops.
+            if type(exc) is not RuntimeError:raise
+            context.checkpoint()
+            LOG.warning('시간표 작업 미완료 · %s · %s · 이어서 진행',job.label,str(exc)[:120])
+            from owner_start_menu import normalize
+            from project_adapter.town_services import TownServices
+            try:normalize(TownServices(adapter,context,inputs,['버튼_나가기']))
+            except RuntimeError as closing:LOG.info('일정 후 메뉴 정리 보류 · %s',closing)
+            return True
         context.checkpoint()
         if job.key in AUTO_MODE_JOBS and adapter.mode in ('main_quest','sub_quest'):
             # Same unwind as a world-boss return: the route loop reselects the saved quest.
