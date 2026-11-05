@@ -24,23 +24,25 @@ def label(field):
 
 def table(frame):
  if getattr(frame,'shape',None)!=(479,897,3):return None
- hits=[];area=frame[170:385,260:650]
+ hits={};area=frame[170:385,260:650]
  # Only common Korean field labels are templates. Their numeric values and
  # the equipment/character names are always read from the current frame.
  for field in FIELDS:
   needle=label(field);values=cv2.matchTemplate(area,needle,cv2.TM_CCOEFF_NORMED)
   _,score,_,pt=cv2.minMaxLoc(np.nan_to_num(values,nan=-1))
-  if score<.92:return None
-  hits.append((260+pt[0],170+pt[1],needle.shape[1],needle.shape[0]))
- x,y,w,h=hits[0]
- if any(abs(a-x)>2 or abs(b-(y+17*i))>2 for i,(a,b,_,_) in enumerate(hits)):return None
+  # A character on three growth tabs has no 돌파 row at all, and every slot's reading failed for it (4.6 s each).
+  # 강화 reads .912 there. The rows' fixed spacing below is what proves the table.
+  if score>=.90:hits[field]=(260+pt[0],170+pt[1],needle.shape[1],needle.shape[0])
+  elif field!='breakthrough':return None
+ x,y,_,_=hits['enhance']
+ if any(abs(a-x)>2 or abs(b-(y+17*i))>2 for i,(a,b,_,_) in enumerate(hits.values())):return None
  return hits
 
 def read(frame,engine):
  hits=table(frame)
  if hits is None:return None
  result={}
- for field,(x,y,w,h) in zip(FIELDS,hits):
+ for field,(x,y,w,h) in hits.items():
   crop=frame[y:y+h,x+60:x+92]
   if crop.shape!=(h,32,3):continue
   values=[]
@@ -156,7 +158,7 @@ def inspect_slot(service,context,inputs,profile,character,slot='무기'):
   if observe(adapter.project.root,row):
    LOG.info('착용 %s 현재값 확인 · 강화 %s · 개방 %s · 돌파 %s · 각성 %s',
             slot,first.get('enhance','미확인'),first.get('opening','미확인'),first.get('breakthrough','미확인'),first.get('awaken','미확인'))
-   cache[token]={'icon':signature,'after':time.monotonic()+(1200 if len(first)==4 else 120)};return True
+   cache[token]={'icon':signature,'after':time.monotonic()+(1200 if len(first)>=3 else 120)};return True
   return False
  except ChoreYield:
   cache.pop(token,None)
@@ -182,7 +184,7 @@ def stale_slots(root,profile,now=None):
  fresh=set()
  for row in rows:
   values=row.get('values',{})
-  if row.get('slot') in SLOTS and all(field in values for field in FIELDS) and now-row.get('at_epoch',0)<STALE_SECONDS:fresh.add(row['slot'])
+  if row.get('slot') in SLOTS and all(field in values for field in FIELDS if field!='breakthrough') and now-row.get('at_epoch',0)<STALE_SECONDS:fresh.add(row['slot'])
  return [slot for slot in SLOTS if slot not in fresh]
 
 def refresh_when_stale(adapter,context,inputs):

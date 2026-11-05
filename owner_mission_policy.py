@@ -116,6 +116,19 @@ class QuestBook:
                     if row.get('block',{}).get('reason')=='death':row['deaths']=0
                     row.pop('block',None);self.commit();return key
         return None
+    def chapter_reached(self,chapter):
+        """The main story is on this chapter, so a hold naming an earlier one is out of date. Only a chapter name
+        settles it: the saved title can misread ('전인' for '전언') and then never matched a finished quest, which
+        held the very side story chapter 4 was waiting on. The row is read afresh before it runs."""
+        changed=False
+        for row in self.item['quests'].values():
+            block=row.get('block') or {}
+            if block.get('functional_hold') or block.get('reason') not in ('prerequisite','condition'):continue
+            named=[int(n) for n in re.findall(r'\[\s*(\d+)\s*장\s*\]',str(block.get('prerequisite') or '')+' '+str(block.get('detail') or ''))]
+            if named and max(named)<chapter:
+                row.pop('block');row['condition_recovered']=True;changed=True
+        if changed:self.commit()
+        return changed
     def prerequisite_proved(self,key):
         # Called only after reading the selected quest detail without the
         # prior prerequisite condition, not because a timer elapsed.

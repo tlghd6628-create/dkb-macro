@@ -247,6 +247,9 @@ class MissionUI(SkillUI):
    buttons=self.rows((674,432,205,40))
    accepted=any('자동진행' in clean(row['text']) and row['score']>=.88 for row in buttons)
   key=book.observe(mode,title,objective=objective,completed=complete,suitable=bool(suitable),actionable=bright and not has_prereq and not gated,accepted=accepted,required_power=required,source='paired_selected_mission_tab')
+  chapter=re.search(r'\[\s*(\d+)\s*장\s*\]',str(title))
+  if mode=='main_quest' and bright and not complete and chapter and book.chapter_reached(int(chapter[1])):
+   LOG.info('지난 장 조건으로 보류된 임무 다시 확인 · 현재 %s장',chapter[1])
   if complete:
    from owner_skill_goal import STORY,runtime_ledger
    if clean(STORY+'5') in clean(title):
@@ -299,7 +302,10 @@ class MissionUI(SkillUI):
     # pending batch, keeping all quest/death/prerequisite history untouched.
     book.item['batch'].update(keys=[],title_reader='selected-row-v2');book.commit()
     LOG.info('서사 수락 묶음 재확인 · 넓은 선택 행 제목 기준 · 기존 임무·사망 기록 유지')
-  if active and book.item['quests'][active]['mode'] in modes:
+  # A running story used to skip the main list altogether, so a main step waiting on a side story was never
+  # read again while another story was on hand ('읽은 행=0' at 14:50). Its row is read first until it opens.
+  main_waiting=requested=='main_quest' and not fill and any(r.get('mode')=='main_quest' and r.get('block',{}).get('reason')=='prerequisite' for r in book.item['quests'].values())
+  if active and book.item['quests'][active]['mode'] in modes and not main_waiting:
    modes=(book.item['quests'][active]['mode'],)+tuple(m for m in modes if m!=book.item['quests'][active]['mode'])
   keys=[];seen=set();expanded=set();unknown=0;partial=False
   for mode in modes:
@@ -363,8 +369,11 @@ class MissionUI(SkillUI):
      # A saved active quest has priority until independently completed or
      # deferred. Do not select another merely because it appears first.
      waiting=book.item.get('active')
-     if choice and (not waiting or choice==waiting):
+     # Except a main step whose condition just cleared: the story was only ever filling that wait.
+     reopened=choice and mode=='main_quest' and book.item['quests'][choice].get('condition_recovered')
+     if choice and (not waiting or choice==waiting or reopened):
       if choice!=key:continue
+      book.item['quests'][key].pop('condition_recovered',None)
       book.activate(key);return key
      frame=self.frame()
     if partial:break

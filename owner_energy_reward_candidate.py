@@ -48,5 +48,17 @@ def quantity(frame,name):
    if value and float(confidence)>=.98:found.append(int(value[0]))
  return found[0] if len(found)==1 else None
 
+def named(frame,name):
+ """The reward screen for this energy, whatever its count. The icon is still settling at .97."""
+ if name not in READERS or not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or frame.dtype!=np.uint8:return False
+ suffix={'생명':'life','여명':'dawn','몽환':'dream'}[name]
+ return (score(frame[94:110,421:478],asset('reward-title'))>=.98
+         and score(frame[128:150,433:465],asset('reward-'+suffix+'-icon1')[:22])>=.97
+         and score(frame[164:178,429:469],asset('reward-'+suffix+'-name'))>=.98)
+
 def matches(frame,name,expected):
- return type(expected) is int and expected>0 and quantity(frame,name)==expected
+ """A lone digit over the icon cannot be read at all (a claim of 4, 11-05). Callers go on to require the box count
+ to fall by exactly this much, so the right screen with an unreadable count is enough. A count that reads must agree."""
+ if type(expected) is not int or expected<1:return False
+ found=quantity(frame,name)
+ return found==expected if found is not None else expected>1 and named(frame,name)
