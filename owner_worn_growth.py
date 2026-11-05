@@ -16,7 +16,7 @@ from owner_gear_intent_store_candidate import IntentStore
 from owner_gear_settings_candidate import Store
 from owner_gear_step_guard_candidate import Guard
 from owner_growth_reading import breakthrough_allowed,goal_state
-from owner_growth_words import (BLESSING_COUNT,BLESSING_LEVEL,BLESSING_NEXT,BLESSING_PILL,BLESSING_TITLE,counts,enough,level_pair,lit,only_word,pill_price)
+from owner_growth_words import (BLESSING_COUNT,BLESSING_LEVEL,BLESSING_NEXT,BLESSING_PILL,BLESSING_TITLE,counts,enough,level_pair,lit,lone_one_pair,only_word,pill_price)
 from owner_hd import real_hit
 from owner_short_notice import shown as coins_short
 
@@ -90,6 +90,7 @@ def read_panel(root,frame):
     if pair is None:
         left,right=text.read(root,frame,BLESSING_LEVEL,scale=2),text.read(root,frame,BLESSING_NEXT,scale=2)
         pair=level_pair(left,right) or font_pair(left,right)
+    if pair is None:pair=lone_one_pair(frame,text.read(root,frame,BLESSING_NEXT,scale=3))
     if pair is None:return None
     pill=text.read(root,frame,BLESSING_PILL,scale=3);word=only_word(pill,('강화','개방'))
     have=have_enough(root,frame)
@@ -419,6 +420,52 @@ class Route:
     def to_field(self):
         self.leave_growth();worn.leave_blessing_screen(self.service,self.context)
         worn.close_bag(self.service,self.context)
+
+
+def growth_switches(root):
+    """The saved growth switches (기능 사용) for gear and blessings. A TEST or a timed job sees only its own switch in
+    adapter.values, so the saved file decides here."""
+    import json
+    try:values=json.loads((Path(root)/'settings/auto-settings.json').read_text(encoding='utf-8-sig')).get('values',{})
+    except (OSError,ValueError,AttributeError):return {'gear':False,'blessing':False}
+    return {'gear':values.get('auto_growth.equipment.enabled') is True,'blessing':values.get('auto_growth.blessing.enabled') is True}
+
+
+def grow(adapter,context,inputs,slots):
+    """Right after a higher-grade swap: the new item grows to its goals by this same route, at once (user, 11-06).
+    Only where growth is switched on for its kind and its grade's goals are ticked. Spends as ordinary growth does."""
+    from project_adapter.town_services import TownServices
+    from project_adapter import market_inventory
+    from owner_hunt_rules_candidate import configured_identity
+    from owner_progression import state
+    root=adapter.project.root;switches=growth_switches(root)
+    items=[Item(slot,slot in worn.BLESSING_SLOTS) for slot in slots]
+    items=[item for item in items if switches['blessing' if item.blessing else 'gear']]
+    if not items:
+        LOG.info('교체 장비 바로 성장 생략 · 성장 기능 사용 꺼짐 · %s',', '.join(slots));return False
+    service=TownServices(adapter,context,inputs,market_inventory.INVENTORY_USE_NAMES)
+    if getattr(service.capture(),'hi',None) is None:return False
+    identity=configured_identity(root)
+    document,revision=Store(root,identity).snapshot()
+    if revision=='missing':return False
+    route=Route(adapter,context,inputs,service,identity,identity,state(adapter).character,document)
+    old=route.intents.pending()
+    if old and old.get('phase')=='prepared':route.intents.abort_prepared('이전 입력 전 기록');old=None
+    if old and not str(old['before'].slot).startswith('worn:'):route.intents.close_absent('인벤토리 경로로 전환 · 현재값으로 다시 판단')
+    try:
+        for item in items:
+            route.check()
+            if not route.read(item) or not item.values:
+                LOG.info('교체 장비 바로 성장 · %s 현재값 못 읽음',item.slot);continue
+            LOG.info('교체 장비 바로 성장 · %s · %s · 다음 %s',item.slot,item.grade,LABEL.get(route.need(item),'목표 도달 또는 목표 꺼짐'))
+            if route.need(item):route.visit(item)
+    except CoinsShort:
+        LOG.info('성장 재화 부족 · 교체 장비 성장 종료')
+    finally:
+        context.checkpoint()
+        if worn.popup(service.capture()):service.click_hit(real_hit(*worn.REAL_CLOSE));context.wait(.8)
+        route.to_field()
+    return True
 
 
 def run(adapter,context,inputs):

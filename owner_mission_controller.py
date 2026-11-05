@@ -168,8 +168,17 @@ def restart_idle_quest(ui,idle):
   idle.update(crop=crop,at=now);return False
  if now-idle['at']<IDLE_SECONDS or not ui.normal():return False
  LOG.info('임무 자리 정체 %d초 · 자동 진행 다시 누름 · %s',now-idle['at'],ui.adapter.mode)
+ quest_range(ui.adapter,ui.context,ui.inputs)
  ui.open(ui.adapter.mode);ui.start_selected();idle.update(crop=None,at=now)
  return True
+
+def quest_range(adapter,context,inputs):
+ """A quest walks to its monsters: 제자리 off and range 30m, as for a boss (user's rule). The quest entry sets it once,
+ but a failed panel read there, or a hunt between quests (its sleep entry puts hunting's ON 5m back), left the
+ character fixed at 5m: pc2 11-06, 0/10 for 7 minutes beside the wrong monster. Only when no record says it is loose."""
+ from owner_boss_range import pending,loosen
+ if pending(adapter.project.root) is not None:return False
+ return loosen(adapter,context,inputs)
 
 def finish_scene(adapter,context,inputs):
  """F1 during a quest scene or dimmed guide: no panel can open until it ends. Uses the start stage's handlers."""

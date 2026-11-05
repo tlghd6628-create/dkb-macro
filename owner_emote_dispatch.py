@@ -220,7 +220,9 @@ def read_requirement(ui):
  ui._owner_emote_requirement_hint=any(r.get('score',0)>=.5 and '표현' in r.get('text','') for r in a+b)
  first,second=parse_target(a,emote_context=True),parse_target(b,emote_context=True)
  if not first or first!=second:
-  LOG.warning('감정 요구 판독 대조 · 첫 화면=%s · 다음 화면=%s',
+  # No 표현 in the tracker means no emote is asked: two looks of a plain quest line differ by OCR (늪/늙, pc2 11-06)
+  # and that was a warning every 10 s. It never held the quest up; the caller just returns.
+  if ui._owner_emote_requirement_hint:LOG.warning('감정 요구 판독 대조 · 첫 화면=%s · 다음 화면=%s',
               [(r.get('text'),round(r.get('score',0),3)) for r in a],
               [(r.get('text'),round(r.get('score',0),3)) for r in b])
   return None

@@ -23,7 +23,12 @@ DEFAULT = {'version': 1, 'recheck_minutes': 20, 'grades': {
     'individual': {}, 'album': {'mode': '조각 등록만'},
     'blessings': {name: {'enabled': False, 'enhance': 49, 'breakthrough': 0} for name in BLESSINGS},
     'energies': {name: {'enabled': False, 'stage': None} for name in ENERGIES},
-    'blessing_equip': {'enabled': True, 'priorities': []}}
+    'blessing_equip': {'enabled': True, 'priorities': [], 'normal_to_rare': False, 'rare_to_hero': False},
+    # Higher grade first, by step (owner_upgrade_equip). Each kind has its own time in the timetable.
+    'gear_equip': {'normal_to_rare': False, 'rare_to_hero': False},
+    # 가호 소환 (owner_blessing_summon): 10회 while ten tickets or more, 1회 for the rest.
+    'blessing_summon': {'one': False, 'ten': False}}
+EQUIP_STEPS = (('normal_to_rare', '일반 → 희귀'), ('rare_to_hero', '희귀 → 영웅'))
 
 
 def skill_catalog():
@@ -97,6 +102,14 @@ def validate(document):
         if not isinstance(equip,dict) or type(equip.get('enabled')) is not bool:
             raise ValueError('가호 장착 설정을 확인해 주세요.')
         validate_order(equip.get('priorities'))
+    for section in ('blessing_equip','gear_equip'):
+        if section in document:
+            if not isinstance(document[section],dict) or any(type(document[section].get(key,False)) is not bool for key,_ in EQUIP_STEPS):
+                raise ValueError('높은 등급 우선 장착 설정을 확인해 주세요.')
+    if 'blessing_summon' in document:
+        summon=document['blessing_summon']
+        if not isinstance(summon,dict) or any(type(summon.get(key,False)) is not bool for key in ('one','ten')):
+            raise ValueError('가호 소환 설정을 확인해 주세요.')
     for section, names, fields in (('blessings', BLESSINGS, ('enhance','breakthrough')),
                                    ('energies', ENERGIES, ('stage',))):
         if section not in document:continue
@@ -140,6 +153,9 @@ class Store:
         document.setdefault('blessings',copy.deepcopy(DEFAULT['blessings']))
         document.setdefault('energies',copy.deepcopy(DEFAULT['energies']))
         document.setdefault('blessing_equip',copy.deepcopy(DEFAULT['blessing_equip']))
+        for key,_ in EQUIP_STEPS:document['blessing_equip'].setdefault(key,False)
+        document.setdefault('gear_equip',copy.deepcopy(DEFAULT['gear_equip']))
+        document.setdefault('blessing_summon',copy.deepcopy(DEFAULT['blessing_summon']))
         return document,revision
 
     def read(self):
@@ -199,6 +215,7 @@ class GearSettings:
             ttk.Checkbutton(box, variable=v['enabled']).grid(row=index, column=1)
             for target_column,key in ((2,'enhance'),(3,'breakthrough'),(4,'awaken')):
                 ttk.Entry(box,textvariable=v[key],width=6).grid(row=index,column=target_column,padx=4)
+        self.gear_steps=self.equip_line(box,'gear',self.value['gear_equip'],row=5,columnspan=8)
         self.worn_heading(box,'착용 장비 · 최근 확인값',row=6,columnspan=8)
         equipped=ttk.Treeview(box,columns=('slot','grade','enhance','breakthrough','awaken'),show='headings',height=5)
         for key,text in zip(equipped['columns'],('부위','등급','강화','돌파','각성')):
@@ -252,7 +269,7 @@ class GearSettings:
         ttk.Separator(blessings,orient='horizontal').grid(row=7,column=0,columnspan=6,sticky='ew',pady=8)
         equip=self.value['blessing_equip']
         self.blessing_equip=tk.BooleanVar(self.window,value=equip['enabled'])
-        ttk.Checkbutton(blessings,text='높은 등급 우선 장착',variable=self.blessing_equip).grid(row=8,column=0,columnspan=6,sticky='w')
+        self.blessing_steps=self.equip_line(blessings,'blessing',equip,row=8,columnspan=6)
         ttk.Label(blessings,text='같은 등급 문양 순위').grid(row=9,column=0,columnspan=6,sticky='w',pady=(8,3))
         self.blessing_rank=[]
         ranks=ttk.Frame(blessings);ranks.grid(row=10,column=0,columnspan=6,sticky='w')
@@ -261,6 +278,14 @@ class GearSettings:
             self.blessing_rank.append(v)
             ttk.Label(ranks,text=str(index+1)).grid(row=0,column=index,padx=3)
             ttk.Combobox(ranks,textvariable=v,values=('',)+PATTERNS,state='readonly',width=7).grid(row=1,column=index,padx=3)
+        summon=ttk.Frame(blessings);summon.grid(row=11,column=0,columnspan=6,sticky='w',pady=(9,3))
+        ttk.Label(summon,text='가호 소환').pack(side='left')
+        self.summon_vars={key:tk.BooleanVar(self.window,value=self.value['blessing_summon'].get(key) is True) for key in ('one','ten')}
+        for key,label in (('one','1회'),('ten','10회')):
+            ttk.Checkbutton(summon,text=label,variable=self.summon_vars[key]).pack(side='left',padx=(10,0))
+        summon_result=tk.StringVar(self.window,value='')
+        ttk.Button(summon,text='TEST',width=6,command=lambda:self.summon_test(summon_result)).pack(side='left',padx=(10,8))
+        ttk.Label(summon,textvariable=summon_result).pack(side='left')
         # Beside the targets: below the reward box the page runs out of height.
         self.worn_heading(blessings,'착용 가호 · 최근 확인값',row=0,column=6,columnspan=1,padx=(24,0))
         worn_blessings=ttk.Treeview(blessings,columns=('slot','kind','grade','enhance','awaken'),show='headings',height=5)
@@ -343,6 +368,27 @@ class GearSettings:
         """Set by the settings console, like test_request."""
         result.set('세부설정 창에서 실행해 주세요')
 
+    def equip_line(self,parent,kind,section,*,row,columnspan):
+        """높은 등급 우선 장착: one tick per grade step, and its TEST. The time is in the timetable."""
+        line=ttk.Frame(parent);line.grid(row=row,column=0,columnspan=columnspan,sticky='w',pady=(9,3))
+        ttk.Label(line,text='높은 등급 우선 장착').pack(side='left')
+        steps={}
+        for key,text in EQUIP_STEPS:
+            steps[key]=tk.BooleanVar(self.window,value=section.get(key) is True)
+            ttk.Checkbutton(line,text=text,variable=steps[key]).pack(side='left',padx=(10,0))
+        result=tk.StringVar(self.window,value='')
+        ttk.Button(line,text='TEST',width=6,command=lambda:self.equip_test(kind,result)).pack(side='left',padx=(10,8))
+        ttk.Label(line,textvariable=result).pack(side='left')
+        return steps
+
+    def equip_test(self,kind,result):
+        """Set by the settings console, like test_request."""
+        result.set('세부설정 창에서 실행해 주세요')
+
+    def summon_test(self,result):
+        """Set by the settings console, like test_request."""
+        result.set('세부설정 창에서 실행해 주세요')
+
     def save(self):
         try:
             value=copy.deepcopy(self.value)
@@ -351,8 +397,12 @@ class GearSettings:
             value['recheck_minutes']=int(raw)
             value['individual']=self.individual.export()
             value['album']['mode']=self.album_mode.get()
-            value['blessing_equip'].update(enabled=self.blessing_equip.get(),
+            steps={key:var.get() for key,var in self.blessing_steps.items()}
+            # The old single switch (the original priority equip, at the old size) follows the steps.
+            value['blessing_equip'].update(enabled=any(steps.values()),**steps,
                                            priorities=collect_rank_fields([v.get() for v in self.blessing_rank]))
+            value['gear_equip'].update({key:var.get() for key,var in self.gear_steps.items()})
+            value['blessing_summon'].update({key:var.get() for key,var in self.summon_vars.items()})
             for grade, v in self.vars.items():
                 row = value['grades'][grade]
                 row['enabled']=v['enabled'].get()

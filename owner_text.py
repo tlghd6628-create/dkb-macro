@@ -69,7 +69,26 @@ def _read_pixels(root,area,language,scale,bright):
             poly=(np.asarray(polys[index],dtype=np.float32)-BORDER)/scale
             low=poly.min(axis=0);high=poly.max(axis=0)
             read.append((str(text),float(score),float((low[0]+high[0])/2),float((low[1]+high[1])/2),float(low[0]),float(low[1]),float(high[0]),float(high[1])))
-    return read
+    return digit_shapes(area,read,language)
+
+
+def digit_shapes(area,read,language):
+    """The game font's 1 is a 7 without the slant, and the engine calls it 7 or nothing (owner_digit_shape). Each number
+    read here has its 1s and 7s decided by the glyphs' own shape; a lone 1 the number reader missed is put back."""
+    import owner_digit_shape as shape
+    area=np.asarray(area)
+    if area.ndim!=3:return read
+    fixed=[]
+    for row in read:
+        text,score,mx,my,x0,y0,x1,y1=row
+        crop=area[max(0,int(y0)-2):int(np.ceil(y1))+2,max(0,int(x0)-2):int(np.ceil(x1))+2]
+        settled=shape.settle(text,crop)
+        if settled==text and clean(text) in ('T',']','I','l','|','[','7') and shape.lone_one(crop):settled='1'
+        fixed.append((settled,)+tuple(row[1:]))
+    if language=='number' and not any(re.search(r'\d',row[0]) for row in fixed) and shape.lone_one(area):
+        height,width=area.shape[:2]
+        fixed.append(('1',.9,width/2,height/2,0.,0.,float(width),float(height)))
+    return fixed
 
 
 def read(root,frame,real_box=None,**options):

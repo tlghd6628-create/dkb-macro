@@ -220,6 +220,10 @@ class SettingsConsole:
     editor.test_request=lambda section,result:self.test_action(GROWTH_SWITCHES[section],result)
     from owner_challenge_test import WORN_KEY
     editor.worn_test=lambda result:self.test_action(WORN_KEY,result)
+    from owner_upgrade_equip import GEAR_KEY,BLESSING_KEY
+    editor.equip_test=lambda kind,result:self.test_action(GEAR_KEY if kind=='gear' else BLESSING_KEY,result)
+    from owner_blessing_summon import KEY as SUMMON_KEY
+    editor.summon_test=lambda result:self.test_action(SUMMON_KEY,result)
     editor.tabs.configure(style='OwnerDirect.TNotebook')
     for page in editor.tabs.tabs():
      name=editor.tabs.tab(page,'text');link(name,frame,editor.tabs,page)
@@ -291,7 +295,9 @@ class SettingsConsole:
   from owner_reward_action_test import PATHS
   from owner_challenge_test import TARGETS as CHALLENGES,start,SHOP_KEY,WORN_KEY
   if key in UNAVAILABLE:result.set(UNAVAILABLE[key]);return
-  if key in (SHOP_KEY,WORN_KEY):
+  from owner_upgrade_equip import GEAR_KEY,BLESSING_KEY
+  from owner_blessing_summon import KEY as SUMMON_KEY
+  if key in (SHOP_KEY,WORN_KEY,GEAR_KEY,BLESSING_KEY,SUMMON_KEY):
    if not self.save():result.set(self.notice.get());return
    start(self.gui,key,result);return
   if key in CHALLENGES:

@@ -212,8 +212,8 @@ class Rows(Base):
   visible={item['id'] for item,_ in console.native.controls}
   # The growth switches sit on the growth pages, each with its own TEST.
   from owner_settings_layout import GROWTH_SWITCHES
-  # The shop page has one, and the worn tables on the gear and blessing pages one each.
-  self.assertEqual(len(buttons),len(REWARDS)+len(set(TARGETS)&visible)+len(GROWTH_SWITCHES)+1+2)
+  # The shop page has one; the worn tables and the higher-grade equips on the gear and blessing pages one each; 가호 소환 one.
+  self.assertEqual(len(buttons),len(REWARDS)+len(set(TARGETS)&visible)+len(GROWTH_SWITCHES)+1+2+2+1)
   self.assertIn('auto_challenge.treasure_hunt.enabled',TARGETS)
   self.assertIn('auto_challenge.treasure_hunt.enabled',visible)
   self.assertLessEqual({'auto_schedule.boss_raid.enabled','auto_growth.spirit_training.enabled','auto_schedule.field_boss.enabled'},visible)

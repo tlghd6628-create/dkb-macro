@@ -34,6 +34,9 @@ JOBS=(
  Job('blessing','가호','auto_rewards.blessing.enabled','06:10',5,'@run_blessing_rewards'),
  Job('gear','성장 장비·가호','auto_growth.equipment.enabled','06:20',10,'achievement_rewards.run_growth_entry'),
  Job('growth','기운 발현','auto_growth.energy.enabled','06:35',5,'achievement_rewards.run_energy_entry'),
+ Job('blessing_summon','가호 소환','owner_summon.blessing.enabled','06:12',5,'#summon'),
+ Job('gear_equip','장비 높은 등급 장착','owner_equip.gear.enabled','06:14',5,'#equip'),
+ Job('blessing_equip','가호 높은 등급 장착','owner_equip.blessing.enabled','06:17',5,'#equip'),
  Job('treasure','보물찾기','auto_challenge.treasure_hunt.enabled','06:45',15,'@run_treasure_region_entry',once=True),
  Job('daily_dungeon','비경탐험','auto_challenge.secret_exploration.enabled','07:10',75,'secret_exploration.run_secret_exploration'),
  Job('weekly_dungeon','전래동화 비경','auto_challenge.secret_folktale_5h.enabled','09:00',320,'secret_folktale.run_folktale_exploration',True,weekday=1),
@@ -53,6 +56,8 @@ DUNGEON_JOBS=frozenset(('daily_dungeon','weekly_dungeon','daily24_dungeon'))
 RECHECK_JOBS=frozenset(('daily_dungeon','weekly_dungeon'))
 # The rest of the jobs that same dispatcher only runs in auto_mode.
 AUTO_MODE_JOBS=DUNGEON_JOBS|frozenset(('daily_missions','weekly_missions','clan_request','treasure','tower','raid'))
+# Higher grade first: the first check at its time, then again every growth recheck interval.
+EQUIP_JOBS=frozenset(('gear_equip','blessing_equip'))
 NO_TIME_LEFT=('비경 이용 시간 0초','비경 잔여시간 소진 확인')
 TREASURE_REGION='auto_challenge.treasure_hunt.region'
 EXCLUDED_USER_SETTINGS=frozenset(('mail','events'))
@@ -123,6 +128,18 @@ def shop_selection_enabled(root):
         return doc.get('enabled',True) is True and any(row.get('enabled') is True for row in doc['items'])
     except (OSError,ValueError,TypeError,RuntimeError):
         return False
+
+def owner_switches(root):
+    """Switches kept in owner settings, not the native ones: the shop's choice and the two higher-grade equips."""
+    from owner_upgrade_equip import GEAR_KEY,BLESSING_KEY,enabled as equip_enabled
+    result={'owner_shop.enabled':shop_selection_enabled(root)}
+    for key,kind in ((GEAR_KEY,'gear'),(BLESSING_KEY,'blessing')):
+        try:result[key]=equip_enabled(root,kind)
+        except (OSError,ValueError,TypeError,RuntimeError):result[key]=False
+    from owner_blessing_summon import KEY as SUMMON_KEY,enabled as summon_enabled
+    try:result[SUMMON_KEY]=summon_enabled(root)
+    except (OSError,ValueError,TypeError,RuntimeError):result[SUMMON_KEY]=False
+    return result
 
 def treasure_confirmed(root):
     path=Path(root)/'settings/owner-schedule.sqlite3'
@@ -301,7 +318,7 @@ def preferred_base(job,cfg,at,key):
 
 class Planner:
     def __init__(self,root,values,at=None):
-        self.root=Path(root);self.values=dict(values);self.values['owner_shop.enabled']=shop_selection_enabled(root);self.identity=identity(root)
+        self.root=Path(root);self.values=dict(values);self.values.update(owner_switches(root));self.identity=identity(root)
         self.path=self.root/'settings/owner-timetable-state.json';self.cfg=config(root)
         self.data=read_required_if_present(self.path,{'version':1,'characters':{}})
         if not isinstance(self.data.get('characters'),dict):raise ValueError('시간표 실행 기록 형식 오류 · 기존 기록 유지')
@@ -573,11 +590,12 @@ class Planner:
 
     def due(self,at=None):
         at=at or now()
-        shop_enabled=shop_selection_enabled(self.root);shop_changed=self.values.get('owner_shop.enabled')!=shop_enabled
-        if shop_changed:
-            self.values['owner_shop.enabled']=shop_enabled
+        switches=owner_switches(self.root);shop_enabled=switches['owner_shop.enabled']
+        shop_changed=any(self.values.get(key)!=value for key,value in switches.items())
+        if self.values.get('owner_shop.enabled')!=shop_enabled:
             # Otherwise the shop appointment disappears from the timetable with no log line.
             LOG.info('잡화상점 구매 시간표 %s · 설정 상품 구매 사용 체크와 선택 품목 기준','사용' if shop_enabled else '해제')
+        if shop_changed:self.values.update(switches)
         if shop_changed or config(self.root)!=self.cfg or boss_signature(self.root,self.values)!=self._boss_stamp or any(enabled(j,self.values) and (self.state.get(j.key,{}).get('period')!=period(j,at) or (j.once and self.state.get(j.key,{}).get('status')=='calendar_hold' and self.state[j.key].get('calendar_day')!=day_at(at).isoformat())) for j in JOBS):self.build(at)
         if not self.cfg.get('enabled',True):return []
         self.repeat_growth(at)
@@ -685,6 +703,17 @@ class Planner:
             self._rebuild_after_running=False
             self.build(at)
         if key=='gear' and ok and unverified:self.repeat_growth(at)
+        if key in EQUIP_JOBS and ok:self.repeat_equip(key,at)
+
+    def repeat_equip(self,key,at):
+        """A higher-grade check comes back every growth recheck interval, within its game day. An unchanged bag is skipped fast."""
+        job=BY_KEY[key];item=self.state[key]
+        if not enabled(job,self.values) or not self.cfg.get('enabled',True):return False
+        candidate=fit(at+timedelta(minutes=self.recheck_minutes()),admission_budget(job,self.values),busy_windows(self.values,at,root=self.root))
+        days=selected_days(self.cfg,job)
+        if period(job,candidate)!=item.get('period') or (days is not None and candidate.weekday() not in days):return False
+        item.update(status='pending',at=candidate.isoformat(),attempts=0,equip_recheck=True)
+        self.commit();return True
 
     def recheck_minutes(self):
         """The user's growth recheck interval for proven waits and result checks."""
@@ -896,7 +925,7 @@ def appointment(root,catalog_key,when,values=None):
             def commit(self):pass
         try:
             preview=PreviewPlanner.__new__(PreviewPlanner);preview.root=Path(root);preview.values=dict(values)
-            preview.values['owner_shop.enabled']=shop_selection_enabled(root)
+            preview.values.update(owner_switches(root))
             preview.identity=identity(root);preview.data=copy.deepcopy(data)
             preview.state=preview.data['characters'][preview.identity]
             preview.build(when,readonly=True)
@@ -921,6 +950,15 @@ def timed_invoke(adapter,job,context,inputs):
         except RuntimeError as exc:LOG.info('일정 후 메뉴 정리 보류 · %s',exc)
 
 def invoke(adapter,job,context,inputs):
+    if job.key=='blessing_summon':
+        from owner_blessing_summon import run as summon
+        result=summon(adapter,context,inputs)
+        return not str(result).startswith('보류')
+    if job.key in ('gear_equip','blessing_equip'):
+        from owner_upgrade_equip import run
+        result=run(adapter,context,inputs,'gear' if job.key=='gear_equip' else 'blessing')
+        LOG.info('%s · %s',job.label,result)
+        return not str(result).startswith('보류')
     if job.key in ('shop','shop_weekly_verify'):
         from owner_shop_runtime_candidate import dispatch_configured
         from owner_schedule_priority import LOCAL as priority
@@ -1035,7 +1073,8 @@ def idle_once(adapter,context,inputs):
     plan=planner(adapter);due=plan.due()
     if not due:return post_equip_growth(adapter,context,inputs,plan)
     job=due[0]
-    if job.key=='gear' and plan.state[job.key].get('growth_recheck'):
+    if (job.key=='gear' and plan.state[job.key].get('growth_recheck')) or (job.key in EQUIP_JOBS and plan.state[job.key].get('equip_recheck')):
+        # A repeat check waits for the hunt or a walk, like the growth recheck: it never breaks into a quest step.
         from owner_task_flow import LOCAL as task
         import time as clock
         observed=getattr(task,'quest_state',None)

@@ -82,6 +82,16 @@ def level_pair(left,right):
     return None
 
 
+def lone_one_pair(frame,right):
+    """(1, 2) when the left side is the font's lone 1 by its shape and the right reads 2: the engine reads that 1 as
+    nothing, T or MT (귀걸이 1 >> 2, 05:10). Anything else stays unread."""
+    import owner_digit_shape as shape
+    real=getattr(frame,'hi',None)
+    if real is None or _one_number(right)!=2:return None
+    x,y,w,h=BLESSING_LEVEL
+    return (1,2) if shape.lone_one(np.asarray(real)[y:y+h,x:x+w]) else None
+
+
 def counts(rows):
     """[(owned, needed)] from 80/5, or [] when none is clear."""
     found=[]
@@ -155,6 +165,7 @@ def read_blessing(root,frame):
     if title is None:return None,'가호 제목 글자 미확인'
     pair=level_pair(text.read(root,frame,BLESSING_LEVEL,scale=3),text.read(root,frame,BLESSING_NEXT,scale=3))
     if pair is None:pair=level_pair(text.read(root,frame,BLESSING_LEVEL,scale=2),text.read(root,frame,BLESSING_NEXT,scale=2))
+    if pair is None:pair=lone_one_pair(frame,text.read(root,frame,BLESSING_NEXT,scale=3))
     if pair is None:return None,'가호 강화 수치 글자 미확인'
     pill=text.read(root,frame,BLESSING_PILL,scale=3)
     word=only_word(pill,('강화','개방'))

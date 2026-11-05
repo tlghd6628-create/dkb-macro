@@ -13,9 +13,13 @@ TREASURE='treasure'
 SHOP='shop';SHOP_KEY='owner_shop.enabled'
 WORN='worn';WORN_KEY='owner_worn.status'
 COUPON='coupon'
+EQUIP='equip';GEAR_EQUIP_KEY='owner_equip.gear.enabled';BLESSING_EQUIP_KEY='owner_equip.blessing.enabled'
 TARGETS={
  'main_quest.first_coupon.enabled':('쿠폰 등록',COUPON),
  WORN_KEY:('착용 현재값 확인',WORN),
+ GEAR_EQUIP_KEY:('장비 높은 등급 장착',EQUIP),
+ BLESSING_EQUIP_KEY:('가호 높은 등급 장착',EQUIP),
+ 'owner_summon.blessing.enabled':('가호 소환',EQUIP),
  SHOP_KEY:('잡화상점 구매',SHOP),
  'auto_rewards.blessing.enabled':('가호 일괄 획득',BLESSING),
  'auto_growth.equipment.enabled':('장비 성장',GROWTH),
@@ -243,6 +247,12 @@ def execute(adapter,context,inputs,key):
         if kind==TREASURE:return treasure(adapter,context,inputs,key)
         if kind==SHOP:return shop(adapter,context,inputs)
         if kind==WORN:return worn(adapter,context,inputs)
+        if kind==EQUIP and key=='owner_summon.blessing.enabled':
+            from owner_blessing_summon import run as summon
+            return summon(adapter,context,inputs)
+        if kind==EQUIP:
+            from owner_upgrade_equip import run
+            return run(adapter,context,inputs,'gear' if key==GEAR_EQUIP_KEY else 'blessing')
         if kind in (GROWTH,STYLE,ALBUM,BLESSING):return growth(adapter,context,inputs,key)
         return dispatch(adapter,context,inputs,key) if kind==DISPATCH else direct(adapter,context,inputs,key)
     except ResumeWork:return None  # a boss return to the selected work; a TEST just ends here
