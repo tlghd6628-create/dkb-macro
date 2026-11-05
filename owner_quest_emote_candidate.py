@@ -120,7 +120,12 @@ def close_chat(ui,detector):
  if paired(ui,chat) and not paired(ui,empty_chat):
   raise Pending('채팅 입력 내용 확인 필요 · 닫기 보류')
  if paired(ui,chat):
-  hit=detector.find('버튼_X_채팅창',ui.frame(),threshold=.95)
+  frame=ui.frame();hit=detector.find('버튼_X_채팅창',frame,threshold=.95)
+  if not hit:
+   # Its picture does not survive 1366x768. With the chat proved open and empty above, its X stands at this real place.
+   if getattr(frame,'hi',None) is not None:
+    from owner_hd import logical_of
+    x,y=logical_of(372,28,getattr(frame,'layout',None));hit=(x,y,(x-7,y-7,x+8,y+8))
   if not hit:raise RuntimeError('감정 처리 후 채팅 닫기 확인 필요')
   l,t,r,b=hit[2];ui.click((l+r)//2,(t+b)//2,lambda f:chat(f) and empty_chat(f))
  if not paired(ui,lambda f:not chat(f) and not panel(f)):
