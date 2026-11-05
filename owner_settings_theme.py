@@ -37,7 +37,7 @@ SECTIONS={
               ('내면의 길',('inner_path',))),
 }
 # Each preset is one line: its switch, then the choice right beside it.
-INLINE_CHOICES=('common.skill_preset.choice','auto_schedule.field_boss.skill_preset.choice','auto_schedule.boss_raid.skill_preset.choice')
+INLINE_CHOICES=('auto_schedule.falling_battle.death_limit','common.skill_preset.choice','auto_schedule.field_boss.skill_preset.choice','auto_schedule.boss_raid.skill_preset.choice')
 LABELS={
  'auto_rewards.inventory_use.enabled':'상자·아이템 사용',
  'auto_growth.spirit_training.interval_minutes':'수련 주기 (분)',

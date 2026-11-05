@@ -231,6 +231,8 @@ def install(gui):
         add_raid_preset(schema);install_raid_preset()
         from owner_raid_tickets import add_fields as add_raid_count
         add_raid_count(schema)
+        from owner_falling_guard import add_fields as add_falling_limit,install as install_falling_guard
+        add_falling_limit(schema);install_falling_guard()
         from owner_disassembly_settings import add_fields as add_disassembly_fields
         add_disassembly_fields(schema)
         schema['modes']=[m for m in schema['modes'] if m['id'] in ('main_quest','sub_quest','auto_mode')]
