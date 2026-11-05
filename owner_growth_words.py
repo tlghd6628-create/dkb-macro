@@ -18,7 +18,7 @@ BLESSING_TITLE=(430,100,330,36);BLESSING_COUNT=(430,632,330,26);BLESSING_PILL=(5
 BLESSING_LEVEL=(490,202,96,34);BLESSING_NEXT=(604,202,96,34)
 NAMES=('봉황','나비','도깨비','연꽃','토끼');TITLE_FLOOR=.75
 # The font splits a title and can read the slot digit twice; the rest may be a letter off (가혹). The digit may not.
-TITLE=re.compile(r'(.{1,4}?)가[호혹후]장[식시]([1-5])\2?(?:\(귀속\))?')
+TITLE=re.compile(r'(.{1,4}?)[가갓][호혹후]장[식시]([1-5])\2?(?:\(귀속\))?')
 COUNT=re.compile(r'(\d[\d,]*)/(\d[\d,]*)')
 # Real pixels of the energy screen (right anchored, the tabs left anchored).
 ENERGY_TITLE=(960,118,360,74);ENERGY_DIAMONDS=(1300,70,60,470);ENERGY_COUNT=(1040,660,210,32);ENERGY_PILL=(1020,700,250,50);ENERGY_TABS=(0,60,280,240)
