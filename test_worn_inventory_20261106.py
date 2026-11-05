@@ -14,6 +14,8 @@ def word(text,y):return dict(text=text,score=.9,rx=620,ry=y,bounds=(600,y-9,640,
 REAL=np.zeros((768,1366,3),np.uint8)
 import owner_hd
 CLOSE=owner_hd.real_hit(*w.REAL_CLOSE)[:2]
+FILTER2=owner_hd.real_hit(w.REAL_FILTER_X,w.REAL_FILTER_Y[2])[:2]
+TILE=owner_hd.real_hit(*w.REAL_FIRST_TILE)[:2]
 
 
 class Table(unittest.TestCase):
@@ -62,6 +64,16 @@ class Heading(unittest.TestCase):
   self.assertIsNone(w.blessing_kind('호랑이가호장식1'))
 
 
+class Corrected(unittest.TestCase):
+ def test_the_font_s_1_on_an_item(self):
+  self.assertEqual(w.corrected({'enhance':50,'awaken':7},False)['awaken'],1)
+  self.assertEqual(w.corrected({'enhance':50,'awaken':0},False)['awaken'],0)
+ def test_over_the_top_is_no_reading(self):
+  self.assertIsNone(w.corrected({'enhance':50,'awaken':3},False))
+ def test_a_blessing_is_left_alone(self):
+  self.assertEqual(w.corrected({'enhance':39,'awaken':7},True)['awaken'],7)
+
+
 class Belongs(unittest.TestCase):
  def check(self,slot,words,title=''):
   with patch('owner_text.read_area',return_value=[word(text,217) for text in words]):return w.real_matches(REAL,slot,title)
@@ -77,6 +89,16 @@ class Belongs(unittest.TestCase):
   self.assertFalse(self.check('가호2',['반지'],'수정세공 반지'))
 
 
+class Numbers(unittest.TestCase):
+ def test_a_row_unread_in_the_tight_crop_gets_a_roomier_look(self):
+  places={'awaken':(690,499,45,26)}
+  with patch('owner_text.read_area',side_effect=[[],[dict(word('1',512))]]) as reader:
+   self.assertEqual(w.real_read(REAL,places),{'awaken':1})
+  self.assertEqual(reader.call_count,2)
+ def test_still_nothing_stays_unread(self):
+  with patch('owner_text.read_area',return_value=[]):self.assertEqual(w.real_read(REAL,{'awaken':(690,499,45,26)}),{})
+
+
 class Settled(unittest.TestCase):
  def run_reads(self,reads):
   values=iter(reads)
@@ -87,8 +109,13 @@ class Settled(unittest.TestCase):
   self.assertEqual(self.run_reads([{'enhance':50,'awaken':7},{'enhance':50,'awaken':1},{'enhance':50,'awaken':1}]),{'enhance':50,'awaken':1})
  def test_never_agreeing_is_nothing(self):
   self.assertIsNone(self.run_reads([{'enhance':50,'awaken':n} for n in range(9)]))
- def test_a_missing_row_never_answers(self):
+ def test_a_row_unread_on_some_looks_takes_what_most_gave(self):
+  reads=[{'enhance':50},{'enhance':50,'awaken':1},{'enhance':50},{'enhance':50,'awaken':1},{'enhance':50,'awaken':7},{'enhance':50}]
+  self.assertEqual(self.run_reads(reads),{'enhance':50,'awaken':1})
+ def test_a_row_seen_once_never_answers(self):
   self.assertIsNone(self.run_reads([{'enhance':50}]*9))
+ def test_a_tie_never_answers(self):
+  self.assertIsNone(self.run_reads([{'enhance':50,'awaken':1},{'enhance':50,'awaken':7}]*3))
 
 
 class Inspect(unittest.TestCase):
@@ -107,13 +134,13 @@ class Inspect(unittest.TestCase):
  def run_slot(self,slot,*,left=True,values=None,heading=('토끼가호장식2(귀속)','일반')):
   values={'enhance':20,'opening':2,'awaken':0} if values is None else values
   with patch.object(w,'popup',side_effect=lambda f:self.open),patch('owner_progression.inventory_parts',return_value=(left,False)),\
-       patch.object(w,'settled_read',return_value=values),patch.object(w,'real_heading',return_value=heading),patch.object(w,'real_matches',return_value=self.matches),\
+       patch.object(w,'settled_read',return_value=values),patch.object(w,'real_heading',return_value=heading),patch.object(w,'real_matches',return_value=self.matches),patch.object(w,'open_blessing_screen',return_value=True),patch.object(w,'offers_unequip',return_value=self.worn_one),\
        patch('owner_mission_ui.MissionUI.wheel'),patch('owner_skill_ui.SkillUI',lambda *a:NS()):
    return w.inspect_real(self.service,self.context,self.inputs,'profile','c',slot)
  def test_a_blessing_is_saved_by_its_place(self):
   self.assertIs(self.run_slot('가호2'),True)
   self.assertEqual(current.blessing_rows(self.root,'profile')[1],('2번','토끼','일반','20','2','0'))
-  self.assertEqual(self.clicks[0],(64,308));self.assertEqual(self.clicks[-1],CLOSE);self.assertEqual(len(self.clicks),2)
+  self.assertEqual(self.clicks[0],FILTER2);self.assertEqual(self.clicks[1],TILE);self.assertEqual(self.clicks[-1],CLOSE);self.assertEqual(len(self.clicks),3)
  def test_an_item_is_saved_by_its_slot(self):
   self.assertIs(self.run_slot('무기',values={'enhance':50,'opening':5,'breakthrough':3,'awaken':1},heading=('바람물결은선','희귀')),True)
   self.assertEqual(current.equipped_rows(self.root,'profile')[0],('무기','희귀','50','5','3','1'))
@@ -121,16 +148,31 @@ class Inspect(unittest.TestCase):
   self.run_slot('가호2');self.clicks.clear()
   self.assertIs(self.run_slot('가호2'),False);self.assertEqual(self.clicks,[])
  def test_a_closed_bag_clicks_nothing(self):
-  self.assertIs(self.run_slot('가호2',left=False),False);self.assertEqual(self.clicks,[])
+  self.assertIs(self.run_slot('반지',left=False),False);self.assertEqual(self.clicks,[])
  def test_a_tile_that_opens_nothing_is_skipped_once(self):
   self.opens=False
-  self.assertIs(self.run_slot('가호2'),False);self.assertEqual(len(self.clicks),1)
+  self.assertIs(self.run_slot('반지'),False);self.assertEqual(len(self.clicks),1)
  def test_unread_numbers_save_nothing_and_still_close(self):
   self.service.adapter._owner_worn_stats_cache={}
   with patch.object(w,'settled_read',return_value=None):pass
   self.assertIs(self.run_slot('가호2',values={}),False)
   self.assertEqual(current.blessing_rows(self.root,'profile')[1][1],'미확인');self.assertEqual(self.clicks[-1],CLOSE)
- matches=True
+ matches=True;worn_one=True
+ def test_a_first_tile_not_worn_saves_nothing_and_closes(self):
+  self.worn_one=False
+  self.assertIs(self.run_slot('가호2'),False)
+  self.assertEqual(current.blessing_rows(self.root,'profile')[1][1],'미확인');self.assertEqual(self.clicks[-1],CLOSE)
+ def test_leaving_by_the_growth_button_keeps_the_answer_and_presses_no_x(self):
+  self.assertIs(self.run_decide(lambda values,grade,title:True),True)
+  self.assertEqual(len(self.clicks),2)
+ def test_not_leaving_closes_with_x(self):
+  self.assertIs(self.run_decide(lambda values,grade,title:False),True)
+  self.assertEqual(self.clicks[-1],CLOSE)
+ def run_decide(self,decide):
+  with patch.object(w,'popup',side_effect=lambda f:self.open),patch('owner_progression.inventory_parts',return_value=(True,False)),\
+       patch.object(w,'settled_read',return_value={'enhance':20,'opening':2,'awaken':0}),patch.object(w,'real_heading',return_value=('토끼가호장식2(귀속)','일반')),patch.object(w,'real_matches',return_value=True),patch.object(w,'open_blessing_screen',return_value=True),patch.object(w,'offers_unequip',return_value=True),\
+       patch('owner_mission_ui.MissionUI.wheel'),patch('owner_skill_ui.SkillUI',lambda *a:NS()):
+   return w.inspect_real(self.service,self.context,self.inputs,'profile','c','가호2',decide=decide)
  def test_a_window_of_another_tile_saves_nothing_and_closes(self):
   self.matches=False
   self.assertIs(self.run_slot('가호2'),False)
@@ -172,7 +214,7 @@ class TestButton(unittest.TestCase):
    self.assertEqual(t.worn(NS(),None,None),'16칸 확인')
  def test_all_slots_are_the_real_ones(self):
   from owner_equipment_boxes import SLOTS
-  self.assertEqual(set(w.ALL_SLOTS),set(SLOTS)|set(w.BLESSING_SLOTS))
+  self.assertEqual(set(w.ALL_SLOTS),set(SLOTS)|set(w.BLESSING_SLOTS));self.assertEqual(len(w.ALL_SLOTS),16)
 
 
 if __name__=='__main__':unittest.main()

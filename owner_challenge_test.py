@@ -17,7 +17,7 @@ TARGETS={
  'main_quest.first_coupon.enabled':('쿠폰 등록',COUPON),
  WORN_KEY:('착용 현재값 확인',WORN),
  SHOP_KEY:('잡화상점 구매',SHOP),
- 'auto_rewards.blessing.enabled':('가호 보상·장착',BLESSING),
+ 'auto_rewards.blessing.enabled':('가호 소환·장착',BLESSING),
  'auto_growth.equipment.enabled':('장비 성장',GROWTH),
  'auto_growth.blessing.enabled':('가호 성장',GROWTH),
  'auto_growth.energy.enabled':('기운 발현',GROWTH),
@@ -52,7 +52,8 @@ class Reasons(logging.Handler):
     def emit(self,record):
         if record.thread!=self.thread:return
         text=record.getMessage()
-        if record.levelno>=logging.INFO and NOT_DONE.search(text) and not text.startswith('실전 TEST'):self.last=text
+        # The OCR warm-up line says 준비 중 at every start and explains nothing.
+        if record.levelno>=logging.INFO and NOT_DONE.search(text) and not text.startswith(('실전 TEST','인식 준비')):self.last=text
 
 def only(values,key):
     """Just this switch. Skill presets stay, because their entries read them."""

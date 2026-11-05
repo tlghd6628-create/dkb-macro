@@ -6,7 +6,7 @@ that item selected. Nothing picks from the growth screen's list, so a spare can 
 The durable input record and its guard are the ordinary ones. What the details window reads is the truth: a record left
 from an earlier press settles against it when the same item is read again, and the value decides what happens next.
 """
-import logging,time
+import logging,re,time
 from pathlib import Path
 import numpy as np
 import owner_text as text
@@ -26,6 +26,7 @@ GROWTH_BUTTON=(570,560,120,46) # real pixels of the details window's 성장
 LIST_COUNT=(1066,78,105,24);SECOND_TILE=(1150,146)  # the growth list: how many it shows, and the tile after the selected one
 RESULT_CLOSE=(400,640,560,100);RESULT_SECONDS=20
 BACK=(35,30)                   # real place of the growth screen's back arrow
+ACTION_PILL=(470,700,325,42)   # real pixels of the 돌파 or 각성 button and its price
 VISIT_SECONDS=300;ITEM_SECONDS=90;RESULT_READS=8;ROUNDS=8;LEVEL_STEP=3
 FRESH_SECONDS=8
 ENHANCE,BREAK,AWAKEN='enhance','breakthrough','awaken'
@@ -45,14 +46,53 @@ def title_words(root,frame):
     return ''.join(text.clean(row['text']) for row in text.read(root,frame,BLESSING_TITLE,scale=2,minimum=.5))
 
 
+def have_enough(root,frame):
+    """True, False, or None when unread. The 0 of 0/1 can read as a letter at one size and clearly at the other (팔찌, 11-06)."""
+    for scale in (3,2):
+        pairs=counts(text.read(root,frame,BLESSING_COUNT,scale=scale))
+        if pairs:return enough(pairs)
+    return None
+
+
+def list_count(frame):
+    """How many tiles the growth list says it holds, or None. A lone digit reads best with room around it, at a larger size."""
+    x,y,w,h=LIST_COUNT
+    for box,scale in (((x,y,w,h),3),((x,y-3,w,h+6),4),((x,y,w,h),2)):
+        shown=[text.clean(r['text']) for r in text.read(None,frame,box,scale=scale,minimum=.5)]
+        shown=[word for word in shown if word.isdigit()]
+        if len(shown)==1:return int(shown[0])
+    return None
+
+
+def font_pair(left,right):
+    """40 >> 41 read as 40 >> 47: the font's 1 reads 7. The two sides are one apart, so that settles it when exactly one way of
+    swapping 7 for 1 makes them so. Anything else stays unread."""
+    from itertools import product
+    def number(rows):
+        # The + beside the next level lowers its score, so this floor is lower than the plain reader's. The sides must still fit.
+        good=[r for r in rows if re.search(r'\d',str(r['text'])) and r['score']>=.5]
+        found=re.findall(r'\d+',str(good[0]['text'])) if len(good)==1 else ()
+        return int(found[0]) if len(found)==1 and len(found[0])<=3 else None
+    a,b=number(left),number(right)
+    if a is None or b is None:return None
+    def ways(number):
+        digits=str(number);spots=[i for i,d in enumerate(digits) if d=='7']
+        return {int(''.join('1' if i in spots and pick[spots.index(i)] else d for i,d in enumerate(digits))) for pick in product((False,True),repeat=len(spots))}
+    found=[(x,y) for x in ways(a) for y in ways(b) if y==x+1]
+    return found[0] if len(found)==1 else None
+
+
 def read_panel(root,frame):
     """The selected item's level and next step on the 강화 tab, from one real frame, or None."""
     if not title_words(root,frame):return None
-    pair=level_pair(text.read(root,frame,BLESSING_LEVEL,scale=3),text.read(root,frame,BLESSING_NEXT,scale=3))
-    if pair is None:pair=level_pair(text.read(root,frame,BLESSING_LEVEL,scale=2),text.read(root,frame,BLESSING_NEXT,scale=2))
+    left,right=text.read(root,frame,BLESSING_LEVEL,scale=3),text.read(root,frame,BLESSING_NEXT,scale=3)
+    pair=level_pair(left,right) or font_pair(left,right)
+    if pair is None:
+        left,right=text.read(root,frame,BLESSING_LEVEL,scale=2),text.read(root,frame,BLESSING_NEXT,scale=2)
+        pair=level_pair(left,right) or font_pair(left,right)
     if pair is None:return None
     pill=text.read(root,frame,BLESSING_PILL,scale=3);word=only_word(pill,('강화','개방'))
-    have=enough(counts(text.read(root,frame,BLESSING_COUNT,scale=3)))
+    have=have_enough(root,frame)
     opening=bool(word) and text.clean(word['text'])=='개방'
     # A step that opens the next tier can show no counter, but a count that is short stays short.
     material=have is not False if opening else have is True
@@ -65,16 +105,17 @@ def read_panel(root,frame):
 def read_action(root,frame,word):
     """The 돌파 or 각성 button and its count, or None when the panel holds no item."""
     if not title_words(root,frame):return None
-    pill=text.read(root,frame,BLESSING_PILL,scale=3);row=only_word(pill,(word,),.8)
+    # Without 자동 선택 beside it the pill stands further left, its price with it.
+    pill=text.read(root,frame,ACTION_PILL,scale=3);row=only_word(pill,(word,),.8)
     if row is None:return None
-    cost=pill_price(pill);have=enough(counts(text.read(root,frame,BLESSING_COUNT,scale=3)))
+    cost=pill_price(pill);have=have_enough(root,frame)
     return {'word':word,'cost':cost,'enough':have,'active':bool(lit(frame.hi,row) and have is True and type(cost) is int and cost>0),'hit':real_place(row)}
 
 
 class Item:
     """One worn tile: where it is, what it answers to in the settings, what its details last said."""
     def __init__(self,slot,blessing):
-        self.slot=slot;self.blessing=blessing;self.values=None;self.grade=None;self.title='';self.done=set()
+        self.slot=slot;self.blessing=blessing;self.values=None;self.grade=None;self.title='';self.done=set();self.changed=False
     @property
     def key(self):return self.slot[-1]+'번' if self.blessing else self.grade
     @property
@@ -127,10 +168,7 @@ class Route:
             self.service.click_hit(real_hit(*BACK));self.context.wait(1.2)
         return not self.in_growth()
     def into_growth(self,item):
-        """From the open details window, by its own button. The window is scrolled, and a blessing's button hides until it scrolls back."""
-        from owner_mission_ui import MissionUI
-        from owner_skill_ui import SkillUI
-        MissionUI.wheel(SkillUI(self.adapter,self.context,self.inputs),1,10,at=(480,310),scene=worn.popup)
+        """From the open details window, by its own button."""
         for _ in range(5):
             row=only_word(text.read(None,self.frame(),GROWTH_BUTTON,scale=2),('성장',),.7)
             if row:break
@@ -145,13 +183,15 @@ class Route:
         LOG.info('착용 %s 성장 화면 안 열림',item.slot);return False
     # ---- what the details say
     def goal(self,item):
-        section=self.document['blessings'] if item.blessing else self.document['grades']
-        return section.get(item.key)
+        if not item.blessing:return self.document['grades'].get(item.key)
+        # Saved under the old field's name: a blessing has awakening, not breakthrough.
+        row=self.document['blessings'].get(item.key)
+        return dict(row,awaken=row.get('breakthrough')) if isinstance(row,dict) else row
     def need(self,item):
         """The next thing this item is short of, by its own details. None when it has its goals or none of it can run."""
         goal=self.goal(item)
         if not isinstance(goal,dict) or goal.get('enabled') is not True:return None
-        kinds=(ENHANCE,) if item.blessing else (ENHANCE,BREAK,AWAKEN) if breakthrough_allowed() else (ENHANCE,AWAKEN)
+        kinds=(ENHANCE,AWAKEN) if item.blessing else (ENHANCE,BREAK,AWAKEN) if breakthrough_allowed() else (ENHANCE,AWAKEN)
         for kind in kinds:
             if kind in item.done:continue
             value=item.values.get(kind)
@@ -168,21 +208,32 @@ class Route:
         else:
             self.intents.complete('observed_failure' if kind==BREAK else 'no_effect')
             LOG.info('착용 %s %s 수치 그대로 · %s',item.slot,LABEL[kind],'돌파 실패' if kind==BREAK else '입력 효과 없음')
-    def read(self,item,enter):
-        """Open the details and read. With enter, go on to the growth screen if this item is short of something."""
-        if not self.open_bag():
-            LOG.info('착용 %s 건너뜀 · 인벤토리 안 열림',item.slot);return None
+    def read(self,item):
+        """Read the item's details down to its numbers, which also puts them in the program's table, and close."""
+        self.leave_growth()
+        # A blessing is read on the blessing screen, which the reader opens.
+        if not item.blessing and not self.open_bag():
+            LOG.info('착용 %s 건너뜀 · 인벤토리 안 열림',item.slot);return False
         # The window just closed fades out, and a click into the fade is lost.
         worn.settle_after_popup(self.service,self.context)
-        entered=[]
         def decide(values,grade,title):
             item.values=values;item.grade=grade;item.title=title
             self.settle(item)
-            kind=self.need(item) if enter else None
-            if kind is None or not self.into_growth(item):return False
-            entered.append(kind);return True
-        if worn.inspect_real(self.service,self.context,self.inputs,self.profile,self.character,item.slot,decide=decide) is not True:return None
-        return entered[0] if entered else False
+            return False
+        return worn.inspect_real(self.service,self.context,self.inputs,self.profile,self.character,item.slot,decide=decide) is True
+    def enter(self,item):
+        """Its details, then straight to its 성장 button: no need to scroll down to the numbers for that."""
+        self.leave_growth()
+        if not item.blessing and not self.open_bag():
+            LOG.info('착용 %s 건너뜀 · 인벤토리 안 열림',item.slot);return False
+        worn.settle_after_popup(self.service,self.context)
+        if not worn.open_tile(self.service,self.context,item.slot):return False
+        heading=worn.tile_heading(self.service,self.context,item.slot)
+        if heading is not None:
+            if item.grade is None:item.grade=heading[1]
+            if self.into_growth(item):return True
+        worn.close_details(self.service,self.context)
+        return False
     # ---- on the growth screen
     def side_tab(self,kind):
         row=only_word(text.read(None,self.frame(),SIDE_TABS,scale=2),(LABEL[kind],),.7)
@@ -192,7 +243,14 @@ class Route:
         """강화 until the goal, this turn's cap, or something stops it."""
         observer=EnhanceObserver(self.service,self.context,self.identity,item)
         guard=Guard(self.context,self.intents,observer.read_pair,fresh_seconds=FRESH_SECONDS)
-        goal=self.goal(item);targets={item.key:goal};end=time.monotonic()+ITEM_SECONDS;rereads=0
+        goal=self.goal(item);targets={item.key:goal}
+        # A press left without a result: the level on this panel settles it.
+        pending=self.intents.pending()
+        if pending and pending['before'].slot==item.record:
+            panel=read_panel(self.root,self.frame())
+            if panel:
+                item.values=dict(item.values or {},enhance=panel['level']);self.settle(item)
+        end=time.monotonic()+ITEM_SECONDS;rereads=0
         def one(latest,mark_sent):
             frame=self.frame();panel=read_panel(self.root,frame)
             if not panel or not panel['active'] or panel['level']!=latest['second'].enhancement or panel['word']!=latest['button_name']:raise worn.ReadAgain()
@@ -207,7 +265,9 @@ class Route:
                 panel=observer.panel or {}
                 if status=='hold_policy' and goal_state(goal,panel.get('level',-1))=='below':
                     LOG.info('착용 %s 강화 불가 · 재료 부족 또는 버튼 꺼짐 · %s',item.slot,panel.get('word'))
-                elif status not in ('hold_policy',):LOG.info('착용 %s 강화 중단 · %s',item.slot,status)
+                elif status not in ('hold_policy',):
+                    seen=read_panel(self.root,self.frame())
+                    LOG.info('착용 %s 강화 중단 · %s · 판독 %s',item.slot,status,{k:v for k,v in (seen or {}).items() if k!='hit'})
                 item.done.add(ENHANCE);return
             rereads=0
             result='hold_result_unknown'
@@ -217,6 +277,7 @@ class Route:
                 result=guard.reconcile(short_notice=lambda:coins_short(self.frame()))
                 if result!='hold_result_unknown':break
             if result=='short_of_coins':raise CoinsShort()
+            item.changed=True
             if result!='observed_progress':
                 # The details decide it on the next read of this item.
                 LOG.info('착용 %s 강화 결과 미확인 · 현재값으로 다시 판단',item.slot);return
@@ -229,7 +290,8 @@ class Route:
         action=read_action(self.root,self.frame(),LABEL[kind])
         if action is None:
             LOG.info('착용 %s %s 대상 아님',item.slot,LABEL[kind]);item.done.add(kind);return
-        if kind==AWAKEN and action['enough'] is False and self.choose_material(item):
+        # A blessing awakens on its own pieces; only an item picks a spare.
+        if kind==AWAKEN and not item.blessing and action['enough'] is False and self.choose_material(item):
             action=read_action(self.root,self.frame(),LABEL[kind]) or action
         if not action['active']:
             LOG.info('착용 %s %s 불가 · 재료 부족 또는 버튼 꺼짐',item.slot,LABEL[kind]);item.done.add(kind);return
@@ -259,6 +321,7 @@ class Route:
             LOG.info('착용 %s %s 안 누름 · %s',item.slot,LABEL[kind],status);item.done.add(kind);return
         LOG.info('착용 %s %s 입력 · 현재 %s',item.slot,LABEL[kind],item.values.get(kind))
         self.after_result(item,kind)
+        item.changed=True
     def after_result(self,item,kind):
         """Watch for the short-of-coins message, then close whatever result window the press brought up."""
         end=time.monotonic()+RESULT_SECONDS;quiet=0
@@ -276,30 +339,41 @@ class Route:
             else:quiet=0
     def choose_material(self,item):
         """The list under an item on the 각성 tab holds it and the spares the game accepts: 강화되지 않은 동일한 장비. The next tile is one."""
-        rows=text.read(None,self.frame(),LIST_COUNT,scale=3)
-        shown=[int(text.clean(r['text'])) for r in rows if text.clean(r['text']).isdigit()]
-        if len(shown)!=1 or shown[0]<2:
+        shown=list_count(self.frame())
+        if shown is None:
+            LOG.info('착용 %s 각성 재료 목록 수 미확인',item.slot);return False
+        if shown<2:
             LOG.info('착용 %s 각성 재료 없음 · 동일 장비 없음',item.slot);return False
         self.service.click_hit(real_hit(*SECOND_TILE));self.context.wait(1)
         return True
     # ---- the visit
     def work(self,item,cap=None):
-        """This item's turn, already on its growth screen."""
+        """This item's turn, already on its growth screen. True when something was pressed, so its details should be read again.
+        What cannot run moves on to the item's next need on the same screen, with nothing read twice."""
         kind=item.pending_kind
-        if kind==ENHANCE:self.press_enhance(item,cap)
-        else:self.press_once(item,kind)
+        while kind:
+            before=len(item.done)
+            if kind==ENHANCE:self.press_enhance(item,cap)
+            else:self.press_once(item,kind)
+            if len(item.done)==before:return True
+            kind=self.need(item)
+        return False
     def visit(self,item,cap=None):
-        """Read, grow what it lacks, read again: a stage only counts once the details show it."""
+        """Grow what it lacks, then read its details again: that reading is what the program's table shows and what decides
+        the next step, at the end of every turn, one ended by no coins included."""
         for _ in range(ROUNDS):
             if time.monotonic()>=self.deadline:return
-            kind=self.read(item,True)
-            if not kind:return
-            item.pending_kind=kind
-            try:self.work(item,cap)
+            kind=self.need(item) if item.values else None
+            if not kind or not self.enter(item):return
+            item.pending_kind=kind;item.changed=False
+            try:pressed=self.work(item,cap)
+            except CoinsShort:
+                if item.changed:self.read(item)
+                raise
             finally:self.leave_growth()
-            if kind==ENHANCE and cap is not None:
-                # One look back at the level, then the next lowest of the grade takes its turn.
-                self.read(item,False);return
+            # Nothing done, nothing new to read: no materials go straight on to the next item.
+            if item.changed:self.read(item)
+            if not pressed or (kind==ENHANCE and cap is not None):return
     def gear(self):
         from owner_equipment_boxes import SLOTS
         items=[Item(slot,False) for slot in SLOTS]
@@ -307,7 +381,7 @@ class Route:
         for turn in range(2):
             for item in items:
                 self.check()
-                if not item.values:self.read(item,False)
+                if not item.values:self.read(item)
         known=[item for item in items if item.values and item.grade]
         missed=[item.slot for item in items if not item.values]
         if missed:LOG.info('착용 장비 현재값 못 읽음 · 이번 차례 제외 · %s',', '.join(missed))
@@ -320,18 +394,31 @@ class Route:
                 waiting=sorted((item for item in group if self.need(item)==ENHANCE),key=lambda item:item.values[ENHANCE])
                 if not waiting:break
                 chosen=waiting[0];others=[item.values[ENHANCE] for item in group if item is not chosen]
+                before=chosen.values[ENHANCE]
                 self.visit(chosen,min(others)+LEVEL_STEP if others else None)
+                # A turn that raised nothing must not come round again: the lowest stayed the lowest, and one item was read every 7 s (pc2, 11-06).
+                if chosen.values[ENHANCE]<=before:
+                    chosen.done.add(ENHANCE)
+                    LOG.info('착용 %s 강화 수치 그대로 · 이번 차례 제외',chosen.slot)
             for item in group:
                 if self.need(item):self.visit(item)
     def blessings(self):
+        # On the blessing screen, slot by slot. One that did not open gets one more turn after the others.
         items=[Item(slot,True) for slot in worn.BLESSING_SLOTS]
         for turn in range(2):
             for item in items:
                 self.check()
                 if time.monotonic()>=self.deadline:return
-                if not item.values:self.visit(item)
+                if not item.values:self.read(item)
         missed=[item.slot for item in items if not item.values]
         if missed:LOG.info('착용 가호 현재값 못 읽음 · 이번 차례 제외 · %s',', '.join(missed))
+        for item in items:
+            self.check()
+            if time.monotonic()>=self.deadline:return
+            if item.values and self.need(item):self.visit(item)
+    def to_field(self):
+        self.leave_growth();worn.leave_blessing_screen(self.service,self.context)
+        worn.close_bag(self.service,self.context)
 
 
 def run(adapter,context,inputs):
@@ -340,8 +427,6 @@ def run(adapter,context,inputs):
     from project_adapter import market_inventory
     from owner_hunt_rules_candidate import configured_identity
     from owner_progression import state
-    from owner_equipment_boxes import close_inventory
-    from owner_progression import inventory_parts
     equipment=adapter.values.get('auto_growth.equipment.enabled') is True
     blessing=adapter.values.get('auto_growth.blessing.enabled') is True
     if not equipment and not blessing:return False
@@ -363,8 +448,7 @@ def run(adapter,context,inputs):
     except CoinsShort:
         LOG.info('성장 재화 부족 · 이번 차례 종료')
     finally:
-        context.checkpoint();route.leave_growth()
-        frame=service.capture()
-        if worn.popup(frame):service.click_hit(real_hit(*worn.REAL_CLOSE));context.wait(.5);frame=service.capture()
-        if inventory_parts(frame)[0] is True:close_inventory(service)
+        context.checkpoint()
+        if worn.popup(service.capture()):service.click_hit(real_hit(*worn.REAL_CLOSE));context.wait(.8)
+        route.to_field()
     return True

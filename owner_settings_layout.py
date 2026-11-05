@@ -31,7 +31,7 @@ def consolidated(schema):
   if isinstance(node,dict):
    key=node.get('id')
    if key in INTERNAL or key in GROWTH_SWITCHES.values():node['visible']=False
-   if key=='auto_rewards.blessing.enabled':node['label']='가호 보상 수령'
+   if key=='auto_rewards.blessing.enabled':node['label']='가호 소환'
    if key=='auto_register.market.bag.enabled':node['default']=False  # the market is closed for now
    for value in node.values():visit(value)
   elif isinstance(node,list):
