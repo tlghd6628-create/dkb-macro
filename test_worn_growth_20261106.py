@@ -233,6 +233,17 @@ class Order(WithRoute):
         self.assertEqual(seen[0],('무기',23))
         self.assertEqual(reads['무기'],50);self.assertEqual(reads['반지'],50)
 
+class Stuck(WithRoute):
+    def test_a_turn_that_raises_nothing_does_not_come_round_again(self):
+        seen=[]
+        def read(item):
+            item.values=dict(enhance=10,breakthrough=3,awaken=1);item.grade='희귀';return True
+        self.route.read=read;self.route.visit=lambda item,cap=None:seen.append(item.slot)
+        self.route.deadline=time.monotonic()+60
+        self.route.gear()
+        self.assertEqual(len(seen),len(set(seen)));self.assertEqual(len(seen),11)
+
+
 class Blessings(WithRoute):
     def setUp(self):
         super().setUp()

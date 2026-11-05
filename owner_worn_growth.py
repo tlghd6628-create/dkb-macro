@@ -394,7 +394,12 @@ class Route:
                 waiting=sorted((item for item in group if self.need(item)==ENHANCE),key=lambda item:item.values[ENHANCE])
                 if not waiting:break
                 chosen=waiting[0];others=[item.values[ENHANCE] for item in group if item is not chosen]
+                before=chosen.values[ENHANCE]
                 self.visit(chosen,min(others)+LEVEL_STEP if others else None)
+                # A turn that raised nothing must not come round again: the lowest stayed the lowest, and one item was read every 7 s (pc2, 11-06).
+                if chosen.values[ENHANCE]<=before:
+                    chosen.done.add(ENHANCE)
+                    LOG.info('착용 %s 강화 수치 그대로 · 이번 차례 제외',chosen.slot)
             for item in group:
                 if self.need(item):self.visit(item)
     def blessings(self):
