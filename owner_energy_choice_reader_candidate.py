@@ -41,7 +41,7 @@ def layouts(frame):
    # The bigger art scores alike across colours, so the colour distance tells them apart. A selected row brightens: 14.4 against 18.8.
    gaps=[float(np.abs(sample.astype('int16')-asset(name+suffix).astype('int16')).mean()) for name in FILES]
    # The selected row pulses, so its colour cannot be held to that margin; the other three still are.
-   lit=suffix=='-v2' and float(frame[y:y+3,363:535].min(axis=2).mean())>=100
+   lit=suffix=='-v2' and float(frame[y:y+3,363:535].min(axis=2).mean())>=85
    apart=lit or values[i]-max(values[:i]+values[i+1:])>=.10 or (suffix=='-v2' and min(gaps[:i]+gaps[i+1:])-gaps[i]>=2.5)
    if values[i]<.96 or not apart:ok=False;break
   if ok:matched.append((offset,rows))
@@ -76,8 +76,10 @@ def read_screen(frame):
  # counts as a selected row. Unknown highlights never imply a default.
  borders=[float(frame[y+offset:y+offset+3,363:535].min(axis=2).mean()) for y in rows_of(frame)]
  order=sorted(range(4),key=lambda i:borders[i],reverse=True)
- if borders[order[0]]>=110 and borders[order[0]]-borders[order[1]]>=30:selected=NAMES[order[0]]
- elif max(borders)<90:selected=None
+ # In the current layout the rim pulses from 134 down near 90, against 69 for a plain row.
+ bright=85 if rows_of(frame) is ROWS_V2 else 110
+ if borders[order[0]]>=bright and borders[order[0]]-borders[order[1]]>=(15 if bright==85 else 30):selected=NAMES[order[0]]
+ elif max(borders)<(80 if bright==85 else 90):selected=None
  else:return None
  # Glyph result is provisional; a fresh independent detail count must match.
  from owner_energy_counter_glyph_candidate import load_observed_atlas,read_counter
