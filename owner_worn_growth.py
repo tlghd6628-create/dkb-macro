@@ -91,7 +91,7 @@ def read_action(root,frame,word):
 class Item:
     """One worn tile: where it is, what it answers to in the settings, what its details last said."""
     def __init__(self,slot,blessing):
-        self.slot=slot;self.blessing=blessing;self.values=None;self.grade=None;self.title='';self.done=set();self.stage_pressed=False
+        self.slot=slot;self.blessing=blessing;self.values=None;self.grade=None;self.title='';self.done=set()
     @property
     def key(self):return self.slot[-1]+'번' if self.blessing else self.grade
     @property
@@ -185,7 +185,8 @@ class Route:
     def read(self,item):
         """Read the item's details down to its numbers, which also puts them in the program's table, and close."""
         self.leave_growth()
-        if not self.open_bag():
+        # A blessing is read on the blessing screen, which the reader opens.
+        if not item.blessing and not self.open_bag():
             LOG.info('착용 %s 건너뜀 · 인벤토리 안 열림',item.slot);return False
         # The window just closed fades out, and a click into the fade is lost.
         worn.settle_after_popup(self.service,self.context)
@@ -207,16 +208,6 @@ class Route:
             if self.into_growth(item):return True
         worn.close_details(self.service,self.context)
         return False
-    def publish_level(self,item,level):
-        """The left of 42 >> 43 on the panel where enhancing stopped is the current value: into the program's table as it is."""
-        item.values=dict(item.values or {},enhance=level)
-        if item.blessing:
-            from owner_growth_current import observe_value
-            observe_value(self.root,self.profile,'blessings',item.key,{'enhance':level},verified=True)
-        elif item.grade:
-            from owner_growth_current import observe
-            observe(self.root,{'character':self.profile,'item_identity':'worn-slot:'+item.slot,'slot':item.slot,'grade':item.grade,'enhancement':level,'verified_fields':['enhancement'],'source':'growth_panel_display_only'})
-        LOG.info('착용 %s 강화 현재값 · %s',item.slot,level)
     # ---- on the growth screen
     def side_tab(self,kind):
         row=only_word(text.read(None,self.frame(),SIDE_TABS,scale=2),(LABEL[kind],),.7)
@@ -233,10 +224,6 @@ class Route:
             panel=read_panel(self.root,self.frame())
             if panel:
                 item.values=dict(item.values or {},enhance=panel['level']);self.settle(item)
-        try:self.enhance_loop(item,cap,observer,guard,goal,targets)
-        finally:
-            if observer.panel:self.publish_level(item,observer.panel['level'])
-    def enhance_loop(self,item,cap,observer,guard,goal,targets):
         end=time.monotonic()+ITEM_SECONDS;rereads=0
         def one(latest,mark_sent):
             frame=self.frame();panel=read_panel(self.root,frame)
@@ -303,7 +290,6 @@ class Route:
         if status!='pending_confirmation':
             LOG.info('착용 %s %s 안 누름 · %s',item.slot,LABEL[kind],status);item.done.add(kind);return
         LOG.info('착용 %s %s 입력 · 현재 %s',item.slot,LABEL[kind],item.values.get(kind))
-        item.stage_pressed=True
         self.after_result(item,kind)
     def after_result(self,item,kind):
         """Watch for the short-of-coins message, then close whatever result window the press brought up."""
@@ -341,17 +327,18 @@ class Route:
             kind=self.need(item)
         return False
     def visit(self,item,cap=None):
-        """Grow what it lacks. Enhancing ends on a panel that says the level. 돌파 and 각성 say no number there, so those
-        alone are read again from the details: a stage only counts once they show it."""
+        """Grow what it lacks, then read its details again: that reading is what the program's table shows and what decides
+        the next step, at the end of every turn, one ended by no coins included."""
         for _ in range(ROUNDS):
             if time.monotonic()>=self.deadline:return
             # A blessing's level is on its growth panel, so it goes straight in. An item's three numbers are already read.
             kind=self.need(item) if item.values else ENHANCE if item.blessing else None
             if not kind or not self.enter(item):return
-            item.pending_kind=kind;item.stage_pressed=False
+            item.pending_kind=kind
             try:pressed=self.work(item,cap)
-            finally:self.leave_growth()
-            if item.stage_pressed:self.read(item)
+            except CoinsShort:
+                self.read(item);raise
+            self.read(item)
             if not pressed or (kind==ENHANCE and cap is not None):return
     def gear(self):
         from owner_equipment_boxes import SLOTS
