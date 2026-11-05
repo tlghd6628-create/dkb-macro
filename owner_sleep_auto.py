@@ -63,7 +63,33 @@ def wrap(original,detector_factory):
     ensure._owner_sleep_auto=True
     return ensure
 
+SLEEP_DARK=45  # the sleep screen's mean brightness is far under this, so a normal screen is not read for words
+
+def slide_if_asleep(adapter,context,inputs):
+    """The native slide does not wake the game at 1366x768, and what comes next then fails on the sleep screen (TEST 11-06 03:03).
+    True when this pressed. The start of a run has its own check; this covers every other wake, TEST included."""
+    import numpy as np
+    from project_adapter.town_services import TownServices
+    from owner_startup_stage import sleep_screen,slide_awake
+    service=TownServices(adapter,context,inputs,[]);frame=service.capture();real=getattr(frame,'hi',None)
+    if real is None or float(np.asarray(real).mean())>SLEEP_DARK or not sleep_screen(service,adapter,frame):return False
+    slide_awake(adapter,context,inputs)
+    LOG.info('절전 화면 밀어서 해제')
+    return True
+
+def install_wake():
+    from project_adapter._entry import Adapter
+    ordinary=Adapter.exit_sleep_mode
+    if getattr(ordinary,'_owner_slides',False):return
+    @wraps(ordinary)
+    def exit_sleep_mode(adapter,context,inputs,*args,**kwargs):
+        result=ordinary(adapter,context,inputs,*args,**kwargs)
+        return True if slide_if_asleep(adapter,context,inputs) else result
+    exit_sleep_mode._owner_slides=True
+    Adapter.exit_sleep_mode=exit_sleep_mode
+
 def install(gui):
+    install_wake()
     from project_adapter import auto_mode,secret_exploration,favorite_hunt,field_boss
     if getattr(auto_mode.ensure_auto_active,'_owner_sleep_auto',False):return
     from owner_gear_native_install_candidate import _rebind_aliases

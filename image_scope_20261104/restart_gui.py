@@ -10,7 +10,7 @@ def tk(part):
         if win32gui.IsWindowVisible(h) and part in win32gui.GetWindowText(h) and win32gui.GetClassName(h)=='TkTopLevel':found.append(h)
     win32gui.EnumWindows(each,None);return found
 if sys.argv[1]=='close':
-    size=LOG.stat().st_size
+    size=LOG.stat().st_size if LOG.exists() else 0  # a new day has no log until the program writes one
     for part in ('세부설정','DKB · 도깨비'):
         for h in tk(part):win32gui.PostMessage(h,win32con.WM_CLOSE,0,0);time.sleep(1.2)
     end=time.time()+40
@@ -21,7 +21,7 @@ if sys.argv[1]=='close':
     else:print('NO shutdown line');print(t[-400:])
     print('windows left',len(tk('DKB · 도깨비')))
 else:
-    size=LOG.stat().st_size
+    size=LOG.stat().st_size if LOG.exists() else 0  # a new day has no log until the program writes one
     subprocess.Popen([str(R/'DKB_개발용.exe')],cwd=str(R))
     end=time.time()+40
     while time.time()<end and not tk('DKB · 도깨비'):time.sleep(.5)

@@ -99,9 +99,24 @@ def card_point(detector,frame,target):
  hit=detector.find(NATIVE_CARDS[target],frame,threshold=.95)
  return (hit[0],hit[1]) if hit else None
 
+REAL_CARDS=(398,514,290,254);REAL_COLUMNS=(449,542,635);FACE_ABOVE_WORD=45  # real pixels of the emote panel
+
+def real_card(frame,target):
+ """The card by its name under the face, as a click point. Only the panel's three columns count: scenery shows through."""
+ from owner_hd import logical_of
+ from owner_text import clean,read_area
+ x,y,w,h=REAL_CARDS;real=np.asarray(frame.hi)
+ found=[r for r in read_area(None,real[y:y+h,x:x+w],left=x,top=y,scale=3,minimum=.6)
+        if clean(r['text'])==clean(target) and min(abs(r['rx']-c) for c in REAL_COLUMNS)<=20]
+ if len(found)!=1:return None
+ column=min(REAL_COLUMNS,key=lambda c:abs(found[0]['rx']-c))
+ # Snapped so that two looks at a still card give the same point.
+ return logical_of(column,round((found[0]['ry']-FACE_ABOVE_WORD)/6)*6,getattr(frame,'layout',None))
+
 def card_at(frame,target,point):
  """Prove an already known slot, using the existing image/ink thresholds.
  A changed scroll page or resolution invalidates the hint, never the proof."""
+ if getattr(frame,'hi',None) is not None:return panel(frame) and real_card(frame,target)==tuple(point)
  if getattr(frame,'shape',None)!=(479,897,3) or target not in NAMES or not panel(frame):return False
  if not isinstance(point,(tuple,list)) or len(point)!=2 or any(type(v) is not int for v in point):return False
  x,y=point;dx,dy=card_offset(target);l,t=x-dx,y-dy
@@ -121,6 +136,7 @@ def proud_face_state(frame,point):
  disabled grey face. Inspect only reference-white face pixels, excluding the
  name, star and moving map. Unknown stays unknown, never authorizes a send."""
  if not card_at(frame,'뽐내기',point):return None
+ if getattr(frame,'hi',None) is not None:return 'enabled'  # the reference pictures hold 897x479 faces; the 61-second limit still guards a repeat
  x,y=point;dx,dy=card_offset('뽐내기');l,t=x-dx,y-dy
  reference=asset('card-clean-proud')[:22];mask=reference.min(axis=2)>200
  patch=frame[t:t+22,l:l+reference.shape[1]]
@@ -154,6 +170,7 @@ class CardLocator:
  def matches(self,frame,target,point):
   if point is None:return False
   if card_at(frame,target,point):return True
+  if getattr(frame,'hi',None) is not None:return False
   if self.atlas and panel(frame) and self.atlas.matches(frame,target,point):return True
   # The original native 화남 image is a clipped first-page card, not the
   # full face/label crop. Retain its original detector and exact hit position.
@@ -161,6 +178,7 @@ class CardLocator:
    return card_point(self.detector,frame,target)==point
   return False
  def find(self,frame,target):
+  if getattr(frame,'hi',None) is not None:return real_card(frame,target) if panel(frame) else None
   for point in (self.hints.get(target),CARD_POSITIONS.get(target)):
    if point is not None and self.matches(frame,target,point):return point
   if self.atlas and panel(frame):

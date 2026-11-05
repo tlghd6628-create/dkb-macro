@@ -160,7 +160,7 @@ def install(gui):
         'event_rewards':{'run_event_rewards':'이벤트'},
         'mail_rewards':{'run_mail_rewards':'우편'},
         'achievement_rewards':{'run_achievement_rewards':'업적','run_album_rewards':'화첩','run_blessing_rewards':'가호','run_energy_entry':'기운 발현','run_growth_entry':'성장 장비·가호'},
-        'market_inventory':{'run_inventory_use':'인벤토리 사용','run_growth_equipment':'성장 장비·가호','run_equipment_disassembly':'장비 분해','run_market_inventory':'거래소'},
+        'market_inventory':{'run_inventory_use':'인벤토리 사용','run_growth_equipment':'성장 장비·가호','run_equipment_disassembly':'장비 분해'},
         'seal_release':{'run_seal_release':'단 봉인해제'},
         'treasure_entry':{'run_treasure_region_entry':'보물찾기'},
         'spirit_training':{'run_spirit_training':'영기 수련'},
@@ -183,6 +183,11 @@ def install(gui):
             for name,label in functions.items():
                 original=getattr(loaded,name,None)
                 if original is not None:replacements.append((original,wrapper(original,label)))
+    # The user's rule for now: no market registration, whatever an older save says.
+    def market_closed(*args,**kwargs):
+        LOG.info('거래소 등록 사용 불가 · 건너뜀')
+        return False
+    replacements.append((importlib.import_module('project_adapter.market_inventory').run_market_inventory,market_closed))
     for name,module in tuple(sys.modules.items()):
         if name.startswith('project_adapter') and module is not None:
             for key,value in tuple(vars(module).items()):
@@ -194,13 +199,14 @@ def install(gui):
     for methods,wrapper in (({
         'run_guide_rewards':'길라잡이','run_event_rewards':'이벤트','run_mail_rewards':'우편',
         'run_achievement_rewards':'업적','run_album_rewards':'화첩','run_blessing_rewards':'가호',
-        'run_inventory_use':'인벤토리 사용','run_market_inventory':'거래소','run_seal_release':'단 봉인해제',
+        'run_inventory_use':'인벤토리 사용','run_seal_release':'단 봉인해제',
         'run_treasure_region_entry':'보물찾기','run_spirit_training':'영기 수련'},service_wrapper),
         ({'run_field_boss_entry':'월드보스','_run_field_boss_entry':'월드보스',
           'run_falling_battle':'낙화의 전장','run_ascension_tower':'승천의 탑'},combat_wrapper)):
         for name,label in methods.items():
             original=getattr(Adapter,name,None)
             if original is not None:setattr(Adapter,name,wrapper(original,label))
+    Adapter.run_market_inventory=market_closed
     # Movement/resupply may run inside the native idle monitor. They are not
     # rescheduled, but their internal waits must not become appointment slots.
     for name in ('run_favorite_hunt','run_town_return','run_potion_purchase'):

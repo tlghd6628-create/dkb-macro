@@ -835,6 +835,18 @@ class SkillUI:
         # Legacy bulk button can learn an unapproved 강인 skill along with the
         # desired ones. Exact individual skill learning is not yet verified.
         raise Pending('선택한 도술만 배우기 확인 필요 · 전체 학습 보류')
+    def learn_all(self):
+        """Press 모두 배우기 until it is gone. Returns how many times it was pressed."""
+        self.open_skills();pressed=0
+        for _ in range(8):
+            self.context.checkpoint()
+            try:button=self.word('모두 배우기',(0,30,897,449),minimum=.85)
+            except Pending:break
+            self.click(button['x'],button['y'],skill_screen);self.context.wait(.8)
+            self.click_word('확인',(430,290,112,55),lambda f:True,minimum=.85)
+            self.context.wait(1.2);pressed+=1
+        LOG.info('도술 모두 배우기 · %d회',pressed)
+        return pressed
     def learn_one(self,sid,ledger,*,tutorial=False,coupon=False):
         """Learn exactly one authorized skill; unknown visual proof is held.
 
@@ -849,7 +861,8 @@ class SkillUI:
             if found:entry={'name':found[0],'style':self.public['all_skill_names'][found[0]].get('style')}
         if not entry:raise Pending('개별 도술 이미지가 없어 학습 보류')
         style=entry.get('style');name=entry.get('name')
-        allowed=(style in ('파멸','강타') or sid in (84,68,89))
+        from owner_skill_goal import PURCHASE_STYLES
+        allowed=(style in PURCHASE_STYLES or sid in (84,68,89))
         if tutorial:
             allowed=(ledger.item.get('story_step')==1 and ledger.item.get('tutorial_required')=='쇠뇌 사격' and name=='쇠뇌 사격')
         elif coupon:
@@ -971,7 +984,7 @@ class SkillUI:
         LOG.info('도술 학습 확인 · %s',name)
         return True
     def enter_shop(self,style):
-        if style not in ('파멸','저격','연타','강타'):raise Pending('엽전 상인 분류 확인 필요')
+        if style not in ('파멸','저격','연타','강타','절명'):raise Pending('엽전 상인 분류 확인 필요')
         self.close_known()
         if not self.normal():raise Pending('도술 상인 이동 전 일반 필드 확인 필요')
         self.adapter.run_town_return(self.context,self.inputs)
@@ -1075,8 +1088,8 @@ class SkillUI:
         """Story 5 only; process verified coin-shop skills in approved styles.
 
         강인 merchant traversal and full shop coverage are deliberately held
-        until actual screen/path evidence exists. Never buy unrelated
-        저격/연타 items or consume selection boxes here.
+        until actual screen/path evidence exists. Styles outside PURCHASE_STYLES
+        are never bought, and selection boxes are not consumed here.
         """
         if ledger.item.get('story_step')!=5:
             raise Pending('최종 도술 서사 완료 확인 전')
@@ -1095,7 +1108,8 @@ class SkillUI:
         except (OSError,ValueError,TypeError,KeyError) as exc:
             raise Pending('선택상자 도술 학습 기록 저장 보류') from exc
         self.close_known();spent=0;seen=set();purchased=set();pending_learning=set()
-        for style in ('파멸','강타'):
+        from owner_skill_goal import PURCHASE_STYLES
+        for style in PURCHASE_STYLES:
             self.enter_shop(style);previous=None
             for _ in range(12):
                 self.context.checkpoint()
@@ -1120,12 +1134,9 @@ class SkillUI:
                 self.drag((117,382),(117,87),lambda f:not skill_screen(f) and not quest_screen(f))
             else:raise Pending(style+' 상점 목록 끝 확인 필요')
             self.close_known()
+        # The user's rule: after buying, 모두 배우기 on the skill tab. One by one needs an icon for each, and 27 have none.
         unavailable=[]
-        for sid in sorted((purchased|pending_learning)-owned):
-            self.context.checkpoint()
-            if str(sid) not in self.public['skills']:
-                unavailable.append(sid);continue
-            self.learn_one(sid,ledger)
+        self.learn_all()
         after=self.scan_owned()
         if not isinstance(after,set):raise Pending('도술 학습 후 목록 확인 필요')
         try:remember_verified_owned(ledger,after)
@@ -1135,12 +1146,12 @@ class SkillUI:
         ledger.item['owned_skills']=sorted(after)
         ledger.event('learning_verified',owned=len(after),missing=sorted(missing))
         unresolved=[]
-        if (purchased|pending_learning)-after or unavailable:unresolved.append('파멸·강타 개별 도술 학습 화면 확인 필요')
+        if (purchased|pending_learning)-after or unavailable:unresolved.append('구매 도술 개별 학습 화면 확인 필요')
         if missing:unresolved.append('요청 광역 도술 학습 미완료: '+', '.join(self.public['skills'][str(i)]['name'] for i in sorted(missing)))
         # A repeated page signature is not proof that OCR covered every shop
         # item, and the third shop is not verified. Do not mark the whole user
         # request complete merely because the nine preset skills are learned.
-        unresolved.append('파멸·강타 전체 판매 목록 확인 필요')
+        unresolved.append('구매 계열 전체 판매 목록 확인 필요')
         result={'status':'partial','owned_skills':sorted(after),
                 'aoe_ready':not missing,'unresolved':unresolved}
         ledger.item['requested_learning']=result

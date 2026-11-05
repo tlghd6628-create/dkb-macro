@@ -14,12 +14,14 @@ COMMON='common.skill_preset.enabled'
 def add_fields(schema):
  """Same native field shape as the world boss preset, on the raid capability."""
  groups=[g for t in schema['tabs'] for g in t['groups']]
- if any(f['id']==ENABLED for g in groups for f in g['fields']):return schema
  by_id={f['id']:(g,f) for g in groups for f in g['fields']}
+ # The user's rule: both start on the single-target deck. A saved value still wins.
+ if BOSS_CHOICE in by_id:by_id[BOSS_CHOICE][1]['default']='B'
+ if ENABLED in by_id:return schema
  if not all(key in by_id for key in (BOSS_ENABLED,BOSS_CHOICE,'auto_schedule.boss_raid.enabled')):return schema
  group,raid=by_id['auto_schedule.boss_raid.enabled']
  switch=copy.deepcopy(by_id[BOSS_ENABLED][1]);switch.update(id=ENABLED,capability=raid['capability'],default=False,label='레이드 스킬 프리셋')
- choice=copy.deepcopy(by_id[BOSS_CHOICE][1]);choice.update(id=CHOICE,capability=raid['capability'],default='A',label='레이드 스킬 프리셋 선택',enabled_if=ENABLED)
+ choice=copy.deepcopy(by_id[BOSS_CHOICE][1]);choice.update(id=CHOICE,capability=raid['capability'],default='B',label='레이드 스킬 프리셋 선택',enabled_if=ENABLED)
  at=group['fields'].index(raid)+1
  group['fields'][at:at]=[switch,choice]
  return schema

@@ -85,6 +85,16 @@ def map_teleport(frame):
     return (found[0]['x'],found[0]['y'],logical_bounds(found[0],frame)) if len(found)==1 else None
 
 
+ACCOUNT_BUTTONS=(460,490,450,140)  # real pixels: the buttons under the settings' account tab
+
+
+def coupon_menu(frame):
+    """쿠폰등록 on the settings' account tab, by exactly that word. Its picture does not match at 1366x768."""
+    from owner_text import clean,logical_bounds,read
+    found=[row for row in read(None,frame,ACCOUNT_BUTTONS) if clean(row['text'])=='쿠폰등록']
+    return (found[0]['x'],found[0]['y'],logical_bounds(found[0],frame)) if len(found)==1 else None
+
+
 def install_merchant():
     """Native callers keep their retries: nothing on this map answers as it always has."""
     from functools import wraps

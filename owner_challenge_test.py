@@ -8,14 +8,15 @@ import inspect,logging,re,threading
 
 LOG=logging.getLogger('project_gui.DKB')
 DISPATCH,DIRECT,RAID='dispatch','direct','raid'
-GROWTH,STYLE,ALBUM,BLESSING,PRESET='growth','style','album','blessing','preset'
+GROWTH,STYLE,ALBUM,BLESSING='growth','style','album','blessing'
 TREASURE='treasure'
 SHOP='shop';SHOP_KEY='owner_shop.enabled'
 WORN='worn';WORN_KEY='owner_worn.status'
+COUPON='coupon'
 TARGETS={
+ 'main_quest.first_coupon.enabled':('쿠폰 등록',COUPON),
  WORN_KEY:('착용 현재값 확인',WORN),
  SHOP_KEY:('잡화상점 구매',SHOP),
- 'auto_schedule.boss_raid.skill_preset.enabled':('레이드 단일 덱 구성',PRESET),
  'auto_rewards.blessing.enabled':('가호 일괄 획득',BLESSING),
  'auto_growth.equipment.enabled':('장비 성장',GROWTH),
  'auto_growth.blessing.enabled':('가호 성장',GROWTH),
@@ -187,11 +188,6 @@ def growth(adapter,context,inputs,key):
         from owner_quest_preflight import read_power
         read_power(adapter,context,inputs)
         return adapter.run_album_rewards(context,inputs)
-    if kind==PRESET:
-        from owner_quest_preflight import read_power
-        from owner_single_preset import configure
-        read_power(adapter,context,inputs)
-        return configure(adapter,context,inputs)
     if kind==BLESSING:
         # The priority equip runs inside the reward job, so this is the one way to see it.
         from owner_quest_preflight import read_power
@@ -226,17 +222,28 @@ def growth(adapter,context,inputs,key):
     if getattr(adapter,'_owner_growth_pending_hold',False):return '보류 · 실행 로그 확인'
     return result
 
+def coupon(adapter,context,inputs):
+    """The start's coupon step alone. Only codes with no record are entered."""
+    from owner_quest_preflight import read_power
+    from owner_coupons import identity_values
+    from owner_startup_receipts import initial_coupons,terminal_coupons
+    read_power(adapter,context,inputs)
+    if not initial_coupons(adapter,context,inputs):return '등록할 쿠폰 없음'
+    pending,complete=terminal_coupons(adapter.project.root,identity_values())
+    return '기록 %d개'%len(complete)+(' · 미완료 '+', '.join(sorted(pending)) if pending else '')
+
 def execute(adapter,context,inputs,key):
     from owner_timetable import LOCAL
     from owner_work_resume import ResumeWork
     kind=TARGETS[key][1];before=adapter.values;adapter.values=only(before,key)
     previous=getattr(LOCAL,'native_job',None);LOCAL.native_job=key
     try:
+        if kind==COUPON:return coupon(adapter,context,inputs)
         if kind==RAID:return raid_real(adapter,context,inputs)
         if kind==TREASURE:return treasure(adapter,context,inputs,key)
         if kind==SHOP:return shop(adapter,context,inputs)
         if kind==WORN:return worn(adapter,context,inputs)
-        if kind in (GROWTH,STYLE,ALBUM,BLESSING,PRESET):return growth(adapter,context,inputs,key)
+        if kind in (GROWTH,STYLE,ALBUM,BLESSING):return growth(adapter,context,inputs,key)
         return dispatch(adapter,context,inputs,key) if kind==DISPATCH else direct(adapter,context,inputs,key)
     except ResumeWork:return None  # a boss return to the selected work; a TEST just ends here
     finally:LOCAL.native_job=previous;adapter.values=before

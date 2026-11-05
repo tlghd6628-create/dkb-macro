@@ -5,11 +5,19 @@ Only connect the known objective and consume3 if native full proof appears.
 """
 from contextlib import contextmanager
 import logging,re,time
+import numpy as np
 from owner_skill_goal import Pending
 LOG=logging.getLogger('project_gui.DKB')
-NEEDED=3
+NEEDED=3;POTION_SWITCH='common.potion_and_favorite.enabled'
 # Real pixels on the 1366x768 screen.
-LIMIT_NAME=(75,108,200,22);LIMIT_ROW=(75,150,180,20);SLOT_COUNT=(562,722,44,24);SLOT_PRESS=(581,722)
+LIMIT_NAME=(75,108,200,22);LIMIT_ROW=(75,150,180,20)
+GOAL_COUNT=(790,262,85,20)  # the first objective's count, in the frame's own terms
+# The bag's consumables tab and its windows.
+TILE_FIRST=(1095,175);TILE_STEP=(60,59);TILE_ROWS=9;TILE_FULL=10.;KEPT_TIER='1';TIER_LOOKS=30
+TIP_KIND=(700,205,110,45);TIP_TITLE=(590,160,178,22);TIP_CLOSE=(782,171);TRASH=(588,543);POTION_KIND='체력물약'
+AUTO_USE=(735,498,60,24);AUTO_USE_PRESS=(765,510);SLOTS=5;SLOT_STEP=52;SLOT_DIGITS=(572,725,34,15);SLOT_PRESS=(581,722)
+QUANTITY_BOX=(610,232,150,26);QUANTITY_ITEM=(610,275,170,50);QUANTITY_AMOUNT=(640,360,60,24);QUANTITY_OK=(745,457);QUANTITY_CANCEL=(620,457);QUANTITY_TITLE='수량입력'
+NOTICE_BOX=(560,360,250,30);DELETE_OK=(751,444);DELETE_NOTICE='복구할수없습니다'
 
 class PotionFull(BaseException):pass
 
@@ -29,13 +37,20 @@ def observe_stage(ui):
  # leaf. Reuse that ownership instead of re-OCRing its small title again.
  center=selected_center(ui.frame())
  if center is None:return None
- ui.rows((832,264,40,17),language='number',pair_minimum=.98)
- pair=getattr(ui,'_owner_last_rows_pair',None)
- def ratio(answer):
-  values={(int(m[1]),int(m[2])) for r in answer if r.get('score',0)>=.98
+ def ratio(answer,floor=.98):
+  values={(int(m[1]),int(m[2])) for r in answer if r.get('score',0)>=floor
           for m in [re.fullmatch(r'\s*(\d{1,2})\s*/\s*(\d{1,2})\s*',str(r.get('text','')))] if m}
   return next(iter(values)) if len(values)==1 else None
- values=[ratio(a) for a in pair[2]] if pair else []
+ if getattr(ui.frame(),'hi',None) is not None:
+  # The objective's count on the real screen, the same on two looks. The shrunken number never reached .98.
+  from owner_text import read,word_box
+  values=[]
+  for _ in range(2):
+   frame=ui.frame();values.append(ratio(read(ui.adapter.project.root,frame,word_box(GOAL_COUNT),scale=3),.85));ui.context.wait(.12)
+ else:
+  ui.rows((832,264,40,17),language='number',pair_minimum=.98)
+  pair=getattr(ui,'_owner_last_rows_pair',None)
+  values=[ratio(a) for a in pair[2]] if pair else []
  LOG.info('퀘스트 필수 구매 목표 대조 · 수량=%s',values)
  if len(values)!=2 or values[0] is None or values[0]!=values[1] or selected_center(ui.frame())!=center:return None
  done,total=values[0]
@@ -91,6 +106,13 @@ def native_purchase_watch(adapter,context,ui,receipt,commit,guard):
  try:yield evidence
  finally:TownServices.button=previous_button;limits.observed_full=previous_full;limits.cached_full=previous_cached
 
+@contextmanager
+def potion_switch_on(adapter):
+ """This story must buy even with 자동 물약구매 off, for this one call. The saved setting stays as it is."""
+ before=adapter.values;adapter.values=dict(before,**{POTION_SWITCH:True})
+ try:yield
+ finally:adapter.values=before
+
 def over_limit(ui):
  """(held, limit) from the shop's first row, 구매 가능 320/250, where two real frames agree. Or None."""
  import owner_text as text
@@ -104,35 +126,117 @@ def over_limit(ui):
   found.append(rows[0]);ui.context.wait(.12)
  return found[0] if found[0]==found[1] else None
 
-def slot_count(ui):
- """Potions left in the first quick slot, on the real screen. Or None."""
- from owner_text import read_area
- import numpy as np
- x,y,w,h=SLOT_COUNT;real=np.asarray(ui.frame().hi)
- values=[r['text'] for r in read_area(None,real[y:y+h,x:x+w],language='number',scale=3,minimum=.6) if re.fullmatch(r'\d{1,4}',str(r['text']).strip())]
- return int(values[0]) if len(values)==1 else None
+def _press(ui,point,proof):
+ from owner_hd import logical_of
+ frame=ui.frame();x,y=logical_of(point[0],point[1],getattr(frame,'layout',None))
+ ui.click(x,y,proof)
 
-def use_potions(ui,receipt,commit,guard):
- """User layout: the potion on Ctrl1. Each use is proved by the slot's count falling; a press with no effect is pressed again."""
- import owner_hd as hd
- from owner_movement import field_hud
- need=receipt.get('to_use',3);start=slot_count(ui)
- if start is None:raise Pending('첫 칸 물약 수량 판독 필요')
- if start<need:raise Pending('첫 칸 물약 수량 부족 · %d/%d'%(start,need))
- LOG.info('퀘스트 필수 구매 · 한도 아래로 물약 %d개 사용 · 첫 칸 %d개',need,start)
- frame=ui.frame();x,y=hd.logical_of(SLOT_PRESS[0],SLOT_PRESS[1],getattr(frame,'layout',None))
- receipt.update(phase='using',use_before=start);commit()
- used=0;last=time.monotonic();end=last+need*6+30
- while used<need:
-  guard()
-  if time.monotonic()>=end or time.monotonic()-last>=20:raise Pending('물약 사용 후 수량 감소 확인 필요 · %d/%d'%(used,need))
-  ui.click(x,y,lambda f:field_hud(f) and guard());ui.context.wait(.5)
-  now=slot_count(ui)
-  if now is not None and now<start-used:
-   used=start-now;last=time.monotonic()
-   receipt.update(used=used,use_after=now)
- receipt.update(phase='full');commit()
- LOG.info('퀘스트 필수 구매 · 물약 %d개 사용 완료',used)
+def _words(frame,box,scale=3):
+ from owner_text import clean,read_area
+ x,y,w,h=box
+ return clean(''.join(r['text'] for r in read_area(None,np.asarray(frame.hi)[y:y+h,x:x+w],scale=scale,minimum=.5)))
+
+def occupied_tiles(frame):
+ """Bag tiles with something on them, last first: potions sort to the end. An empty tile measures about 2, a full one 50 or more."""
+ real=np.asarray(frame.hi);found=[]
+ for row in range(TILE_ROWS):
+  for column in range(4):
+   x,y=TILE_FIRST[0]+TILE_STEP[0]*column,TILE_FIRST[1]+TILE_STEP[1]*row
+   if float(real[y-18:y+18,x-18:x+18].std())>=TILE_FULL:found.append((x,y))
+ return found[::-1]
+
+def _is_potion(frame):return POTION_KIND in _words(frame,TIP_KIND)
+
+def _tier(ui):
+ """The open potion's tier from its title. The title scrolls, so its start comes round every few seconds."""
+ for _ in range(TIER_LOOKS):
+  found=re.search(r'([1-9])단',_words(ui.frame(),TIP_TITLE))
+  if found:return found[1]
+  ui.context.wait(.4)
+ return None
+
+def quick_counts(frame):
+ """Each quick slot's count, or None where none reads. White when in stock, red at nothing or low."""
+ from owner_text import clean,read_area
+ real=np.asarray(frame.hi);counts=[]
+ for slot in range(SLOTS):
+  x,y,w,h=SLOT_DIGITS[0]+SLOT_STEP*slot,*SLOT_DIGITS[1:];part=real[y:y+h,x:x+w].astype(np.int16)
+  red=(part[:,:,0]>150)&(part[:,:,0]-part[:,:,1]>70)&(part[:,:,0]-part[:,:,2]>50)&(part[:,:,2]>45)
+  lifted=np.stack([255-(red|(part.min(axis=2)>170)).astype(np.uint8)*255]*3,axis=2)
+  values=[clean(r['text']) for r in read_area(None,lifted,language='number',scale=4,minimum=.8)]
+  counts.append(int(values[0]) if len(values)==1 and values[0].isdigit() else None)
+ return counts
+
+def _held(frame):
+ found=re.search(r'(\d+)개',_words(frame,TIP_KIND))
+ return int(found[1]) if found else None
+
+def _open_first_tier(ui,guard):
+ """Leave the 1단 potion's tooltip open, or return False with none open. A tile is pressed once a look: a second press
+ uses what is on it, and that could open a box."""
+ from owner_equipment_tooltip_candidate import window_open
+ for point in occupied_tiles(ui.frame()):
+  guard();_press(ui,point,lambda f:guard() and not window_open(f))
+  ui.wait(window_open,seconds=4)
+  if _is_potion(ui.frame()) and _tier(ui)==KEPT_TIER:return True
+  _press(ui,TIP_CLOSE,window_open);ui.wait(lambda f:not window_open(f),seconds=3)
+ return False
+
+def _discard_open_potion(ui,guard):
+ """The open potion's whole stack: the quantity window opens at its maximum."""
+ from owner_equipment_tooltip_candidate import window_open
+ def tip(f):return guard() and _is_potion(f)
+ def quantity(f):return guard() and QUANTITY_TITLE in _words(f,QUANTITY_BOX)
+ def notice(f):return guard() and DELETE_NOTICE in _words(f,NOTICE_BOX,2)
+ # A press too soon after the tooltip opens does nothing. Pressing again here is harmless.
+ ui.context.wait(2)
+ for _ in range(3):
+  _press(ui,TRASH,tip)
+  try:ui.wait(quantity,seconds=2);break
+  except Pending:pass
+ else:raise Pending('물약 버리기 수량 창 확인 필요')
+ frame=ui.frame()
+ if KEPT_TIER+'단' not in _words(frame,QUANTITY_ITEM) or POTION_KIND not in _words(frame,QUANTITY_ITEM):
+  _press(ui,QUANTITY_CANCEL,quantity);raise Pending('수량 창 물품이 1단 물약이 아님 · 입력 취소')
+ amount=_words(frame,QUANTITY_AMOUNT)
+ _press(ui,QUANTITY_OK,quantity);ui.wait(notice,seconds=3)
+ _press(ui,DELETE_OK,notice)
+ ui.wait(lambda f:guard() and not window_open(f),seconds=5)
+ return amount
+
+def discard_first_tier(ui,guard):
+ """(how many were thrown away or None, the quick slot they sat on or None). Other tiers stay."""
+ from owner_skill_box import _close_bag,_open_bag
+ try:
+  _open_bag(ui)
+  if not _open_first_tier(ui,guard):return None,None
+  frame=ui.frame();held=_held(frame);counts=quick_counts(frame)
+  slot=counts.index(held) if held is not None and held in counts else None
+  return _discard_open_potion(ui,guard),slot
+ finally:_close_bag(ui)
+
+def restore_first_tier(ui,guard,slot):
+ """Back on its quick slot with automatic use on. Pressing a slot with the tooltip open registers it, and that also turns
+ automatic use on. With no slot of its own it takes the first one not holding stock."""
+ from owner_equipment_tooltip_candidate import window_open
+ from owner_skill_box import _close_bag,_open_bag
+ try:
+  _open_bag(ui)
+  if not _open_first_tier(ui,guard):raise Pending('구매한 1단 물약 칸 확인 필요')
+  frame=ui.frame();held=_held(frame);counts=quick_counts(frame)
+  if held is None:raise Pending('1단 물약 수량 확인 필요')
+  ui.context.wait(2)
+  if held not in counts:
+   if slot is None:slot=next((i for i,count in enumerate(counts) if not count),None)
+   if slot is None:raise Pending('물약 등록할 빈 칸 없음')
+   _press(ui,(SLOT_PRESS[0]+SLOT_STEP*slot,SLOT_PRESS[1]),lambda f:guard() and window_open(f) and _is_potion(f))
+   ui.wait(lambda f:quick_counts(f)[slot]==held,seconds=4)
+  if 'OFF' in _words(ui.frame(),AUTO_USE).upper():
+   _press(ui,AUTO_USE_PRESS,lambda f:guard() and window_open(f) and _is_potion(f))
+   ui.wait(lambda f:'OFF' not in _words(f,AUTO_USE).upper(),seconds=3)
+  _press(ui,TIP_CLOSE,window_open);ui.wait(lambda f:not window_open(f),seconds=3)
+  LOG.info('퀘스트 필수 구매 · 1단 물약 %s개 빠른 칸 등록 · 자동 사용 켬',held)
+ finally:_close_bag(ui)
 
 def execute(ui,book,key):
  row=book.item['quests'][key]
@@ -157,32 +261,34 @@ def execute(ui,book,key):
   return True
  guard();receipt.update(phase='preflight',goal_before=stage['done'],route='existing_potion_purchase');book.commit()
  ui.close_known()
+ # User's rule: throw away the 1단 stack and buy again. Holding over the limit blocks the purchase, and full health blocks
+ # drinking, so nothing else clears this reliably. Other tiers stay.
+ try:
+  discarded,slot=discard_first_tier(ui,guard)
+ except Pending as exc:
+  LOG.info('퀘스트 필수 구매 보류 · 물약 버리기 미완료 · %s · %s',exc,row['title'])
+  book.defer(key,'condition',detail='물약 버리기 미완료 · '+str(exc));return True
+ LOG.info('퀘스트 필수 구매 · 1단 물약 버림 · %s개 · 빠른 칸 %s · %s',discarded,slot,row['title'])
+ receipt.update(phase='discarded',discarded=discarded,slot=slot);book.commit()
  # The merchant must be seen again: the hour's rest after a full stack is for the ordinary top-up.
  adapter._owner_potion_full_at=-1e30
- for attempt in range(2):
-  guard();full=False
-  try:
-   with native_purchase_watch(adapter,context,ui,receipt,book.commit,guard) as result:
-    LOG.info('퀘스트 필수 구매 · 기존 물약 전체 구매 경로 실행 · %s',row['title'])
-    adapter.run_potion_purchase(context,ui.inputs)
-  except PotionFull:
-   full=True
-  if full:
-   if not ui.normal():_close_potion_screen(ui.service)
-   if not ui.normal():raise Pending('물약 사용 전 기존 상점 종료 확인 필요')
-   receipt.update(phase='full');book.commit()
-   try:use_potions(ui,receipt,book.commit,guard)
-   except Pending as exc:
-    # Not enough in the slot, or the count would not fall. The quest stays open and the other stories go on.
-    LOG.info('퀘스트 필수 구매 보류 · %s · %s',exc,row['title'])
-    book.defer(key,'condition',detail='물약 사용 미완료 · '+str(exc));return True
-   adapter._owner_potion_full_at=-1e30
-   continue
-  if result['buy_sent']:
-   receipt.update(phase='await_goal',requested_at=time.time());book.commit()
-   LOG.info('기존 물약 구매 요청 종료 · 같은 서사에서 실제 구매 조건 완료 확인')
-   adapter._owner_restore_story_once=False
-   return True
-  receipt.update(phase='not_purchased');book.commit()
-  raise Pending('기존 물약 구매가 실행되지 않음 · 임무 미완료 유지')
- raise Pending('물약 사용 후에도 구매 불가 · 추가 사용 없음')
+ guard();full=False
+ try:
+  with native_purchase_watch(adapter,context,ui,receipt,book.commit,guard) as result,potion_switch_on(adapter):
+   LOG.info('퀘스트 필수 구매 · 기존 물약 전체 구매 경로 실행 · %s',row['title'])
+   adapter.run_potion_purchase(context,ui.inputs)
+ except PotionFull:
+  full=True
+ if full:
+  if not ui.normal():_close_potion_screen(ui.service)
+  book.defer(key,'condition',detail='물약을 버린 뒤에도 구매 불가');return True
+ if result['buy_sent']:
+  receipt.update(phase='await_goal',requested_at=time.time());book.commit()
+  LOG.info('기존 물약 구매 요청 종료 · 같은 서사에서 실제 구매 조건 완료 확인')
+  adapter._owner_restore_story_once=False
+  # Buying is what this step asks. The quest's own result stays in await_goal; a failure here costs only the slot.
+  try:restore_first_tier(ui,guard,slot)
+  except Pending as exc:LOG.info('1단 물약 빠른 칸 복구 보류 · %s',exc)
+  return True
+ receipt.update(phase='not_purchased');book.commit()
+ raise Pending('기존 물약 구매가 실행되지 않음 · 임무 미완료 유지')

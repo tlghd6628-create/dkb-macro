@@ -12,12 +12,43 @@ LETTERS={'A':412,'B':385,'C':356,'D':328,'E':300}
 KEY_H=0x48;X=738;COMMON='common.skill_preset'
 
 
+WHITE=200;WHITE_PIXELS=30;HALF=16
+
+def _real_lit(real):
+    """The one circle holding a white letter that reads as its own letter.
+
+    The circles are see-through, so what is behind them differs by character and by deck: a closed menu's A spot
+    measures 70 and an open one's 103 from the skill icons alone. Unlit letters are too dim to read (D read as B at .98),
+    so only a white one is read, and art behind a closed menu does not read as this exact letter.
+    """
+    import owner_hd
+    from owner_text import read_area,clean
+    found=[]
+    for name,y in LETTERS.items():
+        cx,cy=round(X*owner_hd.F+owner_hd.SHIFT_RIGHT),round(y*owner_hd.F)
+        crop=real[cy-HALF:cy+HALF,cx-HALF:cx+HALF]
+        if int((crop.min(axis=2)>WHITE).sum())<WHITE_PIXELS:continue
+        rows=read_area(None,crop,left=cx-HALF,top=cy-HALF,scale=4,minimum=.6)
+        if any(clean(row['text'])==name for row in rows):found.append(name)
+    return found[0] if len(found)==1 else None
+
+
 def lit_letter(frame):
     """The lit letter, or None when the menu is not open. Each circle's darkest channel: lit about 105, others 50 to 57."""
     if getattr(frame,'shape',None)!=(479,897,3):return None
+    real=getattr(frame,'hi',None)
+    if real is not None:return _real_lit(real)
     levels={name:float(frame[y-8:y+9,X-8:X+9].min(axis=2).mean()) for name,y in LETTERS.items()}
     ranked=sorted(levels,key=levels.get,reverse=True)
     return ranked[0] if levels[ranked[0]]>=85 and levels[ranked[0]]-levels[ranked[1]]>=30 else None
+
+
+def _letter_hit(frame,letter):
+    """A fixed place. The column stands at the right edge, but the screen map put D and E 34 px off it, beside the circle (real click 11-06)."""
+    y=LETTERS[letter]
+    if getattr(frame,'hi',None) is None:return (X,y,(X-9,y-9,X+10,y+10))
+    import owner_hd
+    return owner_hd.real_hit(round(X*owner_hd.F+owner_hd.SHIFT_RIGHT),round(y*owner_hd.F))
 
 
 def _wait_open(service,seconds=2.5):
@@ -41,7 +72,7 @@ def select(service,letter):
         LOG.warning('스킬 프리셋 메뉴 확인 안 됨 · %s',letter);return False
     if current==letter:
         service.key(KEY_H);service.context.wait(.2);return True
-    y=LETTERS[letter];service.click_hit((X,y,(X-9,y-9,X+10,y+10)))
+    service.click_hit(_letter_hit(service.capture(),letter))
     # Picking closes the menu, slowly: a key pressed while it slides is lost or reopens it.
     service.context.wait(1.5)
     service.check()

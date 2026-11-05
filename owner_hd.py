@@ -282,6 +282,12 @@ def real_hit(rx,ry):
     return x,y,(x-3,y-3,x+4,y+4)
 
 
+def pin_box(box,rx,ry):
+    """A click anywhere in this logical (x0,y0,x1,y1) lands on exactly this real place, for the next few seconds."""
+    x0,y0,x1,y1=box
+    with _lock:_pins.append((time.monotonic(),x0,y0,x1,y1,rx,ry))
+
+
 def logical_of(rx,ry,layout=None):
     """The place in 897x479 terms for a real place something was read at. A click there lands back on it."""
     layout=layout or _current or default_layout();y=ry/F

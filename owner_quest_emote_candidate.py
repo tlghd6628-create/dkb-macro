@@ -47,11 +47,23 @@ def target_zone(frame):
  compact=((hsv[:,60:150,0]>=15)&(hsv[:,60:150,0]<=40)&(hsv[:,60:150,1]>=60)&(hsv[:,60:150,2]>=160))
  return (right>=400 and (left>=400 or panel(frame))) or (int(compact[:,:40].sum())>=80 and int(compact[:,50:].sum())>=80 and int(compact.sum())>=500)
 
-def panel(frame):return bool(locate(frame,'panel',(300,300,390,320),.97))
+REAL_PANEL_TITLE=(400,486,240,28);REAL_PANEL_CLOSE=(672,500);REAL_CHAT_CLOSE=(372,28);REAL_INPUT=(90,722,255,26)  # real pixels
+def panel(frame):
+ real=getattr(frame,'hi',None)
+ if real is not None:
+  from owner_text import clean,read_area
+  x,y,w,h=REAL_PANEL_TITLE
+  return any(clean(row['text'])=='감정표현' for row in read_area(None,np.asarray(real)[y:y+h,x:x+w],minimum=.5))
+ return bool(locate(frame,'panel',(300,300,390,320),.97))
 def card(frame):return locate(frame,'card',(250,319,429,479),.985) if panel(frame) else None
 def empty_chat(frame):
  """Observed placeholder and entire remaining input area, not OCR inference."""
  if getattr(frame,'shape',None)!=(479,897,3):return False
+ real=getattr(frame,'hi',None)
+ if real is not None:
+  # Typed text is bright across the box. An empty one shows at most its caret, one column wide.
+  x,y,w,h=REAL_INPUT
+  return int((np.asarray(real)[y:y+h,x:x+w].min(axis=2)>150).any(axis=0).sum())<=3
  patch=frame[448:468,55:214]
  for name in ('placeholder','placeholder-alt'):
   reference=asset(name)
@@ -116,11 +128,20 @@ def close_chat(ui,detector):
  # The opened emotion panel can temporarily hide the placeholder. Its own X
  # neither sends nor clears a message; check the input only after it closes.
  if paired(ui,lambda f:chat(f) and panel(f)):
-  ui.click(419,312,lambda f:chat(f) and panel(f))
+  frame=ui.frame();x,y=(419,312)
+  if getattr(frame,'hi',None) is not None:
+   from owner_hd import logical_of
+   x,y=logical_of(*REAL_PANEL_CLOSE,getattr(frame,'layout',None))
+  ui.click(x,y,lambda f:chat(f) and panel(f));ui.context.wait(.5)
  if paired(ui,chat) and not paired(ui,empty_chat):
   raise Pending('채팅 입력 내용 확인 필요 · 닫기 보류')
  if paired(ui,chat):
-  hit=detector.find('버튼_X_채팅창',ui.frame(),threshold=.95)
+  frame=ui.frame();hit=detector.find('버튼_X_채팅창',frame,threshold=.95)
+  if not hit:
+   # Its picture does not survive 1366x768. With the chat proved open and empty above, its X stands at this real place.
+   if getattr(frame,'hi',None) is not None:
+    from owner_hd import logical_of
+    x,y=logical_of(*REAL_CHAT_CLOSE,getattr(frame,'layout',None));hit=(x,y,(x-7,y-7,x+8,y+8))
   if not hit:raise RuntimeError('감정 처리 후 채팅 닫기 확인 필요')
   l,t,r,b=hit[2];ui.click((l+r)//2,(t+b)//2,lambda f:chat(f) and empty_chat(f))
  if not paired(ui,lambda f:not chat(f) and not panel(f)):

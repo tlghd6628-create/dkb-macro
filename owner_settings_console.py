@@ -5,6 +5,10 @@ from gui_settings import fields,parse_value
 
 UNAVAILABLE={}
 
+def closed(key):
+ """The user's rule for now: the market section shows, unchecked and greyed, and nothing in it can be turned on."""
+ return key.startswith('auto_register.market.')
+
 def category(key):
  # Removed from the console only: the saved value and its consumer stay as they are.
  if key.startswith('common.daily_restart.') or key in ('common.potion_and_favorite.source','common.potion_and_favorite.slot'):return None
@@ -90,7 +94,9 @@ class NativeFields:
   checks=None;count=0;line=None
   for index,item in enumerate(rows):
    key=item['id']
-   value=self.model.values[key];var=(tk.BooleanVar(box,value=value) if item['type']=='checkbox' else tk.StringVar(box,value=value))
+   value=self.model.values[key]
+   if closed(key) and item['type']=='checkbox':value=False
+   var=(tk.BooleanVar(box,value=value) if item['type']=='checkbox' else tk.StringVar(box,value=value))
    self.vars[key]=var
    if key in UNAVAILABLE:continue  # the saved value stays; a row that cannot run is not shown
    following=rows[index+1]['type'] if index+1<len(rows) else 'checkbox'
@@ -99,7 +105,8 @@ class NativeFields:
     widget=ttk.Checkbutton(line,text=display_label(item),variable=var,width=max(23,round(len(display_label(item))*1.7)));widget.pack(side='left')
     result=tk.StringVar(line)
     test=ttk.Button(line,text='TEST',width=6,command=lambda key=key,result=result:self.test_request(key,result));test.pack(side='left',padx=(8,12))
-    if key in UNAVAILABLE:test.configure(state='disabled');result.set(UNAVAILABLE[key])
+    if closed(key):test.configure(state='disabled')
+    elif key in UNAVAILABLE:test.configure(state='disabled');result.set(UNAVAILABLE[key])
     elif not self.model.supported(item) or (key not in CHALLENGES and PATHS[key] is None):test.configure(state='disabled');result.set('실행 연결 없음')
     ttk.Label(line,textvariable=result,style='DkbHint.TLabel').pack(side='left')
     checks=None;line=None
@@ -137,7 +144,7 @@ class NativeFields:
   self.model.values=temporary
   try:
    for item,widget in self.controls:
-    widget.configure(state=('readonly' if item['type'] in ('combo','radio') else 'normal') if item['id'] not in UNAVAILABLE and option_editable(self.model,item) else 'disabled')
+    widget.configure(state=('readonly' if item['type'] in ('combo','radio') else 'normal') if item['id'] not in UNAVAILABLE and not closed(item['id']) and option_editable(self.model,item) else 'disabled')
   finally:self.model.values=original
  def save(self):
   state=self.gui.session.snapshot()

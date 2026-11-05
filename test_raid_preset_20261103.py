@@ -90,5 +90,9 @@ class Native(unittest.TestCase):
   self.assertEqual((len(switch),len(choice)),(1,1))
   self.assertIs(switch[0]['default'],False);self.assertEqual(choice[0]['enabled_if'],raid.ENABLED)
   self.assertEqual(switch[0]['capability'],'auto_schedule.boss_raid')
+  # The user's rule: raid and world boss start on B. The everyday row stays on A.
+  self.assertEqual(choice[0]['default'],'B')
+  self.assertEqual([f['default'] for f in fields if f['id']==raid.BOSS_CHOICE],['B'])
+  self.assertEqual([f['default'] for f in fields if f['id']=='common.skill_preset.choice'],['A'])
 
 if __name__=='__main__':unittest.main()
