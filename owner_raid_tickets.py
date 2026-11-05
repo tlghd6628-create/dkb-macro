@@ -33,9 +33,27 @@ def read_once(root,frame,context):
         context.wait(.03);context.checkpoint()
     return parse(result) if done.is_set() else None
 
+REAL_LINE=re.compile(r'보상티켓:?(\d{1,2})/10')
+
+def real_count(root,frame):
+    """보상 티켓 : 1 / 10, read as words at the foot of the raid page."""
+    from owner_text import read
+    for row in read(root,frame,(1040,642,300,34),scale=3):
+        found=REAL_LINE.search(re.sub(r'\s','',row['text']))
+        if found and int(found[1])<=10:return int(found[1])
+    return None
+
 def tickets(flow,frame):
     """Two agreeing reads in a row. A read may time out while the model warms up."""
     root=flow.adapter.project.root;context=flow.context;last=None
+    if getattr(frame,'hi',None) is not None:
+        for attempt in range(READS):
+            if attempt:
+                context.wait(.1);frame=flow.service.capture()
+            value=real_count(root,frame)
+            if value is not None and value==last:return value
+            last=value
+        return None
     for attempt in range(READS):
         if attempt:
             context.wait(.1);frame=flow.service.capture()

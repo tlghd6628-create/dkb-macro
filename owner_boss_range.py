@@ -26,7 +26,41 @@ def _peak(frame,name,box,score=.9):
     from owner_image_scope import unique_peak
     return unique_peak(frame,asset(name),box,score)
 
-def panel_open(frame):return _peak(frame,'panel-title',(640,40,90,28)) is not None
+PANEL=(960,60,400,640)  # real pixels: the panel's words, on the right of the screen
+FIXED_LABEL='자동전투중이동고정';RANGE_LABEL='자율수행범위'
+
+def _real(frame):return getattr(frame,'hi',None)
+
+def _close_to(text,wanted):
+    from difflib import SequenceMatcher
+    from owner_text import clean
+    return SequenceMatcher(None,clean(text),wanted).ratio()>=.7
+
+def real_panel(frame):
+    """The panel's rows by their words. Each switch's two options, and the slider's value line. Parts not showing are missing."""
+    from owner_text import read,clean
+    rows=read(None,frame,PANEL,scale=2,bright=True);out={}
+    def options(label_y,low,high):
+        here=[r for r in rows if low<=r['ry']-label_y<=high and clean(r['text']) in ('사용','사용안함','사용안할') and r['bounds'][0]>=1000]
+        off=[r for r in here if clean(r['text'])!='사용'];on=[r for r in here if clean(r['text'])=='사용']
+        return (off[0],on[0]) if len(off)==1 and len(on)==1 else None
+    for row in rows:
+        if _close_to(row['text'],FIXED_LABEL):
+            pair=options(row['ry'],25,55)
+            if pair:out['fixed']=pair
+        elif _close_to(row['text'],RANGE_LABEL):
+            pair=options(row['ry'],-14,14)
+            if pair:out['range']=pair
+            value=[r for r in rows if 30<=r['ry']-row['ry']<=65 and clean(r['text']).endswith('m')]
+            if value:out['value']=value[0]
+    return out
+
+def panel_open(frame):
+    if _real(frame) is not None:
+        import numpy as np
+        from owner_text import read_area,clean
+        return any('수행설정' in clean(r['text']) or '조작설정' in clean(r['text']) for r in read_area(None,np.asarray(frame.hi)[70:100,960:1330],left=960,top=70))
+    return _peak(frame,'panel-title',(640,40,90,28)) is not None
 def cog(frame):return _peak(frame,'cog',(720,425,100,45))
 
 def _pill(frame,left,right,y):
@@ -38,27 +72,57 @@ def _pill(frame,left,right,y):
 
 def locate(frame):
     """Rows move with the panel's scroll, so each is found from its own label."""
+    if _real(frame) is not None:
+        rows=real_panel(frame)
+        if 'fixed' not in rows or 'range' not in rows:return None
+        return {key:(rows[key][0]['x'],rows[key][1]['x'],rows[key][1]['y']) for key in ('fixed','range')}
     fixed=_peak(frame,'fixed-label',(655,60,120,360));spread=_peak(frame,'range-label',(655,60,120,360))
     if fixed is None or spread is None:return None
     return {'fixed':(710,822,fixed[2]+31),'range':(800,851,spread[2]+8)}
 
 def read(frame):
+    if _real(frame) is not None:
+        import numpy as np
+        from owner_game_settings import chosen
+        rows=real_panel(frame)
+        if 'fixed' not in rows or 'range' not in rows:return None
+        found={}
+        for key in ('fixed','range'):
+            on=chosen(np.asarray(frame.hi),dict(options=list(rows[key])))
+            if on is None:return None
+            found[key]=on is rows[key][1]
+        return found
     rows=locate(frame)
     if rows is None:return None
     found={key:_pill(frame,*row) for key,row in rows.items()}
     return None if None in found.values() else found
 
 SLIDER_LEFT=722;SLIDER_RIGHT=860;SLIDER_DOWN=36
+REAL_SLIDER=(1050,1295)  # real x of the slider's track
 VALUES={'low':'five-m','high':'thirty-m'}
 def slider_y(frame):
+    if _real(frame) is not None:
+        value=real_panel(frame).get('value')
+        return value['y'] if value else None
     rows=locate(frame)
     return None if rows is None else rows['range'][2]-8+SLIDER_DOWN
 def handle(frame):
     """The white knob is the brightest column on the slider's own row."""
+    if _real(frame) is not None:
+        import numpy as np
+        from owner_hd import logical_of
+        value=real_panel(frame).get('value')
+        if not value:return None
+        band=np.asarray(frame.hi)[value['ry']-8:value['ry']+9,REAL_SLIDER[0]:REAL_SLIDER[1]]
+        return logical_of(REAL_SLIDER[0]+int(band.mean(axis=(0,2)).argmax()),value['ry'],frame.layout)[0]
     y=slider_y(frame)
     if y is None:return None
     return int(frame[y-6:y+6,SLIDER_LEFT:SLIDER_RIGHT].mean(axis=(0,2)).argmax())+SLIDER_LEFT
 def shows(frame,value):
+    if _real(frame) is not None:
+        from owner_text import clean
+        seen=real_panel(frame).get('value')
+        return bool(seen) and clean(seen['text'])==('5m' if value=='low' else '30m')
     y=slider_y(frame)
     return y is not None and _peak(frame,VALUES[value],(660,y-16,50,32),.9) is not None
 
@@ -117,7 +181,11 @@ def _slide(ui,value):
     if shows(frame,value):return
     y,x=slider_y(frame),handle(frame)
     if y is None or x is None:raise RangeError('수행 범위 슬라이더 미확인')
-    ui.drag((x,y),(SLIDER_RIGHT if value=='high' else SLIDER_LEFT-20,y),panel_open)
+    if _real(frame) is not None:
+        from owner_hd import logical_of
+        target=logical_of(REAL_SLIDER[1]+6 if value=='high' else REAL_SLIDER[0]-6,round(y*1.6),frame.layout)[0]
+    else:target=SLIDER_RIGHT if value=='high' else SLIDER_LEFT-20
+    ui.drag((x,y),(target,y),panel_open)
     if not _until(ui,lambda f:shows(f,value),2):raise RangeError('수행 범위 '+('최대' if value=='high' else '5m')+' 확인 실패')
 
 def apply(ui,fixed,slider,*,before_change=None):
