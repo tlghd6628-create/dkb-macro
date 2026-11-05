@@ -94,7 +94,14 @@ def read_required_if_present(path,default):
     return value
 def save(path,data):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
-    tmp=path.with_suffix('.tmp');tmp.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8');os.replace(tmp,path)
+    import threading,time as clock
+    tmp=path.with_name('%s.%d.tmp'%(path.stem,threading.get_ident()));tmp.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+    # Windows refuses the swap while anything has the file open for a moment, and that ended a run (11-05).
+    for attempt in range(8):
+        try:os.replace(tmp,path);return
+        except PermissionError:
+            if attempt==7:raise
+            clock.sleep(.1*(attempt+1))
 def day_at(at):return (at-timedelta(hours=5)).date()
 def period(job,at):
     if job.once:return 'all'
