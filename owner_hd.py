@@ -37,6 +37,7 @@ MARK_SCORE=.9
 TITLED_SCREENS=(('native:체크_전체매뉴_기운발현','m_energy'),('native:체크_영기수련','m_spirit'));TITLE_SLACK=6;TITLE_SCORE=.85
 STORE=Path(__file__).parent/'assets/hd'
 HIT_LIFE=5.0
+WORTH_READING=.6
 _index=None;_images={};_missing=set();_layouts=None;_words=None;_marks=None
 _current=None;_last_capture=None;_hits=collections.deque(maxlen=64);_pins=collections.deque(maxlen=16);_lock=threading.Lock()
 
@@ -46,8 +47,8 @@ def rule_of(x):
     return 'left' if x<100 else 'right' if x>=700 else 'center'
 
 
-def to_real_x(x,rule=None):
-    return x*F+SHIFTS[rule or rule_of(x)]
+def to_real_x(x,rule):
+    return x*F+SHIFTS[rule]
 
 
 def to_real_y(y):
@@ -60,7 +61,7 @@ class Layout:
     """Which of the three anchors holds at each part of one screen."""
     def __init__(self,name,grid,signature=None):
         self.name=name;self.grid=np.asarray(grid,np.uint8);self.signature=signature
-        self._xs=None
+        self._xs=None;self._map=None
     def rule(self,x,y):
         row=min(GRID[0]-1,max(0,int(y)//CELL));col=min(GRID[1]-1,max(0,int(x)//CELL))
         return RULES[int(self.grid[row,col])]
@@ -74,6 +75,13 @@ class Layout:
             columns=np.arange(LOGICAL[0])[None,:]+steps
             self._xs=np.clip(np.round(columns).astype(np.int32),0,round(REAL[0]/F)-1)
         return self._xs
+    def compose(self,small):
+        """The same pixels as small[rows,picks()], many times faster: the map only ever names whole pixels."""
+        import cv2
+        if self._map is None:
+            rows=np.broadcast_to(np.arange(LOGICAL[1])[:,None],(LOGICAL[1],LOGICAL[0]))
+            self._map=np.dstack((self.picks(),rows)).astype(np.int16)
+        return cv2.remap(small,self._map,None,cv2.INTER_NEAREST)
 
 
 def _plain_layout():
@@ -221,11 +229,12 @@ def _window_marks():
     global _marks
     if _marks is None:
         wanted={label:screen for screen,labels in WINDOW_MARKS.items() for label in labels}
-        _marks=[]
+        marks=[]  # filled before it is published: another thread must not read half of it
         for key,row in index().items():
             if row.get('label') in wanted:
-                try:_marks.append((wanted[row['label']],_load(key,row,False),row))
+                try:marks.append((wanted[row['label']],_load(key,row,False),row))
                 except OSError:pass
+        _marks=marks
     return _marks
 
 
@@ -291,21 +300,27 @@ def key_of(needle):
     return hashlib.sha1(array.tobytes()+repr(array.shape).encode()).hexdigest()[:20]
 
 
+def _table(name):
+    """Rows of a store file by key, whole before anyone sees them: from a half-read table another thread takes a
+    picture for one with no cut."""
+    rows={}
+    try:
+        for line in (STORE/name).read_text(encoding='utf-8').splitlines():
+            if line.strip():
+                row=json.loads(line);rows[row['key']]=row
+    except (OSError,ValueError):pass
+    return rows
+
+
 def index():
     global _index
-    if _index is None:
-        _index={}
-        try:
-            for line in (STORE/'index.jsonl').read_text(encoding='utf-8').splitlines():
-                if line.strip():
-                    row=json.loads(line);_index[row['key']]=row
-        except (OSError,ValueError):pass
+    if _index is None:_index=_table('index.jsonl')
     return _index
 
 
 def reload_index():
-    global _index,_layouts,_marks
-    _index=None;_layouts=None;_marks=None;_images.clear()
+    global _index,_layouts,_marks,_words
+    _index=None;_layouts=None;_marks=None;_words=None;_images.clear()
     return index()
 
 
@@ -319,9 +334,9 @@ def _load(key,row,flip):
     return _images[tag]
 
 
-def cut_for(needle):
+def cut_for(needle,key=None):
     """The new cut of this old picture and its row, or None."""
-    key=key_of(needle);row=index().get(key)
+    key=key or key_of(needle);row=index().get(key)
     if row:return _load(key,row,bool(row.get('bgr'))),row
     array=np.asarray(needle)
     if array.ndim==3 and array.shape[2]==3:
@@ -334,8 +349,8 @@ def missing():
     return sorted(_missing)
 
 
-def _note_missing(needle):
-    key=key_of(needle)
+def _note_missing(needle,key=None):
+    key=key or key_of(needle)
     if key in _missing:return
     _missing.add(key)
     try:
@@ -389,9 +404,7 @@ def make_frame(real,layout=None):
     global _current
     layout=layout or classify(real)
     small=cv2.resize(real,(round(REAL[0]/F),480),interpolation=cv2.INTER_AREA)[:LOGICAL[1]]
-    rows=np.arange(LOGICAL[1])[:,None]
-    frame=small[rows,layout.picks()]
-    made=frame.view(HdFrame);made.hi=real;made.layout=layout
+    made=layout.compose(small).view(HdFrame);made.hi=real;made.layout=layout
     _current=layout
     return made
 
@@ -426,13 +439,14 @@ def match_real(image,needle,method,ordinary,scorer=None):
     source=getattr(image,'source',None);real=getattr(image,'hi',None)
     if real is None or method!=5:return None  # 5 is TM_CCOEFF_NORMED
     if source is None and image.shape[:2]!=(LOGICAL[1],LOGICAL[0]):return None
-    entry=word_table().get(key_of(needle),{})
+    key=key_of(needle)
+    entry=word_table().get(key,{})
     state=entry.get('state')
     if state and source is not None:return match_state(image,needle,source,real,state)
-    found=cut_for(needle)
+    found=cut_for(needle,key)
     if found is None:
-        _note_missing(needle)
-        return match_words(image,needle,source,real)
+        _note_missing(needle,key)
+        return match_words(image,needle,source,real,key)
     cut,row=found
     h,w=cut.shape[:2]
     box=source or (0,0,LOGICAL[0],LOGICAL[1])
@@ -453,9 +467,9 @@ def match_real(image,needle,method,ordinary,scorer=None):
     logical_y=np.clip(np.round((top+ys)/F-box[1]).astype(int),0,rows-1)
     logical_x=np.clip(np.round((left+xs-shift)/F-box[0]).astype(int),0,cols-1)
     np.maximum.at(answer,(logical_y,logical_x),scores[ys,xs].astype(np.float32))
-    if float(answer.max())<.85:
-        # Not where the cut says. A button's words can still be there: a window moved it, or it looks a little different.
-        by_words=match_words(image,needle,source,real)
+    if float(answer.max())<.96:
+        # Callers ask for up to .95, and the raid tab's cut scored .935 on its own screen. Not where the cut says. A button's words can still be there: a window moved it, or it looks a little different.
+        by_words=match_words(image,needle,source,real,key)
         if by_words is not None and float(by_words.max())>0:return by_words
     _remember_hits(answer,box,np.asarray(needle).shape,shift)
     return answer
@@ -463,13 +477,7 @@ def match_real(image,needle,method,ordinary,scorer=None):
 
 def word_table():
     global _words
-    if _words is None:
-        _words={}
-        try:
-            for line in (STORE/'words.jsonl').read_text(encoding='utf-8').splitlines():
-                if line.strip():
-                    row=json.loads(line);_words[row['key']]=row
-        except (OSError,ValueError):pass
+    if _words is None:_words=_table('words.jsonl')
     return _words
 
 
@@ -504,12 +512,19 @@ def match_state(image,needle,source,real,state):
     return answer
 
 
-def match_words(image,needle,source,real):
+def match_words(image,needle,source,real,key=None):
     """A picture with no new cut, found by the words on it. A clear answer either way: words that are not there
     are a low score, not a look at the scaled frame, where a picture can pass for what it is not."""
     array=np.asarray(needle)
-    row=word_table().get(key_of(needle)) or (word_table().get(key_of(array[:,:,::-1])) if array.ndim==3 else None)
+    row=word_table().get(key or key_of(needle)) or (word_table().get(key_of(array[:,:,::-1])) if array.ndim==3 else None)
     if row is None or 'words' not in row or source is None or source[2]*source[3]>=LOGICAL[0]*LOGICAL[1]/2:return None
+    # Reading takes about .2 s and this runs on every poll of every picture not on screen, which took one look at
+    # the screen from 15 ms to 2 s. Measured on saved screens: the old picture over the scaled frame scores at least
+    # .796 where its words really are, and under .6 on 96% of the others. A window that moves at this size has pad.
+    if not row.get('pad') and image.shape[0]>=array.shape[0] and image.shape[1]>=array.shape[1] and _PLAIN_MATCH[0] is not None:
+        rough=_PLAIN_MATCH[0](np.asarray(image),array,5)
+        if float(np.nan_to_num(rough,nan=-1).max())<WORTH_READING:
+            return np.full((max(1,image.shape[0]-array.shape[0]+1),max(1,image.shape[1]-array.shape[1]+1)),-1.,np.float32)
     import owner_text
     x,y,w,h=owner_text.word_box(source,row.get('pad',0))
     wanted=row['words']
@@ -632,9 +647,25 @@ def _click_layout():
     return _current
 
 
+def _grab(hwnd,target,printwindow):
+    """The game's own capture for a window with nothing over it, less its trip through floats that only blending a
+    layer needs: 19 ms at this size for the very same bytes. Same checks, same order. Anything else goes the original way."""
+    import mdt_owned_capture as owned,win32gui
+    policies=target['capture'].get('layers',[])
+    origin=win32gui.ClientToScreen(hwnd,(0,0));rect=win32gui.GetClientRect(hwnd)
+    if printwindow is None or (rect[2],rect[3])!=tuple(target['client_size']) or owned._layers(hwnd,policies):
+        return _state['capture'](hwnd,target,printwindow=printwindow)
+    image=printwindow(hwnd)
+    if image.dtype!=np.uint8:return _state['capture'](hwnd,target,printwindow=printwindow)
+    if image.shape[:2]!=(rect[3],rect[2]):raise RuntimeError('본체 캡처 크기 불일치')
+    if win32gui.ClientToScreen(hwnd,(0,0))!=origin or win32gui.GetClientRect(hwnd)!=rect or owned._layers(hwnd,policies):
+        raise RuntimeError('캡처 중 창 구성이 변경됐습니다. 다시 캡처하세요.')
+    return image
+
+
 def _capture(hwnd,target,printwindow):
     global _last_capture
-    frame=make_frame(_state['capture'](hwnd,dict(target,client_size=list(REAL)),printwindow=printwindow))
+    frame=make_frame(_grab(hwnd,dict(target,client_size=list(REAL)),printwindow))
     _last_capture=(hwnd,target,printwindow,time.monotonic())
     return frame
 
@@ -706,8 +737,10 @@ def keep_size(gui):
     try:
         state=gui.session.snapshot()
         if state.get('status') not in ('running','paused') and not state.get('worker_alive'):
+            import win32gui
             hwnd=getattr(getattr(gui,'game_window',None),'hwnd',0)
-            if hwnd and _is_game(hwnd):
+            # A minimized game has no size to set, and trying holds the program's window for a second each round.
+            if hwnd and _is_game(hwnd) and not win32gui.IsIconic(hwnd):
                 ensure_size(hwnd);place_program(gui)
     except Exception as exc:
         LOG.debug('게임 창 크기 확인 생략 · %s',exc)

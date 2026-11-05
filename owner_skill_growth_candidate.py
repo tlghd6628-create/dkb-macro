@@ -258,14 +258,46 @@ def transition(rows,current):
         if digits==str(current)+str(current+1):matches.append(digits)
     if len(matches)!=1:raise Pending('도술 현재·다음 강화 수치 대조 필요')
 
+# Words on real pixels take seconds to read while the game runs. Every proof is still read again on the frame before input.
+REAL_PROOF_SECONDS=12;PIXEL_PROOF_SECONDS=3
+WORD_PAD=14;WORD_SHIFT=6  # real pixels
+
+def _proof_seconds(frame):
+    return REAL_PROOF_SECONDS if getattr(frame,'hi',None) is not None else PIXEL_PROOF_SECONDS
+
+def _real_words(frame,box):
+    """(the words, where they start) in this box of the real screen, or None. Reads the box's own words whatever they are:
+    a name, a level, a count or a price."""
+    from owner_hd import real_box
+    from owner_text import clean,read_area
+    x,y,w,h=real_box(box,getattr(frame,'layout',None))
+    # With room around it, so no line comes back cut in half, and the one line nearest the middle of the box is the answer.
+    left=max(0,x-WORD_PAD);top=max(0,y-WORD_PAD);crop=np.asarray(frame.hi)[top:y+h+WORD_PAD,left:x+w+WORD_PAD]
+    if not crop.size:return None
+    middle=(x+w/2,y+h/2)
+    for language in ('korean','number'):
+        rows=[r for r in read_area(None,crop,left=left,top=top,language=language,scale=3) if clean(r['text'])]
+        if rows:
+            row=min(rows,key=lambda r:abs(r['ry']-middle[1])+abs(r['rx']-middle[0])/4)
+            return clean(row['text']),row['rx'],row['ry']
+    return None
+
+def same_real_words(frame,box,source):
+    """The same words at the same place. The panels are see-through and the world moves behind them, so on the real screen
+    the pixels of an unchanged name, level, count or price never held still."""
+    now,then=_real_words(frame,box),_real_words(source,box)
+    return bool(now and then and now[0]==then[0] and abs(now[1]-then[1])<=WORD_SHIFT and abs(now[2]-then[2])<=WORD_SHIFT)
+
 def _same(frame,proof):
     box,source,tick=proof[:3];mode=proof[3] if len(proof)>3 else 'rgb'
-    if not 0<=time.monotonic()-tick<=3:return False
+    if not 0<=time.monotonic()-tick<=_proof_seconds(frame):return False
     return _same_pixels(frame,box,source,mode)
 
 def _same_pixels(frame,box,source,mode='rgb'):
     x,y,w,h=box;patch=frame[y:y+h,x:x+w]
     if patch.shape!=source.shape or not source.size or float(source.std())<5:return False
+    if mode in ('text','gold') and getattr(frame,'hi',None) is not None and getattr(source,'hi',None) is not None:
+        return same_real_words(frame,box,source)
     if mode=='exact':return bool(np.array_equal(patch,source))
     if mode=='style_icon':return same_style_icon(patch,source)
     if mode in ('text','gold'):
@@ -359,7 +391,7 @@ class StyleGrowth:
         if not (0<=l<r<=897 and 0<=t<b<=479):raise Pending('도술 계열 글자 위치 확인 필요')
         box=(l,t,r-l,b-t)
         proof=(box,frames[-1][t:b,l:r].copy(),ticks[-1],'text')
-        if all(0<=time.monotonic()-value<=3 for value in ticks):
+        if all(0<=time.monotonic()-value<=_proof_seconds(frames[-1]) for value in ticks):
             self._publish_visible_styles();return rows,proof
         fresh=refresh_evidence(self.ui,self.guard,frames,ticks,[proof],tab)
         self._publish_visible_styles()
@@ -372,8 +404,9 @@ class StyleGrowth:
         source_frames,source_ticks,answers=raw
         current_frames,current_ticks,_=pair
         if (len(source_frames)!=2 or len(current_frames)!=2 or len(answers[0])!=2
-                or any(not 0<=time.monotonic()-tick<=3 for tick in current_ticks)
+                or any(not 0<=time.monotonic()-tick<=_proof_seconds(current_frames[-1]) for tick in current_ticks)
                 or not all(tab(f) for f in current_frames)):return
+        real=getattr(current_frames[-1],'hi',None) is not None
         for style in SKILL_REINFORCEMENT_TARGETS:
             try:
                 a,av=named_row(answers[0][0],style);b,bv=named_row(answers[0][1],style)
@@ -383,7 +416,8 @@ class StyleGrowth:
                 l,t,r,bottom=map(int,bounds)
                 if not 0<=l<r<=897 or not 0<=t<bottom<=479:continue
                 box=(l,t,r-l,bottom-t);source=source_frames[-1][t:bottom,l:r]
-                if not all(_same_pixels(f,box,source,'text') for f in (*source_frames,*current_frames)):continue
+                # For the table only. Two frames just read the same words, and reading each row four times more cost seconds.
+                if not real and not all(_same_pixels(f,box,source,'text') for f in (*source_frames,*current_frames)):continue
                 self._observe('skills',style,{'enhance':av})
             except Pending:continue
     def _settle_list(self):
@@ -555,7 +589,7 @@ class StyleGrowth:
         # for a changed crop, and keep the final input-time guard below.
         self._guard();tick=time.monotonic();first=self.ui.frame().copy()
         self.ui.context.wait(.12);self._guard();second=self.ui.frame().copy()
-        if (time.monotonic()-tick>3 or not tab(first) or not tab(second)
+        if (time.monotonic()-tick>_proof_seconds(first) or not tab(first) or not tab(second)
                 or not selected(first,row['y']) or not selected(second,row['y'])):
             raise Pending('도술 재료·가격·대상 화면 재확인 지연')
         if opening and not (open_button(first) and open_button(second)):
@@ -650,9 +684,23 @@ class StyleGrowth:
                     intents[name]['status']='aborted_before_input';self.ledger.event('style_growth_aborted',style=name)
                 raise
             self.ui.context.wait(.5)
-            rows,_=self._style_rows(name);newrow,new=named_row(rows,name)
-            if new!=current+1 or not all(selected(f,newrow['y']) for f in self.ui._owner_last_rows_pair[0]):
-                raise Pending(name+' 도술 강화 후 수치 재확인 필요')
+            from owner_short_notice import shown
+            def out_of_coins():
+                if not shown(self.ui.frame()):return None
+                intents[name].update(status='short_of_coins',after=current)
+                self.ledger.event('style_growth_short',style=name,before=current)
+                return {'status':'short_of_coins','style':name,'level':current}
+            short=out_of_coins()
+            if short:return short
+            # Reading the rows gives the message the moment it needs, if it was not up yet.
+            try:
+                rows,_=self._style_rows(name);newrow,new=named_row(rows,name)
+                if new!=current+1 or not all(selected(f,newrow['y']) for f in self.ui._owner_last_rows_pair[0]):
+                    raise Pending(name+' 도술 강화 후 수치 재확인 필요')
+            except Pending:
+                short=out_of_coins()
+                if short:return short
+                raise
             # A confirmed step redraws the emblem (18:37 real hold). The list row just
             # proved +1 on this selected style, so the next settled read learns it again.
             bindings=getattr(self.ui,'_owner_style_bindings',None)
@@ -695,6 +743,7 @@ def run_configured(ui,ledger,document,guard,*,max_steps=5,observe=None,include_i
                 breakthrough=row.get('breakthrough',0) if breakthrough_allowed() else 0
                 result=worker.run(name,row['enhance'],max_steps=max_steps,breakthrough_target=breakthrough)
                 statuses.append(result)
+                if result.get('status')=='short_of_coins':return statuses
                 if breakthrough>0 and result.get('level',0)>=50:
                     statuses.append(SkillUpgrade(SkillUpgradePort(ui,guard),ledger,guard,observe).run(
                         name,'breakthrough',breakthrough,max_steps=max_steps))

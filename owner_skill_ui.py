@@ -444,21 +444,31 @@ class SkillUI:
         found=[]
         for frame in frames:
             rows=read(self.adapter.project.root,frame,area,scale=3)
-            # The same words alone come first: 구매 must not lose to its neighbour 자동 구매.
-            same=[r for r in rows if r['score']>=minimum and clean(r['text'])==clean(text)]
-            found.append(same if same or exact else [r for r in rows if r['score']>=minimum and clean(text) in clean(r['text'])])
+            found.append(self._word_rows(rows,text,minimum,exact))
         if len(found[0])!=1 or len(found[1])!=1:
             LOG.debug('도술 판독 대조 보류 · 기대=%s · 후보=%s',text,[(r['text'][:60],round(r['score'],3)) for r in rows])
             raise Pending('도술 표시 확인 필요: '+text)
         row=found[1][0]
         self.last_text_frame=frames[-1];self.last_text_tick=time.monotonic()
         return dict(row,bounds=logical_bounds(row,frames[-1]))
+    @staticmethod
+    def _word_rows(rows,text,minimum,exact=False):
+        # The same words alone come first: 구매 must not lose to its neighbour 자동 구매.
+        same=[r for r in rows if r['score']>=minimum and clean(r['text'])==clean(text)]
+        return same if same or exact else [r for r in rows if r['score']>=minimum and clean(text) in clean(r['text'])]
+    def _word_stands(self,text,box,row,frame,minimum):
+        """The word read a moment ago is still the one word there, in the same place, on this new frame."""
+        from owner_text import read,word_box
+        found=self._word_rows(read(self.adapter.project.root,frame,word_box(box),scale=3),text,minimum)
+        return len(found)==1 and abs(found[0]['rx']-row['rx'])<=8 and abs(found[0]['ry']-row['ry'])<=8
     def click_word(self,text,box,proof,minimum=.90):
         import cv2,numpy as np
         row=self.word(text,box,minimum);l,t,r,b=row['bounds'];source=self.last_text_frame[t:b,l:r].copy();tick=self.last_text_tick
         def fresh(frame):
             patch=frame[t:b,l:r]
             if time.monotonic()-tick>3 or patch.shape!=source.shape or not proof(frame):return False
+            # A button's picture changes under the pointer and over the moving world. Its word does not.
+            if getattr(frame,'hi',None) is not None:return self._word_stands(text,box,row,frame,minimum)
             value=float(cv2.matchTemplate(patch,source,cv2.TM_CCOEFF_NORMED)[0,0])
             return np.isfinite(value) and value>=.97
         self.click(row['x'],row['y'],fresh);return row

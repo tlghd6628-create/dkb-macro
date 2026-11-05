@@ -8,8 +8,8 @@ from owner_gear_decision_candidate import Observation, decide, reconcile
 
 
 class Guard:
-    def __init__(self, context, store, read_pair, *, clock=time.monotonic):
-        self.context=context;self.store=store;self.read_pair=read_pair
+    def __init__(self, context, store, read_pair, *, clock=time.monotonic, fresh_seconds=1.5):
+        self.context=context;self.store=store;self.read_pair=read_pair;self.fresh_seconds=fresh_seconds
         self.clock=clock;self.worker=threading.get_ident();self.lock=threading.Lock()
 
     def _worker_check(self):
@@ -21,7 +21,7 @@ class Guard:
         now=self.clock()
         return (type(now) in (int,float) and math.isfinite(now) and
                 type(a.captured_at) in (int,float) and type(b.captured_at) in (int,float) and
-                0 <= now-a.captured_at <= 1.5 and 0 <= now-b.captured_at <= 1.5)
+                0 <= now-a.captured_at <= self.fresh_seconds and 0 <= now-b.captured_at <= self.fresh_seconds)
 
     def _enhance_plan(self,a,b,target):
         if (not self._fresh(a,b) or type(a.sequence) is not int or type(b.sequence) is not int or
@@ -108,13 +108,18 @@ class Guard:
                 # Only a record not marked sent is provably before any click.
                 self.store.abort_prepared('최종 판독 또는 클릭 전 중단')
 
-    def reconcile(self,*,before_complete=None):
+    def reconcile(self,*,before_complete=None,short_notice=None):
         self._worker_check()
         with self.lock:
             saved=self.store.pending()
             if saved is None:return 'nothing_pending'
             if saved.get('phase')=='prepared':
                 self.store.abort_prepared('이전 실행의 입력 전 준비 기록');return 'preinput_aborted'
+            # The game said the press had no coins behind it: nothing changed, and that is the answer.
+            if callable(short_notice) and short_notice() is True:
+                self._worker_check()
+                self.store.complete('short_of_coins')
+                return 'short_of_coins'
             data=self.read_pair()
             if not isinstance(data,dict) or data.get('screen_proof') is not True:return 'hold_result_unknown'
             if not self._fresh(data.get('first'),data.get('second')):return 'hold_result_unknown'

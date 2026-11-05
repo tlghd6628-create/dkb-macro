@@ -82,6 +82,9 @@ def scene(detector,frame):
         if hud_dimmed(frame) or choice(frame):return 'unknown'
         return 'unknown' if detector.find(DUNGEON,frame,threshold=.5) or detector.find(EXIT,frame,threshold=.5) else 'field'
     from project_adapter.secret_exploration import AUTO_NAMES
+    # The menu and AUTO stay on screen behind the bag, which then passed for the field.
+    from owner_progression import inventory_parts
+    if all(inventory_parts(frame)):return 'inventory'
     if detector.find(MENU,frame,threshold=.95) and any(detector.find(n,frame,threshold=.95) for n in AUTO_NAMES):return outside()
     from owner_movement import field_hud,hud_anchor
     if field_hud(frame):return outside()
@@ -90,8 +93,10 @@ def scene(detector,frame):
     # A notification dot breaks the menu match and a bright backdrop breaks the settings icon, both in
     # town. With no panel open, the Home icon and AUTO still prove the bare field.
     if hud_anchor(frame,'home-hud',(662,441,25,29)) and any(detector.find(n,frame,threshold=.95) for n in AUTO_NAMES):return outside()
-    from owner_text import shows_field_words
+    from owner_text import shows_field_words,level_and_name
     if shows_field_words(frame):return outside()
+    # The bag's own check is a fixed place. Its title names the character, which nothing else shows there.
+    if level_and_name(frame)[0] is not None:return 'inventory'
     return 'unknown'
 
 def timer_pair(service):
@@ -139,7 +144,7 @@ def resume_dungeon(gui,adapter,context,inputs,service):
 def _resume_dungeon(gui,adapter,context,inputs,service,*,goal=None):
     from owner_camera import zoom_once
     zoom_once(adapter,context,inputs)
-    from project_adapter.secret_exploration import AUTO_NAMES,ensure_auto_active
+    from project_adapter.secret_exploration import ensure_auto_active
     from project_adapter.main_quest import StateROIs,BoundedMainQuestRunner,dependencies
     slots=StateROIs(adapter.project.root/'profiles'/adapter.project.code,mode='sub_quest')
     timer=timer_pair(service)

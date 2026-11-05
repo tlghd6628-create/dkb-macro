@@ -8,6 +8,7 @@ import bootstrap
 import numpy as np
 import owner_hd as hd
 import owner_growth_words as w
+import owner_short_notice as notice
 from project_adapter import market_inventory as native
 
 
@@ -63,6 +64,7 @@ class Counts(unittest.TestCase):
 
 class Zones:
  """What the reader gives for each zone of the blessing panel."""
+ short=False
  def __init__(self,title='나비가호장식3',level=37,count='90/5',word='강화',cost='5,000'):
   self.title=title;self.level=level;self.count=count;self.word=word;self.cost=cost
  def read(self,root,frame,box,**options):
@@ -71,6 +73,7 @@ class Zones:
   if box==w.BLESSING_NEXT:return [row('%d+'%(self.level+1),625,218)]
   if box==w.BLESSING_COUNT:return [row(self.count,594,645)] if self.count else []
   if box==w.BLESSING_PILL:return [row(self.word,730,720),row(self.cost,626,720)]
+  if box==notice.BAND:return [row('재화가 부족합니다.',682,84)] if self.short else []
   raise AssertionError(box)
 
 
@@ -124,13 +127,14 @@ class BlessingState(WithRoot):
 
 class BlessingRun(WithRoot):
  """The 18:27 failure: a level read mid-redraw on the last look must cost a retry, not the whole growth entry."""
- def run_with(self,verify=None,start=37,target=38,identity=None,title='나비가호장식3'):
+ def run_with(self,verify=None,start=37,target=38,identity=None,title='나비가호장식3',no_coins=False):
   import owner_blessing_native_candidate as blessing
   zones=Zones(level=start,title=title);state=SimpleNamespace(selected=None);clicks=[]
   frame=real_frame()
   def click_hit(hit):
    clicks.append(hit)
    if hit[0]>=600:state.selected=1
+   elif no_coins:zones.short=True
    else:zones.level+=1
   service=SimpleNamespace(adapter=SimpleNamespace(project=SimpleNamespace(root=self.root)),check=lambda:None,capture=lambda:frame,click_hit=click_hit,
                           detector=SimpleNamespace(find=lambda *a,**k:None))
@@ -151,6 +155,14 @@ class BlessingRun(WithRoot):
   result,clicks,outcome=self.run_with()
   self.assertFalse(result);self.assertEqual(outcome['actions'],1);self.assertEqual(outcome['confirmed'],1)
   self.assertEqual(clicks[-1][:2],(456,450));self.assertEqual(outcome['state'],'processed_unverified')
+ def test_no_coins_ends_after_one_press_with_no_record_left(self):
+  from owner_gear_intent_store_candidate import IntentStore
+  from owner_gear_settings_candidate import Store
+  identity='fake-words-short-%d'%time.monotonic_ns()
+  result,clicks,outcome=self.run_with(target=45,identity=identity,no_coins=True)
+  self.assertEqual(outcome['state'],'short_of_coins');self.assertEqual(outcome['actions'],1);self.assertEqual(outcome['confirmed'],0)
+  path=Store(self.root,identity).path
+  self.assertIsNone(IntentStore(path.with_name(path.stem+'-intent.json')).pending())
  def test_a_failed_last_look_is_retried_and_does_not_raise(self):
   result,clicks,outcome=self.run_with(lambda n:False if n==1 else None)
   self.assertEqual(outcome['actions'],1);self.assertEqual(outcome['confirmed'],1);self.assertEqual(outcome['state'],'processed_unverified')

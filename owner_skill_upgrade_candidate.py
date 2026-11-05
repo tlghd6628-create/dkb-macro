@@ -227,10 +227,20 @@ class SkillUpgrade:
     if intents[key]['status']=='prepared':
      intents[key]['status']='aborted_before_input';self.ledger.event('skill_upgrade_aborted',key=key)
     raise
+   from owner_short_notice import shown
+   def out_of_coins():
+    if not shown(self.port.ui.frame()):return None
+    intents[key].update(status='short_of_coins',after=current);self.ledger.event('skill_upgrade_short',key=key,before=current)
+    return {'status':'short_of_coins','name':name,'kind':kind,'current':current}
+   short=out_of_coins()
+   if short:return short
    if kind=='breakthrough':
     from owner_growth_reading import RESULT_SETTLE_SECONDS
     self.port.ui.context.wait(RESULT_SETTLE_SECONDS)
    self.check(budget=False);after=self.port.observe(name,kind)
+   # Reading the stage gives the message the moment it needs, if it was not up yet. An unchanged breakthrough looks like a failed one.
+   short=out_of_coins()
+   if short:return short
    if kind=='breakthrough' and after.get('name')==name and after.get('kind')==kind and after.get('current')==current:
     intents[key].update(status='observed_failure',after=current);self.ledger.event('skill_upgrade_failed',key=key,after=current)
     continue

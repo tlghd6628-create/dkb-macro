@@ -3,13 +3,14 @@
 Words survive small patches where pictures and fixed places do not. Rows carry real pixels (rx, ry, bounds) and the
 same place in the 897x479 terms the rest of the program clicks in (x, y); a click there lands on the word.
 """
-import re
+import collections,re,threading
 import numpy as np
 
 SPACE=re.compile(r'[\s·.,:;\'"`\-_~]+')
 BORDER=16
 TITLE=(20,0,330,50)   # real pixels: the title of a full panel, the place name on the field, the level and name in the bag
-_ROOT=[None];_titles={};_areas={}
+AREAS_KEPT=64
+_ROOT=[None];_titles={};_areas=collections.OrderedDict();_areas_lock=threading.Lock()
 
 
 def set_root(root):
@@ -18,10 +19,6 @@ def set_root(root):
 
 def clean(text):
     return SPACE.sub('',str(text))
-
-
-def same_words(a,b):
-    return clean(a)==clean(b)
 
 
 def _engine(root,language):
@@ -41,26 +38,38 @@ def brighten(area,floor=18,ceiling=150):
 
 def read_area(root,area,*,left=0,top=0,language='korean',scale=2,bright=False,minimum=.5):
     """Words in this array of real pixels. Places are real, counting from (left, top)."""
-    import cv2
     area=np.asarray(area)
-    key=(hash(area.tobytes()),area.shape,left,top,language,scale,bright,minimum)
-    if key in _areas:return [dict(row) for row in _areas[key]]
+    # Same pixels, same reading: whatever the place and the score asked for, which only filter what was read.
+    key=(hash(area.tobytes()),area.shape,language,scale,bright)
+    with _areas_lock:
+        read=_areas.get(key)
+        if read is not None:_areas.move_to_end(key)
+    if read is None:
+        read=_read_pixels(root,area,language,scale,bright)
+        with _areas_lock:
+            _areas[key]=read
+            while len(_areas)>AREAS_KEPT:_areas.popitem(last=False)
+    rows=[dict(text=text,score=score,rx=round(mx+left),ry=round(my+top),bounds=(round(x0)+left,round(y0)+top,round(x1)+left,round(y1)+top))
+          for text,score,mx,my,x0,y0,x1,y1 in read if score>=minimum]
+    rows.sort(key=lambda r:(r['ry'],r['rx']))
+    return rows
+
+
+def _read_pixels(root,area,language,scale,bright):
+    """(text, score, middle x, middle y, x0, y0, x1, y1) of everything the engine reads here, counting from the area's corner."""
+    import cv2
     source=brighten(area) if bright else area
     if scale!=1:source=cv2.resize(source,None,fx=scale,fy=scale,interpolation=cv2.INTER_CUBIC)
     source=cv2.copyMakeBorder(source,BORDER,BORDER,BORDER,BORDER,cv2.BORDER_CONSTANT,value=(40,40,40))
-    rows=[]
+    read=[]
     for page in _engine(root,language).predict(source):
         polys=page.get('rec_polys',())
         for index,(text,score) in enumerate(zip(page.get('rec_texts',()),page.get('rec_scores',()))):
-            if float(score)<minimum or index>=len(polys):continue
+            if index>=len(polys):continue
             poly=(np.asarray(polys[index],dtype=np.float32)-BORDER)/scale
             low=poly.min(axis=0);high=poly.max(axis=0)
-            rows.append(dict(text=str(text),score=float(score),rx=round(float((low[0]+high[0])/2)+left),ry=round(float((low[1]+high[1])/2)+top),
-                             bounds=(round(float(low[0]))+left,round(float(low[1]))+top,round(float(high[0]))+left,round(float(high[1]))+top)))
-    rows.sort(key=lambda r:(r['ry'],r['rx']))
-    if len(_areas)>32:_areas.clear()
-    _areas[key]=rows
-    return [dict(row) for row in rows]
+            read.append((str(text),float(score),float((low[0]+high[0])/2),float((low[1]+high[1])/2),float(low[0]),float(low[1]),float(high[0]),float(high[1])))
+    return read
 
 
 def read(root,frame,real_box=None,**options):

@@ -393,9 +393,12 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
                 for attempt in range(6):
                     context.wait(.35 if attempt==0 else .30)
                     context.checkpoint();service.check()
-                    status=reconcile_configured_step(context,root,identity,observer.read_result_pair,clock=clock,before_complete=current)
+                    status=reconcile_configured_step(context,root,identity,observer.read_result_pair,clock=clock,before_complete=current,short_notice=lambda:_coins_short(service))
                     _report(service,f"성장 결과 확인 · 칸={index} · 수치={getattr(observer,'last_levels',[])} · 결과={status} · 사유={getattr(observer,'last_reason','미확인')} · 확인={attempt+1}")
-                    if status=='observed_progress':break
+                    if status in ('observed_progress','short_of_coins'):break
+                if status=='short_of_coins':
+                    service._owner_gear_coins_short=True
+                    _report(service,'장비 강화 재화 부족 · 이번 차례 종료')
                 if status!='observed_progress':break
                 # A real enhance happened. Reading a dim button no longer counts for the level band.
                 service.adapter._owner_growth_item_seen=context
@@ -441,6 +444,11 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
             return False
     guarded._owner_gear_native_candidate=True
     return guarded
+
+
+def _coins_short(service):
+    from owner_short_notice import shown
+    return shown(service.capture())
 
 
 def _capture_extra_hold(service,root,phase,reason):
@@ -517,7 +525,10 @@ def wrap_extras_decorator(original_decorator,identity_resolver,extra_readers_fac
             if reconcile_only:return original(service,*args,**kwargs)
             # Always invoke the separately guarded enhancement route; native
             # breakthrough/awakening batch is not called for custom settings.
+            service._owner_gear_coins_short=False
             result=original(service,*args,**kwargs)
+            if service._owner_gear_coins_short:
+                _report(service,'장비 돌파·각성 건너뜀 · 재화 부족');return result
             targets=document['grades']
             if not callable(extra_readers_factory) or not any(r.get('enabled') is True for r in targets.values()):
                 _report(service,'장비 돌파·각성 건너뜀 · 사용 등급 없음');return result
@@ -562,9 +573,11 @@ def wrap_extras_decorator(original_decorator,identity_resolver,extra_readers_fac
                                 context.wait(RESULT_SETTLE_SECONDS)
                             for attempt in range(3):
                                 context.checkpoint();service.check()
-                                after=reconcile_configured_step(context,root,identity,post_reader,clock=clock,before_complete=current)
+                                after=reconcile_configured_step(context,root,identity,post_reader,clock=clock,before_complete=current,short_notice=lambda:_coins_short(service))
                                 if after!='hold_result_unknown':break
                                 if attempt<2:context.wait(.2)
+                            if after=='short_of_coins':
+                                status='short_of_coins';break
                             if after=='observed_failure':
                                 # Same stage. Continue toward the goal from a fresh
                                 # reading, within this pass's step and time limits.
@@ -592,6 +605,8 @@ def wrap_extras_decorator(original_decorator,identity_resolver,extra_readers_fac
                         if len(pair)>=3:pair[2]()
                     # Never progress with pending input.
                     if intent.pending() is not None or status.endswith('pending'):return result
+                    if status=='short_of_coins':
+                        _report(service,'장비 %s 재화 부족 · 이번 차례 종료'%label);return result
             return result
         return guarded
     decorate._owner_gear_extras_candidate=True

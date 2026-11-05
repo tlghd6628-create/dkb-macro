@@ -12,10 +12,17 @@ from owner_gear_decision_candidate import Observation
 from owner_gear_intent_store_candidate import IntentStore
 from owner_gear_settings_candidate import Store
 from owner_gear_step_guard_candidate import Guard
+from owner_short_notice import shown as coins_short
 
 _cursor={}
 LOG=logging.getLogger('project_gui.DKB')
 SETTLE_READS=8;RESULT_READS=8;TITLE_TOLERANCE=.01;REREADS=3
+# One real frame takes five word reads, up to 2.8 s while the game runs (5562 ms a pair on 22:24), and nothing can read two inside 1.5 s.
+# Each pair must still agree, and verify_final still reads a new frame right before the press.
+PIXEL_PROOF_SECONDS=1.5;WORD_PROOF_SECONDS=12;PIXEL_BUDGET_SECONDS=20;WORD_BUDGET_SECONDS=45
+
+def proof_seconds(frame):
+    return WORD_PROOF_SECONDS if getattr(frame,'hi',None) is not None else PIXEL_PROOF_SECONDS
 
 def same_white_text(source,current,box,tolerance=0.):
     """Exact white glyph proof, excluding the golden animated selection rim.
@@ -246,7 +253,8 @@ class BlessingObserver:
         if {k:v for k,v in states[0].items() if k!='materials'}!={k:v for k,v in states[1].items() if k!='materials'}:
             self.last_reason='가호 두 화면의 칸·수치·버튼 불일치';self.diagnostic_pair=tuple(f.copy() for f in frames)
             return {'screen_proof':False}
-        if not 0<b.captured_at-a.captured_at<=1.5 or self.clock()-a.captured_at>1.5:
+        limit=proof_seconds(frames[-1])
+        if not 0<b.captured_at-a.captured_at<=limit or self.clock()-a.captured_at>limit:
             from dataclasses import replace
             self.last_timings['refreshed_after_ocr']=True
             refreshed=[]
@@ -263,7 +271,7 @@ class BlessingObserver:
                     return {'screen_proof':False}
                 self.sequence+=1;refreshed.append(replace(before,sequence=self.sequence,captured_at=tick));self.context.wait(.08)
             a,b=refreshed
-            if not 0<b.captured_at-a.captured_at<=1.5 or self.clock()-a.captured_at>1.5:
+            if not 0<b.captured_at-a.captured_at<=limit or self.clock()-a.captured_at>limit:
                 self.last_reason='가호 새 화면 재검증 시간 초과';return {'screen_proof':False}
             self._fresh_read_view=(current.copy(),states[-1],b.captured_at)
         self.last_state=dict(states[1])
@@ -282,7 +290,7 @@ class BlessingObserver:
         if kind!='enhance':return False
         if self._fresh_read_view is not None:
             proof,state,stamp=self._fresh_read_view;second=latest.get('second')
-            return bool(state['active'] and 0<=self.clock()-stamp<=1.5 and isinstance(second,Observation)
+            return bool(state['active'] and 0<=self.clock()-stamp<=proof_seconds(frame) and isinstance(second,Observation)
                         and second.enhancement==state['level'] and second.grade==str(state['slot'])+'번'
                         and state['button']==latest.get('button_name') and state['opening']==latest.get('opening')
                         and self._same_read_view(frame,proof,state))
@@ -393,7 +401,7 @@ def run_blessing(service,context,identity,targets,*,slot_reader=read_slot_title,
             current();b=service.capture();stamp_b=time.monotonic()
             first=worn_candidates(native,service.detector,a);second=worn_candidates(native,service.detector,b)
             aa=[(r['index'],r['slot']) for r in first];bb=[(r['index'],r['slot']) for r in second]
-            if aa==bb and second and 0<stamp_b-stamp_a<=1.5 and time.monotonic()-stamp_b<=1.5:break
+            if aa==bb and second and 0<stamp_b-stamp_a<=proof_seconds(b) and time.monotonic()-stamp_b<=proof_seconds(b):break
             if attempt<SETTLE_READS-1:context.wait(.3)
         else:
             return hold('hold_worn_list','장착 가호 두 화면 불일치',(a,b))
@@ -422,7 +430,7 @@ def run_blessing(service,context,identity,targets,*,slot_reader=read_slot_title,
                 previous=selected[offset-1]['index']
                 if not worn_unchanged(now_a,aa,previous) or not worn_unchanged(now_b,aa,previous):
                     return hold('hold_worn_list','장착 가호 목록 변경',(a,b))
-            if not 0<stamp_b-stamp_a<=1.5 or time.monotonic()-stamp_b>1.5:
+            if not 0<stamp_b-stamp_a<=proof_seconds(b) or time.monotonic()-stamp_b>proof_seconds(b):
                 return hold('hold_worn_list','장착 가호 화면 시각 초과',(a,b))
             slot=row['slot'];x,y=native._click_xy(slot);left,top,w,h=(slot[k] for k in ('cell_x','cell_y','cell_w','cell_h'))
             if not (left<=x<left+w and top<=y<top+h):return hold('hold_selection','가호 선택 위치 확인 실패',(b,))
@@ -439,7 +447,8 @@ def run_blessing(service,context,identity,targets,*,slot_reader=read_slot_title,
                 result='hold_result_unknown'
                 for attempt in range(RESULT_READS):
                     current()
-                    result=Guard(context,intents,lambda:observer.read_pair(False)).reconcile(before_complete=current_check)
+                    result=Guard(context,intents,lambda:observer.read_pair(False),fresh_seconds=proof_seconds(b)).reconcile(before_complete=current_check,short_notice=lambda:coins_short(service.capture()))
+                    if result=='short_of_coins':logging.getLogger('project_gui.DKB').info('가호 강화 재화 부족 · 이번 차례 종료')
                     if result!='hold_result_unknown':break
                     if attempt<RESULT_READS-1:context.wait(.35)
                 return result
@@ -461,7 +470,8 @@ def run_blessing(service,context,identity,targets,*,slot_reader=read_slot_title,
                 hit=observer.word_hit if getattr(frame,'hi',None) is not None else service.detector.find(name,frame,threshold=.95)
                 if not hit:raise PreInputHold('가호 실행 버튼 미확인')
                 current();mark_sent();current();service.click_hit(hit);outcome['actions']+=1
-            guard=Guard(context,intents,observer.read_pair);deadline=time.monotonic()+20;status='budget_wait';rereads=0
+            guard=Guard(context,intents,observer.read_pair,fresh_seconds=proof_seconds(b))
+            deadline=time.monotonic()+(WORD_BUDGET_SECONDS if getattr(b,'hi',None) is not None else PIXEL_BUDGET_SECONDS);status='budget_wait';rereads=0
             for _ in range(50):
                 current()
                 if time.monotonic()>=deadline:break

@@ -396,7 +396,7 @@ class SkillBreakthroughFailure(unittest.TestCase):
         import owner_skill_upgrade_candidate as upgrade
         readings=iter(stages);clicks=[];ledger=S(item={},event=lambda *a,**k:None)
         class Port:
-            ui=S(context=S(checkpoint=lambda:None,wait=lambda n:None))
+            ui=S(context=S(checkpoint=lambda:None,wait=lambda n:None),frame=lambda:None)
             def observe(self,name,kind,*,need_quote=False):
                 if not need_quote:self.last=next(readings)
                 return dict(name=name,kind=kind,current=self.last,next=self.last+1,have=9,need=1,price=1,funds=9)

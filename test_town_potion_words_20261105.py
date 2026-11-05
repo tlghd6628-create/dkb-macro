@@ -33,7 +33,8 @@ class Tests(unittest.TestCase):
  def test_full_needs_the_label_and_the_same_numbers(self):
   ui=NS(frame=lambda:FRAME,context=NS(wait=lambda *a:None))
   self.assertEqual(self.under(AT_LIMIT,lambda:limits.observed_full(ui,'1단물약')),250)
-  self.assertIsNone(self.under(USED_UP,lambda:limits.observed_full(ui,'1단물약')))
+  # 320/250 with 구매 불가: over the limit is as finished as at it (the 11-05 screen showed 796/651).
+  self.assertEqual(self.under(USED_UP,lambda:limits.observed_full(ui,'1단물약')),320)
   self.assertIsNone(self.under(OPEN,lambda:limits.observed_full(ui,'1단물약')))
  def test_marks_are_words_on_the_real_screen(self):
   with patch('owner_text.read',return_value=[word('수량 입력',270,688)]):self.assertTrue(shop._quantity_shown(FRAME))

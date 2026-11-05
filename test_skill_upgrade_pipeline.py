@@ -18,7 +18,7 @@ class Journal:
 class Port:
  def __init__(self,current=0):
   self.current=current;self.actions=[];self.effect=True;self.fail_before=False;self.fail_after=False;self.have=100;self.funds=500000
-  self.stop=False;self.ui=S(context=S(checkpoint=self.checkpoint,wait=lambda _:None))
+  self.stop=False;self.ui=S(context=S(checkpoint=self.checkpoint,wait=lambda _:None),frame=lambda:None)
  def checkpoint(self):
   if self.stop:raise Pending('user Stop')
  def observe(self,name,kind,*,need_quote=False):

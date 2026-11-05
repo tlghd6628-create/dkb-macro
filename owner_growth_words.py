@@ -18,7 +18,7 @@ BLESSING_TITLE=(430,100,330,36);BLESSING_COUNT=(430,632,330,26);BLESSING_PILL=(5
 BLESSING_LEVEL=(490,202,96,34);BLESSING_NEXT=(604,202,96,34)
 NAMES=('봉황','나비','도깨비','연꽃','토끼');TITLE_FLOOR=.75
 # The font splits a title and can read the slot digit twice; the rest may be a letter off (가혹). The digit may not.
-TITLE=re.compile(r'(.{1,4}?)가[호혹후]장[식시]([1-5])\2?(?:\(귀속\))?')
+TITLE=re.compile(r'(.{1,4}?)[가갓][호혹후]장[식시]([1-5])\2?(?:\(귀속\))?')
 COUNT=re.compile(r'(\d[\d,]*)/(\d[\d,]*)')
 # Real pixels of the energy screen (right anchored, the tabs left anchored).
 ENERGY_TITLE=(960,118,360,74);ENERGY_DIAMONDS=(1300,70,60,470);ENERGY_COUNT=(1040,660,210,32);ENERGY_PILL=(1020,700,250,50);ENERGY_TABS=(0,60,280,240)
@@ -135,11 +135,26 @@ def hit_of(row):
     return (x,y,(x-6,y-5,x+7,y+6))
 
 
+def _any_size(root,frame,box,parse,label):
+    """The world behind a title moves, and one size of the picture can spoil a word the other reads: a real title stayed
+    unread on three tries while the same frame enlarged read it (22:25). The same floor and the same exact digit at each size."""
+    rows=[]
+    for scale in (3,2):
+        rows=text.read(root,frame,box,scale=scale)
+        found=parse(rows)
+        if found is not None:return found
+    said=[(r['text'],round(r['score'],2)) for r in rows]
+    if _last.get(label)!=said:
+        _last[label]=said;LOG.info('가호 %s 글자 원문 · %s',label,said)
+    return None
+
+
 def read_blessing(root,frame):
     """(panel, None) or (None, reason), from one real frame. The panel holds no pixels, so two can be compared."""
-    title=blessing_title(text.read(root,frame,BLESSING_TITLE,scale=3))
+    title=_any_size(root,frame,BLESSING_TITLE,blessing_title,'제목')
     if title is None:return None,'가호 제목 글자 미확인'
     pair=level_pair(text.read(root,frame,BLESSING_LEVEL,scale=3),text.read(root,frame,BLESSING_NEXT,scale=3))
+    if pair is None:pair=level_pair(text.read(root,frame,BLESSING_LEVEL,scale=2),text.read(root,frame,BLESSING_NEXT,scale=2))
     if pair is None:return None,'가호 강화 수치 글자 미확인'
     pill=text.read(root,frame,BLESSING_PILL,scale=3)
     word=only_word(pill,('강화','개방'))
