@@ -76,8 +76,8 @@ class Loop(replay.Resume):
   out=load(EXITED);outcome,_,published,_=self.run_frames([out,out,self.dip(),out,out,self.dip()])
   self.assertEqual(outcome[0],'replay_end');self.assertNotIn('field',published)
  def test_unknown_stays_bounded_with_no_input(self):
-  outcome,inputs,_,elapsed=self.run_frames([self.dip()]*60)
-  self.assertEqual(outcome[0],'error');self.assertIn('20초',outcome[1]);self.assertEqual(inputs,[])
+  outcome,inputs,_,elapsed=self.run_frames([self.dip()]*200)
+  self.assertEqual(outcome[0],'error');self.assertIn('45초',outcome[1]);self.assertEqual(inputs,[])
  def test_zero_timer_does_not_click_exit_while_the_map_is_still_present(self):
   # The real loop observes >30 seconds of stable map after paired zero reads.
   # Mock only the old helper's fixture override so the loop sees zero too.
@@ -92,7 +92,7 @@ class Loop(replay.Resume):
    ctx=S(checkpoint=lambda:None,wait=lambda s:ticks.__setitem__(0,ticks[0]+s))
    service=S(context=ctx,check=lambda:None,capture=capture,detector=self.detector,button=lambda *a,**k:calls.append(a))
    adapter=S(project=S(root=bootstrap.A,code='DKB'),mode='sub_quest')
-   with patch.object(st.time,'monotonic',lambda:ticks[0]),patch.object(st,'publish'),patch('project_adapter.secret_exploration.ensure_auto_active'),self.assertRaises(StopIteration):
+   with patch.object(st.time,'monotonic',lambda:ticks[0]),patch.object(st,'publish'),patch('owner_camera.zoom_once',lambda *a,**k:None),patch('project_adapter.secret_exploration.ensure_auto_active'),self.assertRaises(StopIteration):
     st._resume_dungeon(S(),adapter,ctx,S(),service)
    self.assertEqual(calls,[])
 

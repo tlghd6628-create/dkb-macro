@@ -298,6 +298,18 @@ def install(gui):
                 if initial==second=='unknown':
                     from project_adapter.main_quest import StateROIs
                     slots=StateROIs(adapter.project.root/'profiles/DKB',mode=adapter.mode)
+                    # Dead in a raid with the boss over the screen: the place cannot be read, but the
+                    # death title can. This stopped the run after 40 seconds (11-05 14:45).
+                    if slots.match('death',second_frame).get('hit'):
+                        death_key=(gui._owner_stage_epoch,'start-death')
+                        stage_attempts[death_key]=stage_attempts.get(death_key,0)+1
+                        if stage_attempts[death_key]>240:raise RuntimeError('시작 화면 사망 복구를 확인하지 못했습니다.')
+                        LOCAL.monitoring=False
+                        try:
+                            if not press_field_revive(service,context,adapter,second_frame):context.wait(.25)
+                        finally:LOCAL.monitoring=True
+                        unknown_since=None
+                        continue
                     dialog_key=known_dialog(slots,first,second_frame)
                     if dialog_key:
                         attempts_key=(gui._owner_stage_epoch,'start-dialog-'+dialog_key)

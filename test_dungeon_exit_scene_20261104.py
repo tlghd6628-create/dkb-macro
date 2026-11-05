@@ -62,7 +62,7 @@ class Resume(unittest.TestCase):
        patch.object(st,'publish',lambda g,a,kind,*r,**k:published.append(kind)),\
        patch('owner_dungeon_reentry.after_exit',return_value=None),\
        patch('owner_scene_archive.unknown_observed',lambda *a,**k:None),\
-       patch('project_adapter.secret_exploration.ensure_auto_active',lambda *a,**k:inputs.append(('auto',))):
+       patch('owner_camera.zoom_once',lambda *a,**k:None),patch('project_adapter.secret_exploration.ensure_auto_active',lambda *a,**k:inputs.append(('auto',))):
    try:outcome=('returned',st._resume_dungeon(S(),adapter,context,S(),service))
    except RuntimeError as exc:outcome=('error',str(exc))
    except AssertionError as exc:outcome=('replay_end',str(exc))
@@ -82,9 +82,9 @@ class Resume(unittest.TestCase):
   outcome,_,published,_=self.run_frames([out,out,dip,out,out,dip])
   self.assertEqual(outcome[0],'replay_end');self.assertNotIn('field',published)
 
- def test_black_screen_longer_than_20s_stops_with_error_today(self):
+ def test_black_screen_longer_than_45s_stops_with_error_today(self):
   # Records current behaviour for a long black exit transition, not a wanted result.
-  outcome,inputs,_,_=self.run_frames([np.zeros((479,897,3),np.uint8)]*60)
-  self.assertEqual(outcome[0],'error');self.assertIn('20초',outcome[1]);self.assertEqual(inputs,[])
+  outcome,inputs,_,_=self.run_frames([np.zeros((479,897,3),np.uint8)]*200)
+  self.assertEqual(outcome[0],'error');self.assertIn('45초',outcome[1]);self.assertEqual(inputs,[])
 
 if __name__=='__main__':unittest.main()
