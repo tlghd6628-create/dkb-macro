@@ -456,7 +456,9 @@ def factory(service,context,identity,targets,kind,*,source=None,stage_reader=rea
         context.checkpoint();service.check();before=service.capture()
         # Once an item is selected the awaken list shows it and its unworn duplicates. Alone, it has no material.
         # Reading its stage anyway cost 9 s per item, 65 s per visit (15:15).
-        if kind=='awaken' and skip is False and len(source.items(before))==1:
+        listed=source.items(before);chosen=native._growth_selected_slot(before,listed)
+        # The grid always reports 13 cells; an empty one has no grade colour.
+        if kind=='awaken' and skip is False and chosen is not None and not any(r.get('index')!=chosen and r.get('grade') in ('흰','파랑','보라') for r in listed):
             from owner_gear_native_install_candidate import _report
             _report(service,'장비 각성 재료 없음 · 칸=%s · 동일 장비 없음'%ticket['index'])
             cleanup();return skip
