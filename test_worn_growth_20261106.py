@@ -38,6 +38,9 @@ class FontPair(unittest.TestCase):
     def test_the_left_side(self):self.assertEqual(self.pair('47','42'),(41,42))
     def test_seven_that_are_really_seven(self):self.assertEqual(self.pair('47','48'),(47,48))
     def test_nothing_fits(self):self.assertIsNone(self.pair('40','45'))
+    def test_the_plus_lowers_the_score_of_the_next_level(self):
+        self.assertEqual(g.font_pair([row('41')],[row('42 +',score=.6)]),(41,42))
+        self.assertIsNone(g.font_pair([row('41')],[row('42 +',score=.3)]))
     def test_two_ways_is_none(self):self.assertIsNone(g.font_pair([row('7')],[row('8'),row('2')]))
     def test_unread_is_none(self):self.assertIsNone(g.font_pair([],[row('41')]))
 
@@ -250,10 +253,10 @@ class Blessings(WithRoute):
         self.route.read=read;self.route.visit=lambda item,cap=None:visited.append(item.slot)
         self.route.blessings()
         self.assertEqual(visited,['가호1','가호3'])
-    def test_awakening_comes_before_enhancing(self):
+    def test_enhancing_comes_before_awakening(self):
         item=self.item({'enhance':40,'opening':4,'awaken':0},slot='가호1',blessing=True)
-        self.assertEqual(self.route.need(item),g.AWAKEN)
-        item.done.add(g.AWAKEN);self.assertEqual(self.route.need(item),g.ENHANCE)
+        self.assertEqual(self.route.need(item),g.ENHANCE)
+        item.done.add(g.ENHANCE);self.assertEqual(self.route.need(item),g.AWAKEN)
     def test_the_goal_is_read_from_the_old_field(self):
         self.assertEqual(self.route.goal(self.item({},slot='가호2',blessing=True))['awaken'],1)
     def test_a_blessing_awakens_on_its_pieces_and_never_picks_a_tile(self):
@@ -354,6 +357,25 @@ class Enter(WithRoute):
 
 
 class Stand(unittest.TestCase):
+    def test_the_native_entry_does_not_run_after_the_route(self):
+        import owner_program_runtime as runtime
+        native=NS(run_growth_entry=lambda *a,**k:self.fail('native entry'))
+        runtime.install_identity_preflight(native,'run_growth_entry',())
+        with patch.object(runtime,'fresh_growth_identity',return_value=True),patch('owner_worn_growth.run',return_value=True):
+            self.assertTrue(native.run_growth_entry(NS(values={'auto_growth.equipment.enabled':True}),None,None))
+    def test_the_field_name_spares_the_info_window(self):
+        import owner_program_runtime as runtime
+        context=object();adapter=NS(_owner_growth_identity_context=None)
+        progress=NS(character='홍짱군',level=50,observed=0)
+        with patch('owner_progression.state',return_value=progress),patch.object(runtime,'field_shows_name',return_value=True),patch('owner_quest_preflight.read_power',side_effect=AssertionError('opened')):
+            self.assertTrue(runtime.fresh_growth_identity(adapter,context,None))
+        self.assertIs(adapter._owner_growth_identity_context,context)
+    def test_another_name_opens_the_info_window(self):
+        import owner_program_runtime as runtime
+        progress=NS(character='홍짱군',level=50,observed=0);opened=[]
+        with patch('owner_progression.state',return_value=progress),patch.object(runtime,'field_shows_name',return_value=False),patch('owner_quest_preflight.read_power',side_effect=lambda *a:opened.append(1)):
+            runtime.fresh_growth_identity(NS(_owner_growth_identity_context=None),NS(checkpoint=lambda:None),None)
+        self.assertEqual(opened,[1])
     def test_the_old_list_route_stands_aside_after_this_route(self):
         import owner_gear_native_install_candidate as install
         context=NS(checkpoint=lambda:None)

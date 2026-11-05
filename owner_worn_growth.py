@@ -6,7 +6,7 @@ that item selected. Nothing picks from the growth screen's list, so a spare can 
 The durable input record and its guard are the ordinary ones. What the details window reads is the truth: a record left
 from an earlier press settles against it when the same item is read again, and the value decides what happens next.
 """
-import logging,time
+import logging,re,time
 from pathlib import Path
 import numpy as np
 import owner_text as text
@@ -50,8 +50,12 @@ def font_pair(left,right):
     """40 >> 41 read as 40 >> 47: the font's 1 reads 7. The two sides are one apart, so that settles it when exactly one way of
     swapping 7 for 1 makes them so. Anything else stays unread."""
     from itertools import product
-    from owner_growth_words import _one_number
-    a,b=_one_number(left),_one_number(right)
+    def number(rows):
+        # The + beside the next level lowers its score, so this floor is lower than the plain reader's. The sides must still fit.
+        good=[r for r in rows if re.search(r'\d',str(r['text'])) and r['score']>=.5]
+        found=re.findall(r'\d+',str(good[0]['text'])) if len(good)==1 else ()
+        return int(found[0]) if len(found)==1 and len(found[0])<=3 else None
+    a,b=number(left),number(right)
     if a is None or b is None:return None
     def ways(number):
         digits=str(number);spots=[i for i,d in enumerate(digits) if d=='7']
@@ -169,8 +173,7 @@ class Route:
         """The next thing this item is short of, by its own details. None when it has its goals or none of it can run."""
         goal=self.goal(item)
         if not isinstance(goal,dict) or goal.get('enabled') is not True:return None
-        # A blessing's awakening goes first: it takes its own pieces and a little coin, and the enhancing after it can run the coins out.
-        kinds=(AWAKEN,ENHANCE) if item.blessing else (ENHANCE,BREAK,AWAKEN) if breakthrough_allowed() else (ENHANCE,AWAKEN)
+        kinds=(ENHANCE,AWAKEN) if item.blessing else (ENHANCE,BREAK,AWAKEN) if breakthrough_allowed() else (ENHANCE,AWAKEN)
         for kind in kinds:
             if kind in item.done:continue
             value=item.values.get(kind)
@@ -244,7 +247,9 @@ class Route:
                 panel=observer.panel or {}
                 if status=='hold_policy' and goal_state(goal,panel.get('level',-1))=='below':
                     LOG.info('착용 %s 강화 불가 · 재료 부족 또는 버튼 꺼짐 · %s',item.slot,panel.get('word'))
-                elif status not in ('hold_policy',):LOG.info('착용 %s 강화 중단 · %s',item.slot,status)
+                elif status not in ('hold_policy',):
+                    seen=read_panel(self.root,self.frame())
+                    LOG.info('착용 %s 강화 중단 · %s · 판독 %s',item.slot,status,{k:v for k,v in (seen or {}).items() if k!='hit'})
                 item.done.add(ENHANCE);return
             rereads=0
             result='hold_result_unknown'

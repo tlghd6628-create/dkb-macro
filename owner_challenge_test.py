@@ -51,7 +51,8 @@ class Reasons(logging.Handler):
     def emit(self,record):
         if record.thread!=self.thread:return
         text=record.getMessage()
-        if record.levelno>=logging.INFO and NOT_DONE.search(text) and not text.startswith('실전 TEST'):self.last=text
+        # The OCR warm-up line says 준비 중 at every start and explains nothing.
+        if record.levelno>=logging.INFO and NOT_DONE.search(text) and not text.startswith(('실전 TEST','인식 준비')):self.last=text
 
 def only(values,key):
     """Just this switch. Skill presets stay, because their entries read them."""

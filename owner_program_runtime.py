@@ -51,6 +51,19 @@ def gear_identity(service):
  service.adapter._owner_growth_profile=observed
  return profile
 
+REAL_FIELD_NAME=(0,745,150,23)  # the character's name at the field's lower left
+
+def field_shows_name(adapter,context,inputs,character):
+ """Sends nothing. False on anything unclear, and the info window then answers as it always has."""
+ from project_adapter.town_services import TownServices
+ from project_adapter import market_inventory
+ from owner_text import clean,read
+ try:
+  frame=TownServices(adapter,context,inputs,market_inventory.INVENTORY_USE_NAMES).capture()
+  if getattr(frame,'hi',None) is None:return False
+  return any(clean(row['text'])==clean(character) for row in read(None,frame,REAL_FIELD_NAME,scale=2,minimum=.6))
+ except (OSError,ValueError,TypeError,RuntimeError,AttributeError):return False
+
 def fresh_growth_identity(adapter,context,inputs):
  from owner_progression import state
  progress=state(adapter)
@@ -62,6 +75,10 @@ def fresh_growth_identity(adapter,context,inputs):
   return True
  if (getattr(adapter,'_owner_growth_identity_context',None) is context
      and progress.character and 0<=time.monotonic()-progress.observed<=180):return True
+ # This run has read who is playing before, and the field still shows that name: no need to open the info window for it.
+ if progress.character and type(progress.level) is int and field_shows_name(adapter,context,inputs,progress.character):
+  adapter._owner_growth_identity_context=context
+  return True
  from owner_quest_preflight import read_power
  previous_observed=progress.observed
  started=time.monotonic();context.checkpoint()
@@ -97,9 +114,10 @@ def install_identity_preflight(native,name,aliases):
    return True
   adapter._owner_growth_preflight_hold=False
   if name=='run_growth_entry':
-   # At 1366x768 worn items grow by way of the bag. The native entry still runs for the rest.
+   # At 1366x768 worn items grow by way of the bag and the blessing screen. The native entry would only open the growth
+   # screen and close it again: energy and skills have their own entries.
    from owner_worn_growth import run as run_worn_growth
-   run_worn_growth(adapter,context,inputs)
+   if run_worn_growth(adapter,context,inputs) is True:return True
   # The actual growth observer proves this item's current values immediately
   # before input. Reading every worn tooltip is display-only and must not
   # starve that guarded action whenever a short quest changes the map.
