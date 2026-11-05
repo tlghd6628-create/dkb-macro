@@ -22,10 +22,6 @@ def real_frame(gold=True):
  return frame
 
 
-# These tests are about reading the panel. The coin floor has its own, and one case below.
-import owner_coin_reserve
-owner_coin_reserve.can_spend=lambda *a,**k:True
-
 class Title(unittest.TestCase):
  def test_title_gives_name_and_slot(self):
   self.assertEqual(w.blessing_title([row('나비가호장식3')])['identity'],'blessing-words:나비3')

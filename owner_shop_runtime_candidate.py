@@ -58,6 +58,10 @@ BALANCE_BOXES=((404,8,40,14),(402,6,44,18))
 # their decimal point, because "20M" and "201M" are the same 2.01M misread.
 BALANCE_TEXT=re.compile(r'\d{1,3}\.\d{1,2}[KMB]|\d{1,3}(?:,\d{3})*')
 
+def _not_read():
+ """Coins are not read any more. The purchase record still has its fields, and wants two distinct ids."""
+ return {'lower':0,'upper':0,'exact':False,'display':'미확인','frame_ids':[uuid.uuid4().hex,uuid.uuid4().hex]}
+
 def _read_pair(ui,specs):
  """Every box from one fresh pair of frames; the caller compares what it needs."""
  ui.rows_batch([(box,language,0,'original',None,lambda a,b:True) for box,language in specs])
@@ -448,12 +452,6 @@ def _buy_one(adapter,context,inputs,item,shop):
  if shop not in ('town','remote'):raise Hold('상점 구분 확인 필요')
  chosen=[r for r in document['items'] if r['shop']==shop and r['name']==item and r['enabled'] is True]
  if len(chosen)!=1:raise Hold('체크한 상품 확인 필요')
- reserve=document['coin_reserve']
- if reserve is None:
-  # A missing file already means the default reserve; an empty field saved
-  # from the editor meant the same to the user, not "never buy".
-  reserve=DEFAULT_COIN_RESERVE;LOG.info('남길 엽전 미설정 · 기본 %d 적용',reserve)
- if type(reserve) is not int or reserve<0:raise Hold('남길 엽전 확인 필요')
  if shop=='remote' and not paid(root):raise Hold('멤버십 설정 확인 필요')
  began=time.monotonic();read_power(adapter,context,inputs);progress=state(adapter)
  if not progress.character or progress.observed<began:raise Hold('현재 캐릭터 화면 확인 필요')
@@ -468,9 +466,6 @@ def _buy_one(adapter,context,inputs,item,shop):
  fingerprint=profile+' | '+progress.character;journal=_journal(root)
  probe=SkillUI(adapter,context,inputs)
  if not probe.normal():raise Hold('원격 상점 진입 전 일반 화면 확인 필요')
- # Already at the floor: every item would stop for the same reason, after opening the shop to find that out.
- from owner_coin_reserve import can_spend
- if not can_spend(probe.frame(),'잡화상점'):return {'status':'reserve_reached','item':item}
  ui=open_remote(adapter,context,inputs) if shop=='remote' else _open_town_shop(adapter,context,inputs)
  ui._owner_shop_kind=shop
  adapter._owner_shop_entered=True
@@ -488,10 +483,8 @@ def _buy_one(adapter,context,inputs,item,shop):
  bought=sum(r['quantity'] for r in records if r['state']=='confirmed' and r['character']==fingerprint and r['shop']==shop and r['item']==item and r['week']==week)
  wanted=quote['remaining'] if chosen[0]['mode']=='max' else chosen[0]['quantity']-bought
  if wanted<=0:return {'status':'target_reached','confirmed':bought}
- unit=quote['unit_price'];before=_balance(ui)
- affordable=(before['lower']-reserve)//unit
- if affordable<=0:return {'status':'reserve_reached','item':item}
- count=min(wanted,quote['remaining'],affordable)
+ unit=quote['unit_price']
+ count=min(wanted,quote['remaining'])
  if _total(ui)!=0 or not _paired(ui,_cart_bar):
   raise Hold('기존 장바구니가 비어 있지 않거나 확인되지 않음')
  ui.click(110,quote['click_y'],lambda f:guard() and quote['row_proof'](f))
@@ -505,18 +498,16 @@ def _buy_one(adapter,context,inputs,item,shop):
  # The popup's own limit can stop short of the count, so the cart says how many.
  total=_total(ui);quantity=total//unit
  if total%unit or not 1<=quantity<=count:raise Hold('장바구니 합계 불일치')
- latest=_balance(ui)
- if latest['lower']-total<reserve:raise Hold('구매 직전 엽전 잔액 확인 필요')
- entry=_record_intent(journal,profile,fingerprint,week,item,quote,owned,latest,reserve,shop=shop,quantity=quantity)
+ entry=_record_intent(journal,profile,fingerprint,week,item,quote,owned,_not_read(),0,shop=shop,quantity=quantity)
  LOG.info('상점 구매 · %s %d개 · 합계 %d',item,quantity,total)
  total_now=_total(ui)
  if total_now!=total:raise Hold('장바구니 합계 불일치')
  verified_cart=ui.last_text_frame.copy()
  ui.click_word('구매',(730,430,65,40),lambda f:guard() and _same_cart(f,verified_cart),minimum=.90)
  ui.context.wait(1)
- if _total(ui)!=0:raise Hold('구매 후 장바구니 비움 확인 필요')
- try:after=_balance(ui)
- except Hold:after=latest  # the bag count below is the receipt
+ # Coins are not read: without enough of them the game's button does nothing and the cart stays full.
+ if _total(ui)!=0:return {'status':'no_coins','item':item}
+ after=_not_read()
  after_quote=_find_quote(ui,item)
  if after_quote['used']<quote['used']+quantity:raise Hold('구매 후 구매 횟수 변화 확인 필요')
  owned_after=owned+quantity
@@ -598,8 +589,8 @@ def dispatch_configured(adapter,context,inputs):
     LOG.warning('상점 품목 미완료 · %s · %s',setting['name'],str(exc));holds.append(setting['name']);break
    status=result.get('status')
    if status in ('target_reached','quota_empty'):break
-   if status=='reserve_reached':
-    LOG.info('상점 구매 멈춤 · %s · 남길 엽전 도달',setting['name']);break
+   if status=='no_coins':
+    LOG.info('상점 구매 멈춤 · %s · 엽전 부족',setting['name']);break
    if status=='settled':continue
    if status!='confirmed':return result
    confirmed+=result.get('quantity',1)

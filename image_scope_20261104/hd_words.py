@@ -48,12 +48,6 @@ keep=[r for r in keep if r['name'] not in BY_HAND]+[dict(key=hd.key_of(det.templ
 # AUTO's state is its colour. owner_hd reads that off the real screen.
 STATES={'버튼_AUTO_활성':'gold','버튼_AUTO_활성2':'gold','버튼_AUTO_비활성':'white','버튼_AUTO_비활성2':'white','버튼_AUTO_일시정지':'paused'}
 keep=[r for r in keep if r['name'] not in STATES]+[dict(key=hd.key_of(det.templates[n]),name=n,state=s) for n,s in STATES.items()]
-# What costs coins: not there while the coins are at the floor (owner_coin_reserve).
-SPEND=re.compile(r'^버튼_(가호_소환10|기운발현_(기운돌파|기운발현|몽환|생명|여명|홍염)$|단봉인해제_(MAX|실행|즉시확인)|물약상인_구매|비경_입장|비경_전래동화_입장|성장_가호_실행버튼|성장_강화|성장_장비_(각성|강화버튼|개방버튼|돌파)|순간이동)')
-spends=[n for n in names if SPEND.search(n)]
-seen={hd.key_of(det.templates[n]) for n in spends}
-keep=[r for r in keep if r['key'] not in seen]+[dict(key=hd.key_of(det.templates[n]),name=n,spends=True) for n in spends]
-print('spends',spends)
 out=hd.STORE/'words.jsonl'
 out.write_text(''.join(json.dumps(r,ensure_ascii=False,sort_keys=True)+'\n' for r in sorted(keep,key=lambda r:r['key'])),encoding='utf-8')
 print('kept',len(keep),'of',len(rows),'with words, of',len(names))

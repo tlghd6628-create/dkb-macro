@@ -109,7 +109,7 @@ class SkillUpgradePort:
   base_count=len(specs)
   ratio=AWAKEN_RATIO if awaken else g.RATIO;price=AWAKEN_PRICE if awaken else g.PRICE
   if need_quote:specs.extend([(ratio,'number',.98,'original_or_clahe',None,g.numeric_pair_verifier('ratio')),(price,'number',.98),
-   (g.BALANCE,'number',.90,'original_or_clahe',None,g.numeric_pair_verifier('balance',increasing=True)),(ACTION,'korean',.98)])
+   (ACTION,'korean',.98)])
   answers=ui.rows_batch(specs);frames,ticks,_=ui._owner_last_rows_pair
   raw=getattr(ui,'_owner_last_rows_raw',None)
   first=answers[0];row=_one(first,exact if awaken else lambda r:r.get('score',0)>=.94 and bool(re.fullmatch(re.escape(name)+r'\+50',_text(r))),'대상')
@@ -140,38 +140,21 @@ class SkillUpgradePort:
   if not awaken:
    x,t,w,h=g.STYLE_ICON;proofs.append((g.STYLE_ICON,source[t:t+h,x:x+w].copy(),ticks[-1],'style_icon'))
   result={'name':name,'kind':kind,'current':current,'next':next_stage}
-  changing_funds=bool(need_quote and raw and len(raw[2])==len(specs))
   if need_quote:
    if not all(g._fixed_template(f,'upgrade_coin.png',
      '5da1e8d46c60a0fa1b25255b220ab2fa3a06ad288e5ec1d915e85a7ddc95982c',(322,443,14,14),.98) for f in frames):
     raise Pending('도술 성장 엽전 비용 아이콘 확인 필요')
    proofs.append(((322,443,14,14),source[443:457,322:336].copy(),ticks[-1],'rgb'))
-   have,need=g.number(answers[base_count],'ratio');cost=g.number(answers[base_count+1],'price');funds=g.number(answers[base_count+2],'balance')
-   if changing_funds:
-    first_funds,second_funds=raw[2][base_count+2]
-    if not g.nondecreasing_balance(first_funds,second_funds):raise Pending('도술 성장 엽전 잔액 감소·판독 변경')
-    funds=min(g.number(first_funds,'balance'),g.number(second_funds,'balance'))
+   have,need=g.number(answers[base_count],'ratio');cost=g.number(answers[base_count+1],'price')
    word='각성' if awaken else '돌파'
-   action=_one(answers[base_count+3],lambda r:r.get('score',0)>=.98 and _text(r)==word,word+' 버튼')
+   action=_one(answers[base_count+2],lambda r:r.get('score',0)>=.98 and _text(r)==word,word+' 버튼')
    box=_bounds(action);point=(box[0]+box[2]//2,box[1]+box[3]//2)
-   for index,kind_of_number in ((base_count,'ratio'),(base_count+1,'price'),(base_count+2,'balance')):
-    if changing_funds and kind_of_number=='balance':continue
+   for index,kind_of_number in ((base_count,'ratio'),(base_count+1,'price')):
     r=_one(answers[index],lambda r:_valid_number(r,kind_of_number),'재료·비용')
     append_row(r)
    append_row(action)
-   result.update(have=have,need=need,price=cost,funds=funds,point=point)
+   result.update(have=have,need=need,price=cost,point=point)
   result['proofs']=g.refresh_evidence(ui,self.guard,frames,ticks,proofs,predicate)
-  if changing_funds:
-   latest=ui.rows_batch([(g.BALANCE,'number',.90,'original_or_clahe',None,g.numeric_pair_verifier('balance',increasing=True))])[0]
-   latest_frames,latest_ticks,_=ui._owner_last_rows_pair;latest_pair=ui._owner_last_rows_raw[2][0]
-   if (not g.nondecreasing_balance(*latest_pair) or g.number(latest_pair[0],'balance')<g.number(second_funds,'balance')
-     or not all(predicate(f) for f in latest_frames) or any(not 0<=time.monotonic()-t<=3 for t in latest_ticks)):
-    raise Pending('도술 성장 최신 엽전·대상 재확인 필요')
-   if any(not g._same_pixels(f,p[0],p[1],p[3]) for f in latest_frames for p in result['proofs']):
-    raise Pending('도술 성장 잔액 확인 중 대상·단계·비용 변경')
-   item=_one(latest,lambda r:_valid_number(r,'balance'),'최신 엽전');box=_bounds(item);x,t,w,h=box
-   result['proofs'].append((box,latest_frames[-1][t:t+h,x:x+w].copy(),latest_ticks[-1],'text'))
-   result['funds']=min(result['funds'],g.number(latest_pair[0],'balance'),g.number(latest_pair[1],'balance'))
   result['predicate']=predicate
   return result
  def commit(self,observation,prepare):
@@ -231,11 +214,9 @@ class SkillUpgrade:
    self.check();quote=self.port.observe(name,kind,need_quote=True)
    if quote.get('name')!=name or quote.get('kind')!=kind or quote['current']!=current or quote.get('next')!=current+1:
     raise Pending('도술 다음 '+field+' 단계 실화면 검증 필요')
-   if any(type(quote.get(k)) is not int for k in ('have','need','price','funds')) or quote['have']<0 or quote['need']<=0 or quote['price']<=0 or quote['funds']<0:
+   if any(type(quote.get(k)) is not int for k in ('have','need','price')) or quote['have']<0 or quote['need']<=0 or quote['price']<=0:
     raise Pending('도술 성장 재료·가격 판독 계약 불일치')
-   if quote['have']<quote['need'] or quote['funds']<quote['price']:raise Pending('도술 '+field+' 재료·엽전 부족')
-   from owner_coin_reserve import reserve
-   if quote['funds']-quote['price']<reserve():raise Pending('도술 '+field+' 남길 엽전 도달')
+   if quote['have']<quote['need']:raise Pending('도술 '+field+' 재료 부족')
    intents[key]={'status':'prepared','name':name,'kind':kind,'before':current,'next':current+1,
     'target':target,'price':quote['price'],'have':quote['have'],'need':quote['need'],'at':time.time()}
    self.ledger.event('skill_upgrade_prepared',key=key,before=current)

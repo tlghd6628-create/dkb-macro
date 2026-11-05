@@ -84,14 +84,13 @@ class ShopSettingsTests(unittest.TestCase):
             try:
                 first=ShopSettings(root,directory,'test');second=ShopSettings(root,directory,'test')
                 first.window.withdraw();second.window.withdraw()
-                self.assertFalse(hasattr(first,'gold_limit'));self.assertEqual(first.reserve.get(),'100000')
-                first.reserve.set('150,000');first.save()
-                second.reserve.set('50000')
+                self.assertFalse(hasattr(first,'gold_limit'));self.assertFalse(hasattr(first,'reserve'))
+                first.enabled.set(False);first.save()
+                second.enabled.set(True)
                 with patch('owner_shop_settings_candidate.messagebox.showerror') as error:second.save()
                 self.assertEqual(error.call_count,1);self.assertTrue(second.window.winfo_exists())
                 store=ShopSettingsStore(directory,'test');self.assertNotIn('gold_spend_limit',store.read_document())
-                self.assertEqual(store.read_document()['coin_reserve'],150000)
-                third=ShopSettings(root,directory,'test');third.window.withdraw();self.assertEqual(third.reserve.get(),'150000')
+                self.assertIs(store.read_document()['enabled'],False)
             finally:root.destroy()
 
 

@@ -52,11 +52,11 @@ class Runtime(unittest.TestCase):
   with self.assertRaises(Hold):self.go(quotes=[self.quote(0),self.quote(0)])
   self.assertEqual(self.journal._read()['transactions'][0]['state'],'pending')
  def test_cut_off_run_settles_by_the_row_counter(self):
-  with self.assertRaises(Hold):self.go(totals=(0,15000,15000,15000))
+  self.assertEqual(self.go(totals=(0,15000,15000,15000))['status'],'no_coins')
   self.assertEqual(self.go(quotes=[self.quote(1)])['status'],'settled')
   self.assertEqual(self.journal._read()['transactions'][0]['state'],'confirmed');self.assertEqual(self.ui.events.count('commit'),1)
  def test_cut_off_run_that_did_not_buy_is_dropped(self):
-  with self.assertRaises(Hold):self.go(totals=(0,15000,15000,15000))
+  self.assertEqual(self.go(totals=(0,15000,15000,15000))['status'],'no_coins')
   self.assertEqual(self.go(quotes=[self.quote(0)])['status'],'settled')
   self.assertEqual(self.journal._read()['transactions'],[])
  def test_cart_total_that_is_no_multiple_or_too_many_never_buys(self):
@@ -68,9 +68,6 @@ class Runtime(unittest.TestCase):
   next(x for x in doc['items'] if x['shop']=='remote' and x['name']==ITEM)['quantity']=3;store.write(doc['items'],100000)
   self.assertEqual(self.go(quotes=[self.quote(0),self.quote(3)],totals=(0,45000,45000,0),owned=(116,119))['quantity'],3)
   self.assertEqual(self.ui.events.count('add_one'),2);self.assertEqual(self.ui.events.count('add_all'),0)
- def test_reserve_reached_buys_nothing(self):
-  store=ShopSettingsStore(self.root,self.profile);doc=store.read_document();store.write(doc['items'],567210)
-  self.assertEqual(self.go(quotes=[self.quote(0)])['status'],'reserve_reached');self.assertEqual(self.ui.events,[])
  def test_unselected_cannot_open_or_spend(self):
   with self.assertRaises(Hold):runtime.buy_remote_one(self.adapter,self.context,None,'전설 장비 강화 비법서')
   self.assertEqual(self.ui.events,[]);self.assertFalse(self.journal.path.exists())
