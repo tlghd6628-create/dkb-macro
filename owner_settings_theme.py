@@ -27,7 +27,7 @@ SECTIONS={
  '문파':(('문파 보스',('auto_schedule.clan_boss_request',)),('문파 도움',('auto_rewards.clan_help',)),('문파 협력수련',('auto_growth.clan_cooperative_training',))),
  '보상·정리':(('자동 보상',('auto_rewards',)),('거래소 등록',('auto_register.market',)),('장비 정리',('auto_register.equipment_disassembly',))),
  '아이템 사용':(('아이템 사용',('auto_rewards.inventory_use',)),('단 봉인 해제',('auto_rewards.seal_release',))),
- '가호':(('가호 소환',('auto_rewards.blessing',)),),
+ '가호':(('가호 일괄 획득',('auto_rewards.blessing',)),),
  '비경·보스':(('일일·주간',('auto_schedule.daily_quest','auto_schedule.weekly_quest','auto_challenge.ascension_tower','auto_challenge.treasure_hunt')),
             ('월드보스',('auto_schedule.field_boss',)),
             ('전장·레이드',('auto_schedule.falling_battle','auto_schedule.folktale','auto_schedule.artifact_charm','auto_schedule.boss_raid')),

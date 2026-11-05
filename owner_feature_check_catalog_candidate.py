@@ -37,7 +37,7 @@ CHECKS=[
  item('energy','기운 발현','성장',['auto_growth.energy.enabled'],[('project_adapter.achievement_rewards','run_energy_entry')],['버튼_전체매뉴_기운발현.png','체크_기운발현_기운발현.png'],menu_group='energy'),
  item('inner_path','내면의 길','성장',['inner_path.enabled']),
  item('spirit','영기 수련','성장',['auto_growth.spirit_training.enabled','auto_growth.spirit_training.interval_minutes'],[('project_adapter.spirit_training','run_spirit_training')],['버튼_전체매뉴_영기수련.png','체크_영기수련.png']),
- item('blessing_reward','가호 소환','보상',['auto_rewards.blessing.enabled'],[('project_adapter.achievement_rewards','run_blessing_rewards')],['버튼_전체매뉴_가호.png','체크_전체매뉴_가호.png']),
+ item('blessing_reward','가호 일괄 획득','보상',['auto_rewards.blessing.enabled'],[('project_adapter.achievement_rewards','run_blessing_rewards')],['버튼_전체매뉴_가호.png','체크_전체매뉴_가호.png']),
  item('seal_release','단 봉인 해제','보상',['auto_rewards.seal_release.enabled'],[('project_adapter.seal_release','run_seal_release')],['버튼_전체매뉴_단봉인해제.png','체크_단봉인해제.png']),
  item('guide','길라잡이','보상',['auto_rewards.guide.enabled'],[('project_adapter.guide_rewards','run_guide_rewards')],['버튼_길라잡이.png','체크_길라잡이.png']),
  item('events','이벤트·출석','보상',['auto_rewards.event.enabled'],[('project_adapter.event_rewards','run_event_rewards')],['버튼_이벤트.png','체크_이벤트.png']),

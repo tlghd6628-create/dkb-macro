@@ -48,7 +48,7 @@ ITEMS=(
  Item('album','화첩 보상','상시·성장','ongoing','auto_rewards.album.enabled','flow'),
  Item('achievement','업적 보상','상시·성장','ongoing','auto_rewards.achievement.enabled','flow'),
  Item('inventory','인벤토리 사용','상시·성장','ongoing','auto_rewards.inventory_use.enabled','flow'),
- Item('blessing','가호 소환','상시·성장','ongoing','auto_rewards.blessing.enabled','flow'),
+ Item('blessing','가호 일괄 획득','상시·성장','ongoing','auto_rewards.blessing.enabled','flow'),
  Item('gear','장비·가호·도술 강화 점검','상시·성장','ongoing','auto_growth.equipment.enabled','flow'),
  Item('growth','기운 발현·내면의 길','상시·성장','ongoing','auto_growth.energy.enabled','flow'),
  Item('season','시즌·기간한정 보상·교환','상시·성장','ongoing'),
@@ -370,7 +370,7 @@ SHORT_NAMES={
     'field_boss':'월드보스','falling':'낙화 전장','falling_elite':'암영 무도가',
     'artifact':'신기 쟁탈','garden':'미혹 정원','main':'메인퀘','sub':'서사퀘',
     'hunt':'자동사냥','folktale':'전래동화','treasure':'보물찾기','album':'화첩',
-    'achievement':'업적','inventory':'인벤토리','blessing':'가호 소환',
+    'achievement':'업적','inventory':'인벤토리','blessing':'가호 일괄 획득',
     'gear':'장비·가호·도술','growth':'기운·내면','season':'시즌 보상','daily24_dungeon':'24h 비경',
 }
 
