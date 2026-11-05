@@ -14,11 +14,40 @@ from owner_gear_awaken_reader_candidate import read_explicit_stage,read_success_
 from owner_gear_decision_candidate import Observation
 
 
+# Tops of the left subtabs. The list depends on the character: at level 50 one account has
+# 강화/돌파/각성/재조율 and another 강화/각성/재조율, where the third place is a paid reroll.
+# So a place alone never names a tab; read_tabs replaces this from the words on screen.
+TABS={'enhance':67,'breakthrough':101,'awaken':135,'reroll':169}
+TAB_WORDS={'강화':'enhance','돌파':'breakthrough','각성':'awaken','재조율':'reroll'}
+
+def tabs_from_rows(rows):
+    """The word on each tab to its top. Missing 강화 or 각성 means this is not a list to trust."""
+    found={}
+    for row in rows:
+        text=''.join(str(row.get('text','')).split())
+        if row.get('score',0)>=.80 and text in TAB_WORDS:found[TAB_WORDS[text]]=int(row['y'])-10
+    return found if 'enhance' in found and 'awaken' in found else None
+
+def read_tabs(service):
+    """Read the subtab words from the screen, or leave the list alone and say False."""
+    import numpy as np
+    from tools.ocr_support import get_paddle_engine
+    from owner_progression import resized
+    box=(10,60,70,145);rows=[]
+    engine=get_paddle_engine(service.adapter.project.root,language='korean')
+    for page in engine.predict(resized(service.capture(),box)):
+        for i,(text,score) in enumerate(zip(page.get('rec_texts',()),page.get('rec_scores',()))):
+            polys=page.get('rec_polys',())
+            if len(polys)>i:rows.append({'text':str(text),'score':float(score),'y':round(box[1]+float(np.asarray(polys[i]).mean(axis=0)[1])/4-8)})
+    found=tabs_from_rows(rows)
+    if not found:return False
+    TABS.clear();TABS.update(found)
+    return True
+
 def tab_selected(frame,kind):
     if getattr(frame,'shape',None)!=(479,897,3):return False
-    positions={'enhance':67,'breakthrough':101,'awaken':135}
-    if kind not in positions:return False
-    means={name:float(frame[y:y+20,14:73].mean()) for name,y in positions.items()}
+    if kind not in TABS:return False
+    means={name:float(frame[y:y+20,14:73].mean()) for name,y in TABS.items()}
     return means[kind]>=180 and all(means[kind]-v>=50 for name,v in means.items() if name!=kind)
 
 
@@ -37,7 +66,7 @@ def ensure_enhance_tab(service,context,*,identity_check=None):
         context.checkpoint();service.check();frame=service.capture()
         if not detector.find('체크_성장',frame,threshold=.95) or not detector.find(native.GROWTH_EQUIPMENT_TAB,frame,threshold=.95):
             raise Hold('장비 성장 메뉴 재확인 필요')
-        found=[kind for kind in ('enhance','awaken','breakthrough') if tab_selected(frame,kind)]
+        found=[kind for kind in TABS if tab_selected(frame,kind)]
         if len(found)!=1:raise Hold('장비 성장 하위탭 재확인 필요')
         kinds.append(found[0]);context.wait(.08)
     if kinds[0]!=kinds[1]:raise Hold('장비 성장 하위탭 변경')
@@ -46,7 +75,7 @@ def ensure_enhance_tab(service,context,*,identity_check=None):
     if callable(identity_check) and identity_check() is not True:raise Hold('캐릭터 또는 설정 변경')
     # The known native enhancement subtab. This is a navigation coordinate,
     # not an item, material, or resource-confirmation button.
-    service.click_hit((43,77,(14,67,73,87)));context.wait(.15)
+    top=TABS['enhance'];service.click_hit((43,top+10,(14,top,73,top+20)));context.wait(.15)
     for _ in range(2):
         context.checkpoint();service.check();frame=service.capture()
         if not tab_selected(frame,'enhance') or not detector.find('체크_성장',frame,threshold=.95):
@@ -328,14 +357,13 @@ class _TabNative:
         service.click_hit((x,y,(l,t,l+w,t+h)))
 
 
-_TAB_HITS={'breakthrough':(43,111,(14,101,73,121)),'awaken':(43,145,(14,135,73,155))}
 def open_tab(service,context,kind):
     """The left subtab by its known box, as ensure_enhance_tab does. Navigation only.
 
     service.button only knows the names its TownServices was built with, and raised
     KeyError for these tabs on the first real run.
     """
-    service.click_hit(_TAB_HITS[kind]);context.wait(.3)
+    top=TABS[kind];service.click_hit((43,top+10,(14,top,73,top+20)));context.wait(.3)
 
 
 def tab_source(service,context,identity,targets,kind,tab):
@@ -346,6 +374,12 @@ def tab_source(service,context,identity,targets,kind,tab):
     from project_adapter import market_inventory as native
     from owner_gear_native_observer_candidate import Observer
     context.checkpoint();service.check()
+    from owner_gear_native_install_candidate import _report
+    # Never press by place alone: on some characters the place of 각성 holds the paid 재조율.
+    if not read_tabs(service):
+        _report(service,'장비 성장 탭 글자 확인 안 됨 · %s 건너뜀'%kind);return None
+    if kind not in TABS:
+        _report(service,'장비 %s 탭 없음 · 이 캐릭터 화면에 없는 메뉴'%kind);return None
     tried=getattr(service,'_owner_extra_tried',None)
     if not isinstance(tried,dict):tried=service._owner_extra_tried={}
     done=tried.setdefault(kind,set())
@@ -353,7 +387,7 @@ def tab_source(service,context,identity,targets,kind,tab):
         open_tab(service,context,kind)
     elif done:
         # Selecting an item narrows this list to that item. Leaving the tab restores it.
-        service.click_hit((43,77,(14,67,73,87)));context.wait(.3)
+        top=TABS['enhance'];service.click_hit((43,top+10,(14,top,73,top+20)));context.wait(.3)
         open_tab(service,context,kind)
     source=Observer(service,context,identity,_TabNative(native),None,None)
     # The list slides in after the tab changes. Read it once two frames agree.
@@ -368,7 +402,6 @@ def tab_source(service,context,identity,targets,kind,tab):
     grades={'흰':'일반','파랑':'희귀','보라':'영웅'}
     earlier={r.get('index'):r for r in source.items(first)}
     selected=native._growth_selected_slot(second,rows)
-    from owner_gear_native_install_candidate import _report
     _report(service,'장비 %s 목록 · 착용 %d칸 · 이번에 본 칸 %s'%(kind,sum(r.get('equipped') is True for r in rows),sorted(done)))
     def wanted(row):
         old=earlier.get(row.get('index'))
