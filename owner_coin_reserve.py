@@ -7,7 +7,7 @@ import logging,re,time
 import numpy as np
 
 LOG=logging.getLogger('project_gui.DKB')
-AREA=(608,16,60,24)  # real pixels of the coin amount in the top bar
+AREA=(608,16,76,24)  # real pixels of the coin amount in the top bar: 4.27M ends at 676, and cut short it read as nothing
 SCALE=6              # measured on 72 saved screens: at 6 times it reads right or not at all, at 3 it took 1 for 7
 SHOWN=re.compile(r'\d{1,3}(?:\.\d{1,2})?[KMB]')
 REMEMBER=300.;SAID_EVERY=60.;FRESH=1.
