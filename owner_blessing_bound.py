@@ -14,13 +14,6 @@ ALL_TAB=(1331,92)
 TILE_X=(1092,1152,1212,1272);TILE_Y=(152,212,272,332)  # the most the list shows without scrolling: 16
 TILE_SPREAD=20
 COMPARE_TAB=(695,303,60,24);COMPARE_TITLE=(685,155,215,32);COMPARE_CLOSE=(907,171)  # a spare's window, right of the worn one's
-BUTTON_BODY=(1120,705,120,27);DIM_BODY=(85,113,64);DIM_SLACK=12  # the button's colour when there is nothing to claim
-
-
-def button_dim(real):
-    x,y,w,h=BUTTON_BODY
-    body=np.median(np.asarray(real)[y:y+h,x:x+w].reshape(-1,3),axis=0)
-    return all(abs(float(value)-dim)<=DIM_SLACK for value,dim in zip(body,DIM_BODY))
 
 
 def tile_count(frame):
@@ -70,11 +63,11 @@ def places(count):
     return [(x,y) for y in TILE_Y for x in TILE_X][:count]
 
 
-def skip_reason(service,*,ignore_dim=False):
-    """None when every blessing is 귀속 and 일괄 획득 may be pressed, else why not."""
+def skip_reason(service,**_):
+    """None when every blessing is 귀속 and 일괄 획득 may be pressed, else why not. Whether the button is lit is the original
+    routine's own check: a colour taken for unlit here was never seen lit, and it kept every claim from running."""
     context=service.context
-    context.checkpoint();service.check();frame=service.capture()
-    if not ignore_dim and button_dim(frame.hi):return '일괄 획득 버튼 꺼짐'
+    context.checkpoint();service.check()
     service.click_hit(hd.real_hit(*ALL_TAB));context.wait(1.2)
     context.checkpoint();service.check();frame=service.capture()
     count=tile_count(frame)

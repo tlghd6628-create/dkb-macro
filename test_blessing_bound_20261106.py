@@ -12,15 +12,7 @@ import owner_worn_stats as worn
 
 
 def real(colour=None):
-    big=np.zeros((768,1366,3),np.uint8)
-    x,y,w,h=b.BUTTON_BODY
-    big[y:y+h,x:x+w]=colour if colour is not None else b.DIM_BODY
-    return big
-
-
-class Dim(unittest.TestCase):
-    def test_the_colour_of_nothing_to_claim(self):self.assertTrue(b.button_dim(real()))
-    def test_a_lit_button_is_not_dim(self):self.assertFalse(b.button_dim(real((110,190,80))))
+    return np.zeros((768,1366,3),np.uint8)
 
 
 class Sweep(unittest.TestCase):
@@ -55,9 +47,6 @@ class Sweep(unittest.TestCase):
     def test_a_window_that_does_not_open_stops(self):
         self.opens=False
         self.assertIn('안 열림',self.run_it(2,[]));self.assertEqual(len(self.tile_clicks()),1)
-    def test_a_dim_button_clicks_nothing(self):
-        self.frame=NS(hi=real())
-        self.assertIn('꺼짐',self.run_it(3,[]));self.assertEqual(self.clicks,[])
 
 
 class Count(unittest.TestCase):
