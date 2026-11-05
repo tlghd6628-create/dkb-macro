@@ -146,6 +146,10 @@ class GenericPort(Port):
   # turn an old screenshot into a supposedly fresh count.
   from owner_energy_box_detail_candidate import warm_count_reader
   context.checkpoint();warm_count_reader(adapter.project.root);context.checkpoint()
+ def no_boxes(self):
+  if self.ensure_inventory() is False:raise Hold('인벤토리 열기 확인 필요')
+  self.opened=True;self.view='inventory'
+  return self.pair(lambda a,b:True if box_gone(a) and box_gone(b) else None) is not None
  def current_detail(self,guard):
   if guard() is not True:raise Hold('캐릭터 또는 설정 변경')
   if self.opened and self.view=='detail':

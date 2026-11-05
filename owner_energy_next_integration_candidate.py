@@ -62,6 +62,8 @@ def attempt(adapter,context,inputs):
      outcome.update(state='confirmed',remaining=remaining,
                     needs_recheck=bool(choices['energies'] and remaining>0),retry_after_seconds=60)
      return 'confirmed'
+   # Nothing left is the normal end of these boxes, not a hold to retry every minute.
+   if port.no_boxes():outcome['state']='no_claim';outcome['remaining']=0;return 'no_claim'
    try:
     done=run_batched(port,journal,choices,guard=guard,
                      validated_targets=set(READERS),max_batches=3,max_seconds=120)
