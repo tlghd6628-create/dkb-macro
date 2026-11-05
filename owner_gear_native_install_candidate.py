@@ -389,6 +389,7 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
                 status=run_configured_step(service,context,root,identity,'enhance',observer.read_pair,observer.verify_final,clock=clock,settings_check=current)
                 ticket=observer.ticket or {};grade=ticket.get('grade');goal=targets.get(grade,{}).get('enhance')
                 _report(service,f"성장 목표 검사 · 칸={index} · 등급={grade} · 수치={getattr(observer,'last_levels',[])} · 목표={goal} · 결과={status} · 사유={getattr(observer,'last_reason','미확인')}")
+                if getattr(observer,'last_levels',None):service.adapter._owner_growth_item_seen=context
                 if status in ('hold_screen_unverified','hold_observation','hold_final_preinput','hold_boundary_preinput'):
                     from owner_gear_hold_capture_candidate import enqueue
                     enqueue(root,'growth-'+status,getattr(observer,'last_reason','미확인'),tuple(getattr(observer,'last_frames',())))

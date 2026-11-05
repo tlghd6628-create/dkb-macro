@@ -118,6 +118,7 @@ def dispatch(adapter,context,ordinary):
     previous_servicing=getattr(LOCAL,'servicing',False);LOCAL.servicing=True
     previous_milestone=getattr(adapter,'_owner_growth_milestone',None)
     adapter._owner_growth_milestone=milestone
+    adapter._owner_growth_item_seen=None
     try:
         logger=logging.getLogger('project_gui.DKB')
         logger.info('퀘스트 이동·자동사냥 확인 · 현재 자리에서 보상·성장 처리')
@@ -131,8 +132,11 @@ def dispatch(adapter,context,ordinary):
                            (adapter,context,item['inputs']),{},adapter)
         if milestone is not None and 'auto_growth.equipment.enabled' in keys:
             from owner_progression import state
-            state(adapter).attempted(milestone)
-            logger.info('레벨 구간 강화 점검 완료 · %d레벨 구간 · 재료 부족 시 실제 강화 생략',milestone)
+            # 07:04 marked band 30 done with nothing read at all. Only a pass that looked at an item counts.
+            if getattr(adapter,'_owner_growth_item_seen',None) is context:
+                state(adapter).attempted(milestone)
+                logger.info('레벨 구간 강화 점검 완료 · %d레벨 구간 · 재료 부족 시 실제 강화 생략',milestone)
+            else:logger.info('레벨 구간 강화 미완료 · %d레벨 구간 · 장비를 읽지 못해 다음 기회에 다시 확인',milestone)
         return True
     except __import__('owner_chore_transition').ChoreYield:
         adapter._owner_pending_services=dict(item,keys=eligible)

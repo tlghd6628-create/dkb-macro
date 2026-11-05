@@ -1,7 +1,7 @@
 """Opt-in generic 1/N selection port, separate from frozen recovery build."""
 from owner_energy_box_port_candidate import Port
 from owner_energy_box_detail_candidate import detail,detail_screen,generic_box_detail,box_candidates,stable_box_candidates
-from owner_energy_choice_reader_candidate import read_pair,read_open_pair,layout_screen,layout_variant,rows_of,asset,_score
+from owner_energy_choice_reader_candidate import read_pair,read_open_pair,layout_screen,layout_variant,rows_of,read_screen,asset,_score
 from owner_energy_box_runtime_candidate import Hold
 import logging
 LOG=logging.getLogger('project_gui.DKB')
@@ -94,7 +94,7 @@ class GenericPort(Port):
     value=read_pair(a,b)
     return value if value and value.get('selected')==name and value.get('available_count')==total and value.get('quantity')==expected else None
    pair=self.wait_pair(changed)
-   if not pair:raise Hold('수량 변경 결과 재확인 필요')
+   if not pair:raise Hold('수량 변경 결과 재확인 필요 · %s에서 %s 기대 · 읽음 %s'%(current,expected,(read_screen(self.service.capture()) or {}).get('quantity')))
    state=pair[0]
   else:raise Hold('수량 조절 한도 초과')
   final=self.pair(read_pair)
