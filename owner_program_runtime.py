@@ -96,6 +96,10 @@ def install_identity_preflight(native,name,aliases):
     adapter._owner_growth_pending_hold=True
    return True
   adapter._owner_growth_preflight_hold=False
+  if name=='run_growth_entry':
+   # At 1366x768 worn items grow by way of the bag. The native entry still runs for the rest.
+   from owner_worn_growth import run as run_worn_growth
+   run_worn_growth(adapter,context,inputs)
   # The actual growth observer proves this item's current values immediately
   # before input. Reading every worn tooltip is display-only and must not
   # starve that guarded action whenever a short quest changes the map.

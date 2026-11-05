@@ -31,6 +31,9 @@ def recover(adapter,context,inputs):
  if item is None:
   adapter._owner_growth_recovery_context=context;return 'no_pending'
  before=item.get('before')
+ # A press by way of the bag settles when its worn item is next read there.
+ if str(getattr(before,'slot','')).startswith('worn:'):
+  adapter._owner_growth_recovery_context=context;return 'no_pending'
  if (item.get('phase')!='sent' or item.get('kind')!='enhance'
      or getattr(before,'character',None)!=identity):return 'hold_history'
  context.checkpoint()
