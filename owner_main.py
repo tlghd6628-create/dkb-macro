@@ -221,8 +221,9 @@ class MainPanel:
 
 
 def install(gui):
-    import owner_hd
+    import owner_hd,owner_text
     owner_hd.install()
+    owner_text.set_root(gui.project.root)
     if hasattr(gui,'root'):gui.root.after(4000,lambda:owner_hd.keep_size(gui))
     if not getattr(gui,'_owner_quest_schema',False):
         model=gui.load_settings_model()

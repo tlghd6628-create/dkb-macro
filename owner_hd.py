@@ -181,6 +181,19 @@ def to_real_point(x,y,layout=None):
     return min(REAL[0]-1,max(0,round(x*F+shift))),min(REAL[1]-1,max(0,round(y*F)))
 
 
+def logical_of(rx,ry,layout=None):
+    """The place in 897x479 terms for a real place something was read at. A click there lands back on it."""
+    layout=layout or _current or default_layout();y=ry/F
+    picked=None
+    for rule in RULES:
+        x=(rx-SHIFTS[rule])/F
+        if 0<=x<LOGICAL[0] and layout.rule(x,y)==rule:picked=(x,SHIFTS[rule]);break
+    if picked is None:picked=((rx-SHIFTS['center'])/F,SHIFTS['center'])
+    x,shift=picked
+    with _lock:_hits.append((time.monotonic(),x-8,y-8,x+8,y+8,shift))
+    return round(x),round(y)
+
+
 def real_box(box,layout=None,rule=None):
     """A logical (x,y,w,h) in real pixels, by the anchor at its middle."""
     x,y,w,h=box

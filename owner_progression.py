@@ -284,11 +284,12 @@ def observe_inventory(service,*,force=False):
     import numpy as np
     x=68 if level>=10 else 62
     patch=frames[-1][9:25,x:x+33]
-    if not np.array_equal(np.min(patch,axis=2)>150,np.min(frames[0][9:25,x:x+33],axis=2)>150):
+    if getattr(frames[-1],'hi',None) is None and not np.array_equal(np.min(patch,axis=2)>150,np.min(frames[0][9:25,x:x+33],axis=2)>150):
         LOG.info('육성 캐릭터 판독 보류 · 두 화면 이름 영역 불일치');return False
     character=hashlib.sha256((np.min(patch,axis=2)>150).tobytes()).hexdigest()[:24]
     from owner_character_binding import observe as bind_character,name_head
-    character=bind_character(service.adapter,character,level,name_head(frames[-1]))
+    from owner_text import level_and_name
+    character=bind_character(service.adapter,character,level,name_head(frames[-1]),level_and_name(frames[-1],service.adapter.project.root)[1])
     progress.accept(level,power,character)
     # The same paired reading read_power takes, so box work right after a bag check need not open the panels again.
     service.adapter._owner_progression_observation=(service.context,progress.observed,character)

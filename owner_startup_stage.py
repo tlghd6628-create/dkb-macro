@@ -356,6 +356,9 @@ def install(gui):
                         with activity_scope(LABELS.get(kind,kind)):
                             continue_special(gui,adapter,context,inputs,service,kind,publish,scene,RecheckStage)
                     LOCAL.monitoring=False
+                    if kind=='field':
+                        from owner_game_settings import ensure_once
+                        ensure_once(adapter,context,inputs)
                     if kind in ('field','dungeon'):
                         from owner_camera import zoom_out
                         zoom_out(adapter,context,inputs)

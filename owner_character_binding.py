@@ -16,7 +16,7 @@ LOG=logging.getLogger('project_gui.DKB')
 _LOCK=threading.RLock()
 BOUND='bound';MATCHED='matched';CROSSED='crossed';MISMATCH='mismatch';UNAVAILABLE='unavailable'
 HEAD_MATCH=.915
-_HEADS={}
+_HEADS={};_NAMES={}
 
 
 def _path(root):return Path(root)/'settings/owner-character-binding.json'
@@ -57,8 +57,25 @@ def name_head(frame):
     return None
 
 
+def same_name(seen,configured):
+    """One misread letter in three (홈짱군) is the same name."""
+    from difflib import SequenceMatcher
+    a,b=str(seen or '').strip(),str(configured or '').strip()
+    return bool(a and b) and (a==b or SequenceMatcher(None,a,b).ratio()>=.66)
+
+
+def configured_name(root):
+    try:return json.loads((Path(root)/'settings/manager_identity.json').read_text(encoding='utf-8-sig')).get('character_name')
+    except (OSError,ValueError,AttributeError):return None
+
+
 def shown_on(frame,character):
     """The stable key is the hash from the first level, so later levels compare the first glyph."""
+    from owner_text import level_and_name
+    if getattr(frame,'hi',None) is not None:
+        # The words are on the real screen, and they do not move with the level digits.
+        expected=_NAMES.get(character)
+        return bool(expected) and same_name(level_and_name(frame)[1],expected)
     stored=_HEADS.get(character);head=name_head(frame)
     return bool(stored and head and same_head(stored,head))
 
@@ -106,13 +123,34 @@ def resolve(root,profile,glyph_hash,level,head=None):
         return document['profiles'][profile]['character'],status
 
 
-def observe(adapter,glyph_hash,level,head=None):
+def by_name(root,profile,glyph_hash,level,name):
+    """Decide by the name itself where it can be read. The key stays the one already bound, so records carry over."""
+    expected=configured_name(root)
+    if not expected or not name:return glyph_hash,UNAVAILABLE
+    if not same_name(name,expected):return glyph_hash,MISMATCH
+    path=_path(root)
+    with _LOCK:
+        try:document=_read(path)
+        except (OSError,ValueError) as exc:
+            LOG.warning('캐릭터 연결 기록 확인 필요 · %s',exc);return glyph_hash,UNAVAILABLE
+        row=document['profiles'].get(profile)
+        if not isinstance(row,dict):row=document['profiles'][profile]={'character':glyph_hash,'level':level}
+        elif row.get('level')==level:
+            _NAMES[row['character']]=expected;return row['character'],MATCHED
+        else:row['level']=level
+        try:_write(path,document)
+        except OSError as exc:LOG.warning('캐릭터 연결 기록 저장 보류 · %s',exc)
+        _NAMES[row['character']]=expected
+        return row['character'],MATCHED
+
+
+def observe(adapter,glyph_hash,level,head=None,name=None):
     """Stable key for this reading, and whether timed work must hold."""
     from owner_hunt_rules_candidate import configured_identity
     root=adapter.project.root
     try:profile=configured_identity(root)
     except (OSError,ValueError,TypeError):return glyph_hash
-    character,status=resolve(root,profile,glyph_hash,level,head)
+    character,status=by_name(root,profile,glyph_hash,level,name) if name else resolve(root,profile,glyph_hash,level,head)
     was=getattr(adapter,'_owner_character_mismatch',False) is True
     # An unreadable record proves nothing, so it cannot release a proven hold.
     adapter._owner_character_mismatch=status==MISMATCH or (was and status==UNAVAILABLE)

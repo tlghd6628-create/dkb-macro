@@ -86,6 +86,9 @@ def hit(frame,name,box,threshold=.94):
 def remote_shop_screen(frame):
  """Independent foreground title and the existing exact potion-list label."""
  import numpy as np
+ from owner_text import shows_title
+ words=shows_title(frame,'잡화 상점')
+ if words is not None:return words
  from owner_remote_potion_limit_candidate import _asset
  from owner_visual_state import same_label
  found=hit(frame,'remote-shop-title',(35,4,110,30))
