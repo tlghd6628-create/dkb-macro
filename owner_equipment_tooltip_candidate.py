@@ -763,7 +763,7 @@ def run_in_open_inventory(adapter,context,inputs):
   if hit is None:
    scroll=getattr(port,'scroll_page',None)
    if pages<8 and callable(scroll) and scroll():
-    pages+=1;excluded=[];inventory,_=port._frame();continue
+    pages+=1;excluded=[];port.opened_cells=set();inventory,_=port._frame();continue
    return 'confirmed' if confirmed_count else ('visible_unknown_cells_held' if getattr(port,'unknown_cells_held',False) else 'no_more_visible_candidates')
   # Row exclusions reset when the bag redraws, and the same unreadable cells were opened again until the
   # 90 seconds ran out (12:41). Twice is enough for this visit.
@@ -805,7 +805,7 @@ def run_in_open_inventory(adapter,context,inputs):
     if confirmed is None:return 'pending_confirmation'
    port.close_worn_detail()
    adapter._owner_equipment_upgrade_growth_pending={'character':character,'at':time.monotonic()}
-   confirmed_count+=1;excluded=[];inventory,_=port._frame()
+   confirmed_count+=1;excluded=[];port.opened_cells=set();inventory,_=port._frame()
    if confirmed_count>=len(SLOTS):return 'confirmed'
    continue
   if status=='already_worn':
