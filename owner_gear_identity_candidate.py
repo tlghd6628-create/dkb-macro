@@ -11,8 +11,9 @@ class IconIdentity:
         self.native=native;self.detector=detector;self.pre=None;self.index=None;self.token=None;self.post_seen=False
 
     def _same_on_real(self,real,old,index):
-        """The panel's icon against every tile before selection, at full size: the chosen tile leads by a wide margin.
-        Measured own .91 and the next .53 (hat, 11-05)."""
+        """The panel's icon against every tile before selection, at full size: the chosen tile is the best match.
+        Measured own .91 and the next .53 (hat), but .77 and .68 for a rare ring beside a plain ring of the same art,
+        which held every growth visit there. The tick on the tile has already proved which one is chosen."""
         from owner_hd import real_box
         x,y,w,h=CENTRE_ICON;needle=real[y:y+h,x:x+w];scores=[]
         for row in self.pre_rows:
@@ -23,7 +24,7 @@ class IconIdentity:
             if not np.isfinite(value):return False
             scores.append((value,row['index']))
         own=next((v for v,i in scores if i==index),None);others=[v for v,i in scores if i!=index]
-        return own is not None and bool(others) and own>=.75 and own-max(others)>=.25
+        return own is not None and bool(others) and own>=.70 and own-max(others)>=.05
 
     def __call__(self,frame,index,selected):
         if not isinstance(frame,np.ndarray) or frame.shape!=(479,897,3) or frame.dtype!=np.uint8:return None
