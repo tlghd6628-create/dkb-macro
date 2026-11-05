@@ -51,7 +51,9 @@ def _real_dots(frame,box):
     real=np.asarray(frame.hi);x,y,w,h=box
     left,top=max(0,round(x*F+SHIFTS['right'])),max(0,round(y*F));right,bottom=min(real.shape[1],round((x+w)*F)),min(real.shape[0],round((y+h)*F))
     part=real[top:bottom,left:right].astype('int16');r,g,b=part[:,:,0],part[:,:,1],part[:,:,2]
-    count,_,stats,_=cv2.connectedComponentsWithStats(((r>170)&(g<95)&(b<95)).astype('uint8'),8);found=[]
+    # A dot's white shine leaves holes, and can split it in two: its parts filled 33% of its box and it was never seen (11-06).
+    mask=cv2.morphologyEx(((r>170)&(g<95)&(b<95)).astype('uint8'),cv2.MORPH_CLOSE,np.ones((3,3),'uint8'))
+    count,_,stats,_=cv2.connectedComponentsWithStats(mask,8);found=[]
     for index in range(1,count):
         l,t,width,height,area=(int(v) for v in stats[index])
         if not (6<=width<=13 and 6<=height<=13 and abs(width-height)<=2 and area>=.35*width*height):continue
