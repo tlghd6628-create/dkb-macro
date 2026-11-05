@@ -429,6 +429,15 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
                 service._owner_gear_no_stones=_tried|{index}
                 try:return guarded(service,_tried=_tried|{index})
                 finally:service._owner_gear_no_stones=frozenset()
+            # One visit used to raise one item for 20 s, so a level band left the rest of the gear untouched.
+            # Later items get their turn within two minutes; the next visit starts from the priority order again.
+            started=getattr(service,'_owner_gear_visit_started',None) or time.monotonic()
+            if (status in ('observed_progress','hold_time_limit','hold_policy') and intent.pending() is None
+                and index not in _tried and time.monotonic()-started<120):
+                service._owner_gear_visit_started=started
+                service._owner_gear_no_stones=_tried|{index}
+                try:return guarded(service,_tried=_tried|{index})
+                finally:service._owner_gear_no_stones=frozenset();service._owner_gear_visit_started=None
             # Native caller result semantics are unverified; do not assert full
             # completion when one item advanced or an item was held.
             return False
