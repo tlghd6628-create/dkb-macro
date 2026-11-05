@@ -43,7 +43,9 @@ def paint_controls(gui):
 def paint_log(gui):
  # The visible log may be the layout's copy of the original widget.
  originals=getattr(getattr(gui,'visual_view',None),'originals',{})
+ from owner_log_view import install as log_view
  for log in {gui.log,originals.get('log',gui.log)}:
+  log_view(log)
   log.configure(relief='flat',borderwidth=0,highlightthickness=1,highlightbackground=BORDER,highlightcolor=BORDER,
                 background=SURFACE,foreground=TEXT,padx=8,pady=6,spacing1=1,spacing3=1,font=(FONT,9))
 
