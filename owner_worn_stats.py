@@ -64,6 +64,22 @@ def real_heading(real):
  grades=[grade for grade in ('일반','희귀','영웅','전설') if grade in words]
  return title,grades[0] if len(grades)==1 else None
 
+REAL_PART=(725,205,75,40)
+PART_WORDS={'반지':'반지','팔찌':'팔찌','목걸이':'목걸이','귀걸이':'귀걸이','갑옷':'갑옷','다리':'각반','신발':'신발','장갑':'장갑','투구':'투구','허리띠':'허리띠'}
+
+def real_matches(real,slot,title):
+ """Is the open window this tile's? A window can open late, on the click for the next tile, and then the first tile's
+ numbers went in under the second's name (01:52). The window names its part; a weapon's word is whatever is not one of the others."""
+ from owner_text import clean,read_area
+ x,y,w,h=REAL_PART
+ words=[clean(row['text']) for row in read_area(None,real[y:y+h,x:x+w],minimum=.6)]
+ if slot in BLESSING_SLOTS:
+  # The font's 1 reads ] (도깨비 가호 장식1). A digit that cannot be read proves nothing.
+  found=re.search(r'장[식시]([1-5\]lI|])',title)
+  return '가호' in words and found is not None and ('1' if found[1] in ']lI|' else found[1])==slot[-1]
+ if slot in PART_WORDS:return PART_WORDS[slot] in words
+ return bool(words) and not any(word in PART_WORDS.values() or word=='가호' for word in words)
+
 def blessing_kind(title):
  """도깨비 from 도깨비 가호 장식1 (귀속). The place on the panel gives the slot, so its digit is not needed here."""
  from difflib import SequenceMatcher
@@ -129,7 +145,7 @@ def popup(frame):
  return bool(inventory_parts(frame)==(True,True) and close_mark(frame)
              and _badge(frame,420,116,445,135)>=.96)
 
-READ_TRIES=6
+READ_TRIES=6;OPEN_LOOKS=30
 
 class ReadAgain(Exception):
  """The last look before a press did not hold. Nothing was sent."""
@@ -165,14 +181,18 @@ def inspect_real(service,context,inputs,profile,character,slot,*,decide=None):
  if decide is None and old and time.monotonic()<old['after']:return False
  cache[token]={'after':time.monotonic()+120}
  service.click_hit((x+w//2,y+h//2,(x,y,x+w,y+h)));opened=False;left=False
- for _ in range(10):
+ # Just after the bag opens a window can take several seconds.
+ for _ in range(OPEN_LOOKS):
   context.wait(.2);context.checkpoint();service.check()
   if popup(service.capture()):opened=True;break
  if not opened:
   LOG.info('착용 %s 현재값 건너뜀 · 상세창 안 열림',slot);return False
  ui=SkillUI(adapter,context,inputs)
  try:
-  title,grade=real_heading(np.asarray(service.capture().hi))
+  context.wait(.3)
+  real=np.asarray(service.capture().hi);title,grade=real_heading(real)
+  if not real_matches(real,slot,title):
+   LOG.info('착용 %s 현재값 저장 안 함 · 상세창이 다른 장비 · %s',slot,title);return False
   MissionUI.wheel(ui,-1,10,at=(480,310),scene=popup)
   # Parked outside the window so no row lights up under the pointer. Nothing here presses its - or + buttons.
   with inputs.transaction():

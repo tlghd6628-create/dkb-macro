@@ -60,6 +60,21 @@ class Heading(unittest.TestCase):
   self.assertIsNone(w.blessing_kind('호랑이가호장식1'))
 
 
+class Belongs(unittest.TestCase):
+ def check(self,slot,words,title=''):
+  with patch('owner_text.read_area',return_value=[word(text,217) for text in words]):return w.real_matches(REAL,slot,title)
+ def test_an_item_by_its_part(self):
+  self.assertTrue(self.check('다리',['각반']));self.assertTrue(self.check('반지',['반지']))
+  self.assertFalse(self.check('팔찌',['부채']));self.assertFalse(self.check('목걸이',['갑옷']))
+ def test_a_weapon_is_none_of_the_others(self):
+  self.assertTrue(self.check('무기',['부채']));self.assertFalse(self.check('무기',['반지']));self.assertFalse(self.check('무기',[]))
+  self.assertFalse(self.check('무기',['가호']))
+ def test_a_blessing_by_its_digit(self):
+  self.assertTrue(self.check('가호2',['가호'],'토끼가호장식2(귀속)'));self.assertFalse(self.check('가호2',['가호'],'도깨비가호장식1(귀속)'))
+  self.assertTrue(self.check('가호1',['가호'],'도깨비가호장식](귀속)'))
+  self.assertFalse(self.check('가호2',['반지'],'수정세공 반지'))
+
+
 class Settled(unittest.TestCase):
  def run_reads(self,reads):
   values=iter(reads)
@@ -90,7 +105,7 @@ class Inspect(unittest.TestCase):
  def run_slot(self,slot,*,left=True,values=None,heading=('토끼가호장식2(귀속)','일반')):
   values={'enhance':20,'opening':2,'awaken':0} if values is None else values
   with patch.object(w,'popup',side_effect=lambda f:self.open),patch('owner_progression.inventory_parts',return_value=(left,False)),\
-       patch.object(w,'settled_read',return_value=values),patch.object(w,'real_heading',return_value=heading),\
+       patch.object(w,'settled_read',return_value=values),patch.object(w,'real_heading',return_value=heading),patch.object(w,'real_matches',return_value=self.matches),\
        patch('owner_mission_ui.MissionUI.wheel'),patch('owner_skill_ui.SkillUI',lambda *a:NS()):
    return w.inspect_real(self.service,self.context,self.inputs,'profile','c',slot)
  def test_a_blessing_is_saved_by_its_place(self):
@@ -112,6 +127,11 @@ class Inspect(unittest.TestCase):
   self.service.adapter._owner_worn_stats_cache={}
   with patch.object(w,'settled_read',return_value=None):pass
   self.assertIs(self.run_slot('가호2',values={}),False)
+  self.assertEqual(current.blessing_rows(self.root,'profile')[1][1],'미확인');self.assertEqual(self.clicks[-1],(510,106))
+ matches=True
+ def test_a_window_of_another_tile_saves_nothing_and_closes(self):
+  self.matches=False
+  self.assertIs(self.run_slot('가호2'),False)
   self.assertEqual(current.blessing_rows(self.root,'profile')[1][1],'미확인');self.assertEqual(self.clicks[-1],(510,106))
  def test_an_unknown_kind_saves_nothing(self):
   self.assertIs(self.run_slot('가호1',heading=('호랑이가호장식1','희귀')),False)

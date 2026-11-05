@@ -164,6 +164,8 @@ class Route:
         """Open the details and read. With enter, go on to the growth screen if this item is short of something."""
         if not self.open_bag():
             LOG.info('착용 %s 건너뜀 · 인벤토리 안 열림',item.slot);return None
+        # The window just closed fades out, and a click into the fade is lost.
+        worn.settle_after_popup(self.service,self.context)
         entered=[]
         def decide(values,grade,title):
             item.values=values;item.grade=grade;item.title=title
