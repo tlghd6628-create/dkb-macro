@@ -394,11 +394,13 @@ def summon_already_shown(detector,name,frame):
     return (850,440,(845,435,855,445))
 
 # At 1366x768 these are found by their words and nothing else: a softer look at their pictures could take a neighbour.
-REAL_WORDS={'버튼_축지술_가운데':'teleport_word','버튼_귀환':'home_word'}
+REAL_WORDS={'버튼_축지술_가운데':'teleport_word','버튼_귀환':'home_word','버튼_보스_축지술':'map_teleport','버튼_지도_축지술':'map_teleport'}
 
 def real_word_hit(detector,name,frame,candidate_filter):
-    import owner_movement
-    made=getattr(owner_movement,REAL_WORDS[name])(frame)
+    import owner_movement,owner_real_marks
+    reader=REAL_WORDS[name]
+    made=getattr(owner_movement,reader,None) or getattr(owner_real_marks,reader)
+    made=made(frame)
     if made is None or (candidate_filter is not None and not candidate_filter(frame,made)):return None
     note(detector.profile,name,'word')
     seen=getattr(real_word_hit,'seen',None)

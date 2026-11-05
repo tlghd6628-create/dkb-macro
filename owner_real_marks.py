@@ -72,6 +72,16 @@ def map_merchant(frame):
     return x,y,(x-8,y-8,x+9,y+9)
 
 
+MAP_BUTTONS=(1000,700,366,50)  # real pixels: 걸어가기, 축지술, 축지부 사용 along the map's foot
+
+
+def map_teleport(frame):
+    """The map's 축지술 button, in the shape a found picture has. Exactly that word: 축지부 사용 beside it costs an item."""
+    from owner_text import clean,logical_bounds,read
+    found=[row for row in read(None,frame,MAP_BUTTONS) if clean(row['text'])=='축지술']
+    return (found[0]['x'],found[0]['y'],logical_bounds(found[0],frame)) if len(found)==1 else None
+
+
 def install_merchant():
     """Native callers keep their retries: nothing on this map answers as it always has."""
     from functools import wraps
