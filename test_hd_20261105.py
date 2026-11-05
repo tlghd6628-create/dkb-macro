@@ -169,6 +169,20 @@ class Matching(unittest.TestCase):
   self.assertEqual(cv2.matchTemplate(self.frame[100:110,800:820].astype(np.float32),self.needle.astype(np.float32),cv2.TM_CCORR).shape,(1,1))
 
 
+class Pins(unittest.TestCase):
+ def setUp(self):hd._pins.clear();hd._hits.clear()
+ def tearDown(self):hd._pins.clear()
+ def test_a_word_found_elsewhere_is_where_the_click_goes(self):
+  import time
+  hd._pins.append((time.monotonic(),495,310,522,326,778,528))
+  self.assertEqual(hd.to_real_point(508,318,GROWTH),(778,528))
+  self.assertNotEqual(hd.to_real_point(100,100,GROWTH),(778,528))
+ def test_an_old_one_expires(self):
+  import time
+  hd._pins.append((time.monotonic()-hd.HIT_LIFE-1,495,310,522,326,778,528))
+  self.assertNotEqual(hd.to_real_point(508,318,GROWTH),(778,528))
+
+
 class Auto(unittest.TestCase):
  def frame(self,colour):
   r=np.zeros((768,1366,3),np.uint8);r[705:725,1198:1222]=colour

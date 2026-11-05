@@ -41,6 +41,10 @@ for n in names:
     if hangul>=2 and len(word)<=14 and word not in NEVER and (word not in COMMON or n.startswith('버튼_')):
         e=roi[n];rows.append(dict(key=hd.key_of(det.templates[n]),name=n,words=word,exact=word in COMMON,x=e['x'],y=e['y'],w=e['w'],h=e['h']))
 keep=rows
+# Words the old picture was too small to read, in windows that stand elsewhere at this size. pad is real pixels.
+BY_HAND={'체크_레이드_매칭입장':('매칭입장',False,40),'버튼_레이드_매칭입장확인':('확인',False,40),'버튼_레이드_매칭입장확인2':('확인',False,40),
+         '버튼_X_레이드부결':('×',True,20),'체크_레이드_투표부결':('투표부결',False,30)}
+keep=[r for r in keep if r['name'] not in BY_HAND]+[dict(key=hd.key_of(det.templates[n]),name=n,words=w,exact=x,pad=p) for n,(w,x,p) in BY_HAND.items()]
 # AUTO's state is its colour. owner_hd reads that off the real screen.
 STATES={'버튼_AUTO_활성':'gold','버튼_AUTO_활성2':'gold','버튼_AUTO_비활성':'white','버튼_AUTO_비활성2':'white','버튼_AUTO_일시정지':'paused'}
 keep=[r for r in keep if r['name'] not in STATES]+[dict(key=hd.key_of(det.templates[n]),name=n,state=s) for n,s in STATES.items()]
