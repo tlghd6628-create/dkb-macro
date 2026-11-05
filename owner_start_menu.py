@@ -18,6 +18,10 @@ def training_banner():
 
 def idle_training(frame):
  import cv2
+ if getattr(frame,'hi',None) is not None:
+  # A running training shows no such words, and goes to its own resume path.
+  from owner_text import read,word_box,clean
+  return any('수련이없습니다' in clean(r['text']) for r in read(None,frame,word_box((380,425,135,27))))
  return float(cv2.matchTemplate(frame[425:452,380:515],training_banner(),cv2.TM_CCOEFF_NORMED).max())>=.97
 
 def help_card(frame):
@@ -54,7 +58,8 @@ def menu_panel(frame):
  return float(np.abs(patch.astype('int16')-needle.astype('int16')).mean())<=15
 
 # Full-screen menus a stop can leave open, named by the words at their top left.
-TITLE_MENUS=('설정','성장','도술','임무','세계지도','가호','문파','몽련치료','탈것','내정보','우편함','이벤트','길라잡이','업적','거래소','잡화상점','보스토벌','도사수행록')
+TITLE_MENUS=('설정','성장','도술','임무','세계지도','가호','문파','몽련치료','탈것','내정보','우편함','이벤트','길라잡이','업적','거래소','잡화상점','보스토벌','도사수행록',
+ '화첩','단봉인해제','내면의길','기운발현','의복','신수','칭호','친구','구인구직','아이템사전','제작','유물수집','요귀도감','보물찾기','비경탐험','승천의탑','플래너','순위','키설정','영석상점')
 
 def title_menu(frame):
  """The menu these words name, or None. None too on a frame with no real pixels."""
