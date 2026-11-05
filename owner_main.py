@@ -220,10 +220,31 @@ class MainPanel:
             except tk.TclError:pass
 
 
+OLD_NAMES=(('가호 보상','가호 일괄 획득'),)
+
+def rename_in_logs():
+    """The original modules are compiled and still name the blessing bulk claim 가호 보상. The log says what the owner calls it."""
+    import logging
+    old=logging.getLogRecordFactory()
+    if getattr(old,'_owner_rename',False):return
+    def swap(value):
+        if not isinstance(value,str):return value
+        for before,after in OLD_NAMES:value=value.replace(before,after)
+        return value
+    def factory(*args,**kwargs):
+        record=old(*args,**kwargs)
+        record.msg=swap(record.msg)
+        if isinstance(record.args,tuple):record.args=tuple(swap(value) for value in record.args)
+        if isinstance(getattr(record,'gui_message',None),str):record.gui_message=swap(record.gui_message)
+        return record
+    factory._owner_rename=True
+    logging.setLogRecordFactory(factory)
+
 def install(gui):
     import owner_hd,owner_text
     owner_hd.install()
     owner_text.set_root(gui.project.root)
+    rename_in_logs()
     if hasattr(gui,'root'):gui.root.after(4000,lambda:owner_hd.keep_size(gui))
     if not getattr(gui,'_owner_quest_schema',False):
         model=gui.load_settings_model()
