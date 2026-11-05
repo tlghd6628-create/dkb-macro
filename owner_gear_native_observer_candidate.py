@@ -44,6 +44,21 @@ class Observer:
 
     def items(self,frame):return self.native.inspect_growth_equipment(self.service.detector,frame)
 
+    def _both_engines(self,frame):
+        """A lone digit sits near the reader's .85 (3 read .83). Either engine may name it at the
+        same .85 on a crop of the digit alone, if they do not differ. Callers still need two frames."""
+        import re
+        from tools.ocr_support import get_paddle_engine
+        from owner_progression import resized
+        box=self._number_box(frame)
+        if box is None:return None
+        root=self.service.adapter.project.root;values=set();minimum=self.config.get('threshold',.85)
+        for language in ('number','korean'):
+            for page in get_paddle_engine(root,language=language).predict(resized(frame,(box[0]+51,box[1]+3,26,20))):
+                for text,score in zip(page.get('rec_texts',()),page.get('rec_scores',())):
+                    if score>=minimum and re.fullmatch(r'\d{1,2}',str(text).strip()):values.add(int(text))
+        return values.pop() if len(values)==1 else None
+
     def _number_box(self,frame):
         hit=self.service.detector.find(self.config['template_roi'],frame,region=self.config['search_roi'],threshold=self.config.get('threshold',.85))
         if not hit:return None
@@ -173,6 +188,7 @@ class Observer:
             else:detail=self.native.read_growth_equipment_detail(self.service,frame,self.config,**options)
             detail_ms.append(round((self.clock()-stage_start)*1000,1))
             level=detail.get('enhancement') if isinstance(detail,dict) else None
+            if type(level) is not int:level=self._both_engines(frame)
             if type(level) is not int or level<0:self.last_reason='강화 수치 판독 실패';return {'screen_proof':False}
             if type(self.minimum_level) is int and level<self.minimum_level:
                 self.last_reason='이전 확인 수치보다 낮음';return {'screen_proof':False}
@@ -269,6 +285,7 @@ class Observer:
                 # confirmed. The input-side reader sees those, and still needs two agreeing frames.
                 detail=self.native.read_growth_equipment_detail(self.service,frame,self.config,item=self.ticket['row'])
                 level=detail.get('enhancement') if isinstance(detail,dict) else None
+                if type(level) is not int:level=self._both_engines(frame)
                 confidence=1. if type(level) is int else None
             if (type(level) is not int or not 0<=level<=50 or type(confidence) not in (int,float)
                 or confidence<self.config.get('threshold',.85)):

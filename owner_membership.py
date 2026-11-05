@@ -225,7 +225,7 @@ def install(gui):
   previous=getattr(LOCAL,'missions',None);LOCAL.missions=(adapter,context,inputs)
   try:
    result=ordinary_run(adapter,context,inputs)
-   from owner_mission_ui import MissionUI
+   from owner_mission_ui import MissionUI,fit_rows_left
    ui=MissionUI(adapter,context,inputs);complete=True;running=False
    try:
     for setting,weekly,label in (('auto_schedule.daily_quest.enabled',False,'일일'),('auto_schedule.weekly_quest.enabled',True,'주간')):
@@ -245,6 +245,14 @@ def install(gui):
        report(adapter,'daily_missions',Outcome(DONE,'수락 5/5 · 즉시 완료 0/5 확인'))
      elif remaining==0:
       running=True;LOG.info('%s 임무 수락 5/5 · 진행 중 · 완료로 저장하지 않음',label)
+     elif remaining is not None and fit_rows_left(ui.frame())==0:
+      # Every row this character is strong enough for is taken; the rest stay locked until it grows.
+      text='수락 %d/5 · 수락 가능 행 없음'%(5-remaining);LOG.info('%s 임무 %s',label,text)
+      from owner_timetable import LOCAL as timetable
+      key='weekly_missions' if weekly else 'daily_missions'
+      if getattr(timetable,'job',None)==key:
+       from owner_outcome import DONE,Outcome,report
+       report(adapter,key,Outcome(DONE,text))
      else:
       complete=False;LOG.info('%s 임무 미완료 · 남은 수락 가능 횟수=%s/5 · 완료로 저장하지 않음',label,remaining if remaining is not None else '판독 대기')
    finally:ui.close_known()

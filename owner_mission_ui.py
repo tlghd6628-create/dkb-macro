@@ -92,6 +92,16 @@ def remaining_on_screen(ui):
  if hit(first,'quota-five',(343,438,34,27),.97) and hit(second,'quota-five',(343,438,34,27),.97):return 5
  return parse_remaining(ui.rows((345,440,30,22),language='number'))
 
+def fit_rows_left(frame):
+ """Rows tagged green (strong enough) that lack the round in-progress mark on the right."""
+ left=0
+ for n in range(9):
+  y=112+round(38.3*n);tag=frame[y-8:y+8,588:612].astype('int16')
+  green=((tag[...,1]-tag[...,0]>25)&(tag[...,1]-tag[...,2]>25)).sum()
+  mark=(frame[y-9:y+10,628:650].min(axis=2)>190).sum()
+  if green>=15 and mark<25:left+=1
+ return left
+
 def instant_left(ui):
  """멤버십 즉시 완료 남은 횟수 N/5, on the daily tab only."""
  values=[]
