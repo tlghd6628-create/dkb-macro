@@ -228,6 +228,15 @@ class EnergyLedger:
   data['receipts'].append({'name':pending['name'],'increase':increase,'frame_ids':frames,'at':time.time()})
   data['pending']=None;self._write(data);return increase
 
+def whole_percent(values):
+ """What the ratio boxes show: whole numbers that keep the same total (33.33, 33.33, 33.34 shows 33, 33, 34)."""
+ from decimal import Decimal
+ exact={name:Decimal(str(value)) for name,value in values.items()}
+ shown={name:int(value) for name,value in exact.items()}
+ left=int(sum(exact.values()).to_integral_value())-sum(shown.values())
+ for name in sorted(exact,key=lambda n:(exact[n]-shown[n],list(exact).index(n)),reverse=True)[:max(left,0)]:shown[name]+=1
+ return {name:str(value) for name,value in shown.items()}
+
 def open_settings(parent,root,profile,*,embedded=False):
  from owner_energy_allocation_candidate import equal_display,percent_units
  store=Choices(root,profile);data,revision=store.snapshot()
@@ -247,7 +256,7 @@ def open_settings(parent,root,profile,*,embedded=False):
  ttk.Label(body,text='발현 재료 선택 상자').pack(anchor='w')
  grid=ttk.Frame(body);grid.pack(fill='x',pady=(4,8))
  for column,label in enumerate(('기운','비율 (%)','')):ttk.Label(grid,text=label).grid(row=0,column=column,padx=6,sticky='w')
- initial=data.get('energy_percentages') if data['energy_mode']=='percent' else equal_display(data['energies'])
+ initial=whole_percent(data.get('energy_percentages') if data['energy_mode']=='percent' else equal_display(data['energies']))
  choices={name:tk.StringVar(win,value=str(initial[name])) for name in ENERGIES};equal=[data['energy_mode'] in ('balanced','single')]
  total=tk.StringVar(win)
  def changed(*args):
@@ -270,7 +279,7 @@ def open_settings(parent,root,profile,*,embedded=False):
     if Decimal(choices[name].get())>0:selected.append(name)
    except InvalidOperation:pass
   if not selected:selected=['생명','여명','몽환']
-  for name,value in equal_display(selected).items():choices[name].set(value)
+  for name,value in whole_percent(equal_display(selected)).items():choices[name].set(value)
   equal[0]=True
  changed();equal[0]=data['energy_mode'] in ('balanced','single')
  footer=ttk.Frame(body);footer.pack(fill='x')
