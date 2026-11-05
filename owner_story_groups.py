@@ -4,6 +4,7 @@ from functools import lru_cache
 import copy,hashlib,json,logging,re,time
 from owner_skill_goal import Pending
 from owner_skill_ui import quest_screen,selected_quest_box,clean
+from owner_mission_policy import hangul
 LOG=logging.getLogger('project_gui.DKB');ASSETS=Path(__file__).parent/'assets/mission-groups'
 _LOCATE_BACKOFF={}
 class StorySelectionPending(Pending):pass
@@ -116,11 +117,63 @@ def likeness(a,b):
    best=max(best,float(2*(xx&yy).sum()/max(1,int(xx.sum()+yy.sum()))))
  return best
 
+def row_words(ui,frame):
+ """The whole list's words from real pixels, read once per picture. None on a frame with no real pixels."""
+ adapter=getattr(ui,'adapter',None)
+ if adapter is None or getattr(frame,'hi',None) is None:return None
+ from owner_text import read,word_box
+ return read(adapter.project.root,frame,word_box((70,96,430,342)),scale=2)
+
+def row_title(words,y):
+ """The title on the row at this logical y; the column beside it can fall inside the read area."""
+ parts=sorted((r for r in words if abs(r['y']-y)<=10 and r['score']>=.60 and not re.fullmatch(r'[\d,.]*(적합|도전|위험)?',clean(r['text']))),key=lambda r:r['rx'])
+ text=' '.join(r['text'].strip() for r in parts)
+ return text if len(hangul(text))>=3 else None
+
+def same_root(a,b):
+ from difflib import SequenceMatcher
+ x,y=hangul(a),hangul(b)
+ if len(x)<4 or len(y)<4:return False
+ digits=lambda s:re.findall(r'\d+',re.sub(r'^\s*\[[^\]]+\]','',str(s)))
+ return digits(a)==digits(b) and SequenceMatcher(None,x,y).ratio()>=.86
+
+def known_root(book,title):
+ """The saved root with this title. A hold on any reading of the name stays in force, then the latest seen."""
+ hits=[(k,v) for k,v in book.item['quests'].items() if v.get('group') and not v.get('identity_alias_of') and same_root(title,v.get('title',''))]
+ pool=[h for h in hits if not h[1].get('completed')] or hits
+ return max(pool,key=lambda h:(bool(h[1].get('block')),h[1].get('last_seen',0)))[0] if pool else None
+
+def accept_button(ui,frame):
+ """임무 수락 by its picture, or by its words on the real frame. The caller checks it on a second frame."""
+ found=find(frame,'accept-button',(700,430,180,44),.94)
+ adapter=getattr(ui,'adapter',None)
+ if found or adapter is None or getattr(frame,'hi',None) is None:return found
+ from owner_text import read,word_box,find as find_words
+ rows=[r for r in find_words(read(adapter.project.root,frame,word_box((675,432,200,40)),scale=3),'임무 수락') if r['score']>=.85]
+ return (rows[0]['x'],rows[0]['y'],None,rows[0]['score']) if len(rows)==1 else None
+
+def quota_words(ui,first):
+ """수락한 임무 N/20 from the footer's real pixels, the same number on two frames."""
+ adapter=getattr(ui,'adapter',None)
+ if adapter is None or getattr(first,'hi',None) is None:return None
+ from owner_text import read,word_box
+ values=[]
+ for frame in (first,ui.frame()):
+  found=set()
+  for row in read(adapter.project.root,frame,word_box((580,438,90,28)),scale=3):
+   m=re.search(r'(\d{1,2})\s*/\s*20\s*$',row['text'])
+   if m and row['score']>=.90 and 0<=int(m[1])<=20:found.add(int(m[1]))
+  values.append(next(iter(found)) if len(found)==1 else None)
+  if frame is first:ui.context.wait(.12)
+ return values[0] if values[0] is not None and values[0]==values[1] else None
+
 def quota(ui):
  """Paired labelled numeric reading; never substitute local batch length."""
  from owner_membership import hit
  first=ui.frame()
  if not quest_screen(first):return None
+ worded=quota_words(ui,first)
+ if worded is not None:return worded
  def full(f):
   import numpy as np
   found=find(f,'quota-full',(580,438,87,28),.94,bright=False)
@@ -276,11 +329,16 @@ class Groups:
   raise Pending('임무 목록 맨 위 도달을 확인하지 못함 · 목록 일부를 전체로 보지 않음')
  def identify(self,frame,row):
   g=glyph(frame,row['y'])
-  if not g:raise Pending('임무 묶음 제목 영역 확인 필요')
-  matches=sorted(((max(likeness(g,v.get('group_glyph')),likeness(g,self._expected_glyph(k))),k) for k,v in self.book.item['quests'].items() if v.get('group')),reverse=True)
-  if matches and matches[0][0]>=.87 and (len(matches)==1 or matches[0][0]-matches[1][0]>=.04 or matches[0][0]>=.97):key=matches[0][1]
-  else:key='sub_quest:group:'+hashlib.sha256(bytes.fromhex(g['bits'])).hexdigest()[:24]
+  # Words name the root. Title pictures at the real size made six journal entries for one 가모리의 방랑 도사.
+  words=row_words(self.ui,frame);title=row_title(words,row['y']) if words else None
+  key=known_root(self.book,title) if title else None
+  if not g and not key:raise Pending('임무 묶음 제목 영역 확인 필요')
+  if not key:
+   matches=sorted(((max(likeness(g,v.get('group_glyph')),likeness(g,self._expected_glyph(k))),k) for k,v in self.book.item['quests'].items() if v.get('group')),reverse=True)
+   if matches and matches[0][0]>=.87 and (len(matches)==1 or matches[0][0]-matches[1][0]>=.04 or matches[0][0]>=.97):key=matches[0][1]
+   else:key='sub_quest:group:'+hashlib.sha256(bytes.fromhex(g['bits'])).hexdigest()[:24]
   entry=self.book.item['quests'].setdefault(key,{'mode':'sub_quest','title':'서사 임무 (이름 확인 중)','deaths':0,'group':True,'group_glyph':g})
+  if title and entry['title'].endswith('(이름 확인 중)'):entry.update(title=title.strip(),title_read_attempted=True)
   if entry['title'].endswith('(이름 확인 중)') and not entry.get('title_read_attempted'):
    entry['title_read_attempted']=True
    try:
@@ -336,6 +394,10 @@ class Groups:
     import cv2,numpy as np
     score=float(cv2.matchTemplate(part,needle,cv2.TM_CCOEFF_NORMED)[0,0])
     if np.isfinite(score) and score>=.95:return r
+  words=row_words(self.ui,frame)
+  if words:
+   named=[r for r in group_rows(frame) if (seen:=row_title(words,r['y'])) and same_root(self.book.item['quests'][key]['title'],seen)]
+   if len(named)==1:return named[0]
   expected=self._expected_glyph(key)
   found=[(likeness(expected,glyph(frame,r['y'])),r) for r in group_rows(frame)]
   found.sort(key=lambda x:x[0],reverse=True)
@@ -427,8 +489,8 @@ class Groups:
  def accept(self,key,before):
   self.accept_clicked=False
   if not self.select(key):return False
-  def proof(f):return bool(quest_screen(f) and selected_quest_box(f) and find(f,'accept-button',(700,430,180,44),.94))
-  f=self.ui.frame();button=find(f,'accept-button',(700,430,180,44),.94)
+  def proof(f):return bool(quest_screen(f) and selected_quest_box(f) and accept_button(self.ui,f))
+  f=self.ui.frame();button=accept_button(self.ui,f)
   if not button:return False
   self.ui.context.wait(.12)
   if not proof(self.ui.frame()):return False
@@ -439,7 +501,7 @@ class Groups:
    if after==before+1:break
    if after is not None and after not in (before,before+1):break
    self.ui.context.wait(.25)
-  button_left=not find(self.ui.frame(),'accept-button',(700,430,180,44),.94)
+  button_left=not accept_button(self.ui,self.ui.frame())
   if after==before and not button_left:
    # The same accept button and count: the click did not land. Nothing was
    # accepted, so this row is skipped for this scan rather than clicked again.

@@ -238,7 +238,8 @@ class MissionUI(SkillUI):
   has_prereq=any(s in clean(text) for s in ('선행','임무완료후','임무를완료'))
   # '[4장] 쉬어가는 길' only asks for a side story to be finished; AUTO on it stood still for minutes.
   side=side_story_gate(text)
-  if side:has_prereq=True;prereq=side
+  # The same words can stay on the row after that story is done, which must not hold the step for good.
+  if side and not book.story_finished(side):has_prereq=True;prereq=side
   gated=required is not None and (power is None or power<required)
   objective=clean(text).split('실행조건')[0].split('완료보상')[0].replace('임무목표','')
   objective=re.sub(r'[0-9,]+/[0-9,]+','',objective)
