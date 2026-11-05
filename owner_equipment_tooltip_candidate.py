@@ -76,8 +76,9 @@ def worn_detail_frame(frame,engine):
  return {'slot':PART_MAP[kind],'grade':grade,'item':_item_token(frame[97:115,390:502],frame[128:148,434:454].copy())}
 
 def _part_name(engine,frame,box):
- """The glyph 찌 reads near .70 and sometimes as 짜. Only an exact part name passes the caller's check."""
- text=_ocr(engine,frame,box,minimum=.60)
+ """The glyph 찌 reads near .70 and sometimes as 짜, and a lone 검 near .33. Only an exact part name
+ passes the caller's check, so a weak reading can only say 'a different part', as 검 beside a fan is."""
+ text=_ocr(engine,frame,box,minimum=.30)
  return '팔찌' if text in ('팔짜','팔째','팔쩌') else text
 
 def initial_candidate_frame(frame,engine):

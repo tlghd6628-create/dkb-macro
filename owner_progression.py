@@ -167,10 +167,10 @@ def read_short_power(engine,frame):
     a=parse_power(engine.predict(cv2.resize(patch,None,fx=4,fy=4,interpolation=cv2.INTER_CUBIC)),.92)
     b=parse_power(engine.predict(cv2.resize(patch,None,fx=3,fy=3,interpolation=cv2.INTER_LINEAR)),.92)
     if a is not None and a==b:return a
-    # 59,623 stayed under the line on those two and held F1 for three minutes (.92 cubic). Two linear sizes read it .98.
-    a=parse_power(engine.predict(cv2.resize(patch,None,fx=4,fy=4,interpolation=cv2.INTER_LINEAR)),.95)
-    b=parse_power(engine.predict(cv2.resize(patch,None,fx=6,fy=6,interpolation=cv2.INTER_LINEAR)),.95)
-    return a if a is not None and a==b else None
+    # 59,623 and 63,221 stayed under the line on those two and ended F1 after three minutes. Cubic also reads
+    # 63 as 68, while linear sizes read it .94 to .96. Four of them agreeing is stronger than two at .95.
+    values={parse_power(engine.predict(cv2.resize(patch,None,fx=scale,fy=scale,interpolation=cv2.INTER_LINEAR)),.93) for scale in (3,4,5,6)}
+    return values.pop() if len(values)==1 else None
 
 
 class Progress(QuestMemory):
