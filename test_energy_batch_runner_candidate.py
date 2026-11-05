@@ -24,6 +24,7 @@ class BatchPort:
   return self.proof(name=name,quantity=self.quantity+(1 if self.bad else 0),boxes=self.n,toast_verified=True,
    evidence_ids=[f'e{i}-{self.seq}' for i in range(4)],evidence_sha256=['a'*64]*4,evidence_dir='fake')
  def close_known(self):pass
+ def no_boxes(self):return self.n==0
 
 class Tests(unittest.TestCase):
  def setUp(self):
@@ -65,5 +66,10 @@ class Tests(unittest.TestCase):
   self.call(max_batches=1);self.port.n-=1
   with self.assertRaises(Hold):self.call()
   self.assertEqual(self.port.calls,[('생명',16)])
+ def test_boxes_received_mid_plan_join_it(self):
+  self.call(max_batches=1);self.port.n+=6
+  self.call()
+  d=self.j.read();self.assertEqual(sum(q for _,q in self.port.calls),52);self.assertEqual(self.port.n,0)
+  self.assertEqual(sum(d['energy_batch_plan']['remaining'].values()),0)
 
 if __name__=='__main__':unittest.main()

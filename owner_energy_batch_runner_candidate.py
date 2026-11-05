@@ -22,8 +22,10 @@ def ensure_plan(journal,settings,available):
      old['remaining'][name]+=extra[name];old['allocated'][name]=old['allocated'].get(name,0)+extra[name]
     old['rounding_after']=rounding_after;old['boxes_before']=old.get('boxes_before',0)+available-left
     journal.save(state);return old
+   # Fewer than planned means something else opened them, and this plan can no longer be trusted.
+   raise Hold('상자 잔량과 저장된 분배 계획이 다릅니다')
   history=state.setdefault('energy_batch_history',[])
-  history.append(dict(old,archived_at=time.time(),reason='settings_changed' if old.get('weights')!=stamp else 'count_changed' if left else 'completed'))
+  history.append(dict(old,archived_at=time.time(),reason='settings_changed' if left else 'completed'))
   state['energy_batch_history']=history[-64:]
  values,rounding_after=allocation(available,settings,state)
  plan={'version':1,'id':uuid.uuid4().hex,'weights':stamp,'boxes_before':available,
