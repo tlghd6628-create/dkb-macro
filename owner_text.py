@@ -115,6 +115,22 @@ def shows_field_words(frame,root=None):
     return 'home' in words and len(words&{'h','t','tab','tob','toab'})>=2
 
 
+def word_box(box):
+    """Real pixels covering a logical (x, y, w, h) under any of the three anchors."""
+    import owner_hd
+    x,y,w,h=box;F=owner_hd.F
+    left=max(0,round(x*F+owner_hd.SHIFT_RIGHT)-12);right=min(owner_hd.REAL[0],round((x+w)*F)+12)
+    top=max(0,round(y*F)-8);bottom=min(owner_hd.REAL[1],round((y+h)*F)+8)
+    return left,top,right-left,bottom-top
+
+
+def logical_bounds(row,frame):
+    """A word's box in 897x479 terms, around where a click on it goes."""
+    x0,y0,x1,y1=row['bounds'];half=max(2,round((x1-x0)/3.2));high=max(2,round((y1-y0)/3.2))
+    x,y=row['x'],row['y']
+    return max(0,x-half),max(0,y-high),min(897,x+half+1),min(479,y+high+1)
+
+
 def find(rows,words):
     """The rows holding these words. Exact words first, so 사용 does not answer for 사용 안 함."""
     wanted=clean(words)
