@@ -159,8 +159,10 @@ def auto_run_shown(ui,frame):
  """자동 진행 where 임무 수락 would be: the selected step is already accepted."""
  adapter=getattr(ui,'adapter',None)
  if adapter is None or getattr(frame,'hi',None) is None:return False
- from owner_text import read,word_box,find as find_words
- return bool([r for r in find_words(read(adapter.project.root,frame,word_box((740,432,140,40)),scale=3),'자동 진행') if r['score']>=.85])
+ from owner_text import read,word_box
+ # The reader splits it at its space: 자동, 진행.
+ rows=read(adapter.project.root,frame,word_box((740,432,140,40)),scale=3)
+ return clean(''.join(r['text'] for r in rows if r['score']>=.85))=='자동진행'
 
 def quota_words(ui,first):
  """수락한 임무 N/20 from the footer's real pixels, the same number on two frames."""
