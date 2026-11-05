@@ -35,6 +35,19 @@ def press_dialog(adapter,context,inputs,service,slots,key,frame):
     else:runner.input_one(key,hit,frame)
     return True
 
+SLEEP_WORDS=(450,115,470,45)  # real pixels: 화면 중앙을 밀어서 절전 해제
+
+def sleep_screen(service,adapter,frame):
+    """The sleep screen says so. Its small icon scores under the old line once scaled down (16:38)."""
+    if getattr(frame,'hi',None) is None:return bool(service.detector.find(SLEEP,frame,threshold=.95))
+    from owner_text import find,read
+    return bool(find(read(adapter.project.root,frame,SLEEP_WORDS,bright=True),'절전 해제'))
+
+def slide_awake(adapter,context,inputs):
+    """Middle of the screen to the upper right, which is what wakes the game at 1366x768 (tried by hand, 16:40)."""
+    from owner_skill_ui import SkillUI
+    SkillUI(adapter,context,inputs).drag((448,240),(790,75),lambda f:True);context.wait(2)
+
 def guide_visible(adapter,first,second):
     from tutorial_highlight import load_config,detect_tutorial_highlight
     config=load_config(adapter.project.root/'profiles'/adapter.project.code)
@@ -253,13 +266,16 @@ def install(gui):
                     continue
                 # F2/F1 pressed on the sleep screen: nothing else names that screen, so the
                 # stop below fired after 40 seconds (23:32 real log). Wake, then read again.
-                if initial==second=='unknown' and service.detector.find(SLEEP,first,threshold=.95) and service.detector.find(SLEEP,second_frame,threshold=.95):
+                if initial==second=='unknown' and sleep_screen(service,adapter,first) and sleep_screen(service,adapter,second_frame):
                     sleep_key=(gui._owner_stage_epoch,'sleep')
                     stage_attempts[sleep_key]=stage_attempts.get(sleep_key,0)+1
                     if stage_attempts[sleep_key]>3:raise RuntimeError('절전 해제가 3회 반복되어 확인이 필요합니다.')
                     LOG.info('시작 화면 · 절전 화면 확인 · 해제 후 위치 재확인')
                     LOCAL.monitoring=False
-                    try:adapter.exit_sleep_mode(context,inputs)
+                    try:
+                        adapter.exit_sleep_mode(context,inputs)
+                        context.wait(.5)
+                        if sleep_screen(service,adapter,service.capture()):slide_awake(adapter,context,inputs)
                     finally:LOCAL.monitoring=True
                     continue
                 if initial==second=='unknown':

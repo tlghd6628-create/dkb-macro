@@ -1,4 +1,4 @@
-"""Fake native-call tests only; no game actions."""
+﻿"""Fake native-call tests only; no game actions."""
 import unittest
 from types import SimpleNamespace as NS
 from unittest.mock import patch
@@ -79,7 +79,7 @@ class Tests(unittest.TestCase):
    if len(calls)==1:raise q.PotionFull()
   self.adapter.run_potion_purchase=native
   def consume(ui,r,commit,guard):calls.append('use3');r['used']=3
-  with patch.object(q,'native_purchase_watch',watch),patch.object(q,'consume_three',consume):
+  with patch.object(q,'native_purchase_watch',watch),patch.object(q,'use_potions',consume):
    self.assertTrue(self.run_execute(b,{'stage':2,'done':0}))
   self.assertEqual(calls,['existing','use3','existing'])
  def test_next_stage_confirms_only_purchase_not_chapter(self):

@@ -6,6 +6,18 @@ LOG=logging.getLogger('project_gui.DKB');LOCAL=threading.local()
 FLAGS=('auto_rewards.album.enabled','custom.auto_rewards.album.enabled')
 COMPLETE='버튼_전체매뉴_화첩_완성';CHECK='체크_전체매뉴_화첩'
 class AlbumBoundary(BaseException):pass
+class AlbumNothingLeft(BaseException):pass
+LOOKS_AGAIN='다른 빨점 재확인';MOST_LOOKS=2
+
+class NoDots(logging.Handler):
+ """The original looks again for a dot it cannot place, and at 1366x768 did so for five minutes (17:27). A press or
+ any other step logs something else in between, so looks in a row mean nothing is left to claim."""
+ looks=0
+ def emit(self,record):
+  text=record.getMessage()
+  if '화첩' not in text:return
+  self.looks=self.looks+1 if LOOKS_AGAIN in text else 0
+  if self.looks>=MOST_LOOKS:raise AlbumNothingLeft()
 
 def completion_hit(service,frame):
  if not service.detector.find(CHECK,frame,threshold=.95):return None
@@ -68,11 +80,17 @@ def install(gui):
   mode=Store(adapter.project.root,identity).read()['album']['mode']
   previous=getattr(LOCAL,'scope',None)
   scope={'adapter':adapter,'identity':identity,'mode':mode,'sent':False};LOCAL.scope=scope
+  watch=NoDots();LOG.addHandler(watch)
   try:
    try:
     result=original(adapter,context,inputs)
     if scope['sent']:report(adapter,'album',Outcome(SENT_UNCONFIRMED,'완성 입력 후 결과 별도 확인',unverified=True))
     return result
+   except AlbumNothingLeft:
+    LOG.removeHandler(watch)
+    LOG.info('화첩 보상 완료 · 빨점 없음 · 추가 탐색 종료')
+    TownServices(adapter,context,inputs,['버튼_나가기']).button('버튼_나가기',wait_before_click=.12,required=False)
+    return True
    except AlbumBoundary as exc:
     LOG.info('화첩 · %s',exc)
     report(adapter,'album',Outcome(SENT_UNCONFIRMED if scope['sent'] else WAITING,str(exc),unverified=True))
@@ -82,7 +100,8 @@ def install(gui):
      if service.detector.find(CHECK,service.capture(),threshold=.95):
       service.button('버튼_나가기',wait_before_click=.12,required=False)
     return True
-  finally:LOCAL.scope=previous
+  finally:
+   LOG.removeHandler(watch);LOCAL.scope=previous
  ordinary_click=TownServices.click_hit
  @wraps(ordinary_click)
  def click(service,hit):return guarded_click(ordinary_click,service,hit)
