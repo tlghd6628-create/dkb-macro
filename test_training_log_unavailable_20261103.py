@@ -11,15 +11,10 @@ KEY='auto_rewards.training_log.enabled'
 
 
 class Tests(Base):
- def test_checkbox_and_test_disabled_reason_visible_and_value_preserved(self):
+ def test_row_is_hidden_and_value_preserved(self):
   native=NativeFields(self.gui);original=native.model.values[KEY]
   frame=tk.Frame(self.tk);native.build(frame,'보상·정리');native.refresh_controls()
-  widget=next(w for item,w in native.controls if item['id']==KEY)
-  self.assertEqual(str(widget.cget('state')),'disabled')
-  row=widget.master;buttons=[w for w in row.winfo_children() if w.winfo_class()=='TButton']
-  self.assertEqual(len(buttons),1);self.assertEqual(str(buttons[0].cget('state')),'disabled')
-  labels=[w for w in row.winfo_children() if w.winfo_class()=='TLabel']
-  self.assertTrue(any(self.tk.getvar(str(w.cget('textvariable')))==UNAVAILABLE[KEY] for w in labels))
+  self.assertFalse(any(item['id']==KEY for item,_ in native.controls))
   self.assertEqual(native.model.values[KEY],original);self.assertEqual(native.vars[KEY].get(),original)
   self.assertFalse((self.root/'settings/auto-settings.json').exists())
  def test_callback_cannot_start_or_save_even_if_called_directly(self):

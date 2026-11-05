@@ -92,6 +92,7 @@ class NativeFields:
    key=item['id']
    value=self.model.values[key];var=(tk.BooleanVar(box,value=value) if item['type']=='checkbox' else tk.StringVar(box,value=value))
    self.vars[key]=var
+   if key in UNAVAILABLE:continue  # the saved value stays; a row that cannot run is not shown
    following=rows[index+1]['type'] if index+1<len(rows) else 'checkbox'
    if key in TARGETS or key in CHALLENGES:
     line=ttk.Frame(box);line.pack(fill='x',pady=3)
@@ -225,7 +226,9 @@ class SettingsConsole:
     hunt.list.pack_configure(fill='x',expand=False)
    elif label=='상점':
     from owner_shop_settings_candidate import open_settings
-    self.editors.append(open_settings(frame,gui.project.root,identity,embedded=True))
+    shop=open_settings(frame,gui.project.root,identity,embedded=True);self.editors.append(shop)
+    from owner_challenge_test import SHOP_KEY
+    shop.add_test(lambda result:self.test_action(SHOP_KEY,result))
    elif label=='아이템 사용':
     self.native.build(frame,label,compact=True)
     from owner_starter_choice_candidate import open_settings
@@ -277,8 +280,11 @@ class SettingsConsole:
   if self.save():self.window.destroy();self.callbacks[key]()
  def test_action(self,key,result):
   from owner_reward_action_test import PATHS
-  from owner_challenge_test import TARGETS as CHALLENGES,start
+  from owner_challenge_test import TARGETS as CHALLENGES,start,SHOP_KEY
   if key in UNAVAILABLE:result.set(UNAVAILABLE[key]);return
+  if key==SHOP_KEY:
+   if not self.save():result.set(self.notice.get());return
+   start(self.gui,key,result);return
   if key in CHALLENGES:
    if not self.native.model.supported(self.native.model.items[key]):result.set('실행 연결 없음');return
    if not self.save():result.set(self.notice.get());return

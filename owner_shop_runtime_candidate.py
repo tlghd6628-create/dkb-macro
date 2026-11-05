@@ -352,7 +352,12 @@ def dispatch_configured(adapter,context,inputs):
   LOG.info('상점 구매 생략 · 설정 상품 구매 사용 꺼짐 · 선택 품목 %d개',len(selected))
   return {'status':'no_selection','reason':'설정 상품 구매 사용 꺼짐'}
  if not selected:return {'status':'no_selection','reason':'선택 품목 없음'}
- supported=selected
+ from owner_membership import paid
+ # The same item checked in both shops is one purchase, reached the way this
+ # account can: remotely with a membership, at the merchant without one.
+ route='remote' if paid(root) else 'town'
+ names={(r['shop'],r['name']) for r in selected}
+ supported=[r for r in selected if r['shop']==route or (('remote' if r['shop']=='town' else 'town',r['name']) not in names)]
  holds=[];confirmed=0
  for setting in supported:
   # Bound the native weekly limit; each item gets its own fresh recheck,

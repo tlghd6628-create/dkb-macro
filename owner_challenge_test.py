@@ -10,7 +10,9 @@ LOG=logging.getLogger('project_gui.DKB')
 DISPATCH,DIRECT,RAID='dispatch','direct','raid'
 GROWTH,STYLE,ALBUM,BLESSING,PRESET='growth','style','album','blessing','preset'
 TREASURE='treasure'
+SHOP='shop';SHOP_KEY='owner_shop.enabled'
 TARGETS={
+ SHOP_KEY:('잡화상점 구매',SHOP),
  'auto_schedule.boss_raid.skill_preset.enabled':('레이드 단일 덱 구성',PRESET),
  'auto_rewards.blessing.enabled':('가호 보상·장착',BLESSING),
  'auto_growth.equipment.enabled':('장비 성장',GROWTH),
@@ -148,6 +150,16 @@ def treasure(adapter,context,inputs,key):
     visible('보물찾기 TEST · 지방=%s · 시간표 기록 없음',region)
     return dispatch(adapter,context,inputs,key)
 
+def shop(adapter,context,inputs):
+    """The timetable's own dispatcher, so this buys what the checked rows say."""
+    from owner_shop_runtime_candidate import dispatch_configured
+    result=dispatch_configured(adapter,context,inputs)
+    status=result.get('status')
+    if status in ('processed','partial'):
+        held=' · 미완료 '+', '.join(result['held_items']) if result.get('held_items') else ''
+        return '구매 %d회%s'%(result.get('confirmed',0),held)
+    return '보류 · '+str(result.get('reason') or status)
+
 def direct(adapter,context,inputs,key):
     """These two run by the clock in normal play, not from the dispatcher."""
     if key=='auto_schedule.field_boss.enabled':return adapter.run_field_boss_entry(context,inputs)
@@ -207,6 +219,7 @@ def execute(adapter,context,inputs,key):
     try:
         if kind==RAID:return raid_real(adapter,context,inputs)
         if kind==TREASURE:return treasure(adapter,context,inputs,key)
+        if kind==SHOP:return shop(adapter,context,inputs)
         if kind in (GROWTH,STYLE,ALBUM,BLESSING,PRESET):return growth(adapter,context,inputs,key)
         return dispatch(adapter,context,inputs,key) if kind==DISPATCH else direct(adapter,context,inputs,key)
     except ResumeWork:return None  # a boss return to the selected work; a TEST just ends here
