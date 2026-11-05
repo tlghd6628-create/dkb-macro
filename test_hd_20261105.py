@@ -77,9 +77,15 @@ class Layouts(unittest.TestCase):
  def test_every_saved_screen_is_told_from_the_others(self):
   if not FRAMES.exists():self.skipTest('saved frames not on this PC')
   hd._layouts=None
+  stored={layout.name:layout for layout in hd.layouts()}
   for path in FRAMES.glob('*_hd.png'):
    name=path.stem[:-3]
-   if name!=hd.DEFAULT_SCREEN:self.assertEqual(hd.classify(np.asarray(Image.open(path).convert('RGB'))).name,name)
+   if name==hd.DEFAULT_SCREEN:continue
+   told=hd.classify(np.asarray(Image.open(path).convert('RGB')))
+   if told.name==name:continue
+   # Only two rows stored as one screen may stand in for each other: the same map and the same picture.
+   mine=stored[name]
+   self.assertTrue((told.grid==mine.grid).all() and float(np.dot(told.signature,mine.signature))>.9999,'%s read as %s'%(name,told.name))
 
 
 class Frames(unittest.TestCase):
