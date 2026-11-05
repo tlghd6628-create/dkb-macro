@@ -119,7 +119,13 @@ def native_readers_factory(service,context,identity,targets,*,observation_sink=N
     # Worn items that showed a dim button this visit are not offered again (1→10→1 ended a visit before the white gear).
     skipped=getattr(service,'_owner_gear_no_stones',frozenset())
     candidates=[r for r in candidates if r['index'] not in skipped]
-    if not candidates:raise Hold('장착 장비 또는 선택 전 등급 확인 필요')
+    # The lowest item of a grade costs the least, so a dim button there means the whole grade is short.
+    short=getattr(service,'_owner_gear_short_grades',frozenset())
+    candidates=[r for r in candidates if grade_map.get(r.get('grade')) not in short]
+    if not candidates:
+        # Every item looked at this visit stood at its goal: the one quiet end that finishes a level band.
+        if skipped and not short:service.adapter._owner_growth_item_seen=context
+        raise Hold('장착 장비 또는 선택 전 등급 확인 필요')
     # Rotate across visible worn cells between calls; list order is not a
     # reliable equipment-category or inventory identity indicator.
     priority={}
@@ -134,44 +140,14 @@ def native_readers_factory(service,context,identity,targets,*,observation_sink=N
                     matched=priority_indices(saved.get('frames'),(frame,fresh),rows,saved.get('verified_worn'))
                     priority={matched[p]:i for i,p in enumerate(PRIORITY) if p in matched}
         except (TypeError,ValueError,KeyError,AttributeError):priority={}
-    candidates.sort(key=lambda row:(priority.get(row['index'],3),row['index']))
+    from owner_gear_levels import ceiling_for,levels_of,lowest_first
+    levels=levels_of(service.adapter.project.root,frame,candidates,getattr(service,'_owner_gear_seen_levels',None))
+    candidates=lowest_first(candidates,levels,priority)
     preferred=_post_equip_preference(frame,candidates,getattr(service.adapter,'_owner_post_equip_target',None))
-    continuation=_candidate_continuation.get(identity);chosen=next((r for r in candidates if r['index']==preferred),None)
-    if chosen is None and continuation and continuation[2]==Store(service.adapter.project.root,identity).revision():
-        # Continue the same verified icon after the per-call limit, instead of
-        # leaving a higher-priority item half-finished merely due to the limit.
-        import hashlib
-        for row in candidates:
-            if row['index']!=continuation[0]:continue
-            s=row['slot'];x,y=s['cell_x']+8,s['cell_y']+8
-            current_icon=frame[y:y+18,x:x+18]
-            token='icon:'+hashlib.sha256(current_icon.tobytes()).hexdigest()
-            same=token==continuation[1]
-            if not same and previous_observer is not None and getattr(previous_observer,'character',None)==identity:
-                import cv2,numpy as np
-                old_pre=getattr(previous_observer.identity_reader,'pre',None)
-                old_rows=getattr(previous_observer.identity_reader,'pre_rows',())
-                old_row=next((r for r in old_rows if r.get('index')==row['index']),None)
-                if isinstance(old_pre,np.ndarray) and old_row:
-                    old_slot=old_row['slot'];ox,oy=old_slot['cell_x']+8,old_slot['cell_y']+8
-                    old_icon=old_pre[oy:oy+18,ox:ox+18]
-                    if old_icon.shape==current_icon.shape==(18,18,3):
-                        delta=float(np.abs(old_icon.astype(np.float32)-current_icon.astype(np.float32)).mean())
-                        similarity=float(cv2.matchTemplate(old_icon,current_icon,cv2.TM_CCOEFF_NORMED)[0,0])
-                        same=delta<=2.0 and np.isfinite(similarity) and similarity>=.99
-                        if not same and _same_stable_icon(old_icon,current_icon):
-                            visible=[]
-                            for item in rows:
-                                slot=item['slot'];ix,iy=slot['cell_x']+8,slot['cell_y']+8
-                                if _same_stable_icon(old_icon,frame[iy:iy+18,ix:ix+18]):visible.append(item['index'])
-                            same=visible==[row['index']]
-            if same:chosen=row
-    if chosen is None:
-        _candidate_continuation.pop(identity,None)
-        previous=_candidate_cursor.get(identity)
-        index=next((i for i,row in enumerate(candidates) if row['index']==previous),-1)
-        chosen=candidates[(index+1)%len(candidates)]
-    _candidate_cursor[identity]=chosen['index']
+    chosen=next((r for r in candidates if r['index']==preferred),None) or candidates[0]
+    service._owner_gear_chosen_lowest=chosen is candidates[0]
+    service._owner_gear_ceiling=ceiling_for(chosen,candidates,levels)
+    _report(service,f"강화 순서 · 칸별 수치={levels} · 고른 칸={chosen['index']} · 이번 상한={service._owner_gear_ceiling}")
     return observer,chosen['index']
 
 
@@ -290,6 +266,8 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
     @wraps(original)
     def guarded(service,*,blessing=False,_tried=frozenset()):
         context=service.context;context.checkpoint();service.check()
+        if getattr(service,'_owner_gear_visit_started',None) is None:
+            service._owner_gear_short_grades=frozenset();service._owner_gear_seen_levels={}
         try:
             root=service.adapter.project.root
             identity=identity_resolver(service)
@@ -310,7 +288,10 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
             if getattr(service.adapter,'_owner_growth_reconcile_only',False) is True:return False
             return original(service,blessing=False)
         reconcile_only=getattr(service.adapter,'_owner_growth_reconcile_only',False) is True
-        if not any(row.get('enabled') is True for row in targets.values()) and not reconcile_only:return False
+        if not any(row.get('enabled') is True for row in targets.values()) and not reconcile_only:
+            # No grade is switched on, so a level band has nothing to come back for.
+            service.adapter._owner_growth_item_seen=context
+            return False
         if not callable(readers_factory) and not reconcile_only:return False
         try:
             settings_path=Store(root,identity).path
@@ -373,6 +354,7 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
             pair=readers_factory(service,context,identity,targets)
             if not isinstance(pair,tuple) or len(pair)!=2:return False
             observer,index=pair
+            ceiling=getattr(service,'_owner_gear_ceiling',None)
             observer.prepare_and_select(index)
             service._owner_gear_last_observer=observer
             service.adapter._owner_growth_observer=observer
@@ -389,7 +371,9 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
                 status=run_configured_step(service,context,root,identity,'enhance',observer.read_pair,observer.verify_final,clock=clock,settings_check=current)
                 ticket=observer.ticket or {};grade=ticket.get('grade');goal=targets.get(grade,{}).get('enhance')
                 _report(service,f"성장 목표 검사 · 칸={index} · 등급={grade} · 수치={getattr(observer,'last_levels',[])} · 목표={goal} · 결과={status} · 사유={getattr(observer,'last_reason','미확인')}")
-                if getattr(observer,'last_levels',None):service.adapter._owner_growth_item_seen=context
+                seen=getattr(service,'_owner_gear_seen_levels',None)
+                if seen is None:seen=service._owner_gear_seen_levels={}
+                if getattr(observer,'last_levels',None):seen[index]=max(observer.last_levels)
                 if status in ('hold_screen_unverified','hold_observation','hold_final_preinput','hold_boundary_preinput'):
                     from owner_gear_hold_capture_candidate import enqueue
                     enqueue(root,'growth-'+status,getattr(observer,'last_reason','미확인'),tuple(getattr(observer,'last_frames',())))
@@ -413,6 +397,11 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
                     _report(service,f"성장 결과 확인 · 칸={index} · 수치={getattr(observer,'last_levels',[])} · 결과={status} · 사유={getattr(observer,'last_reason','미확인')} · 확인={attempt+1}")
                     if status=='observed_progress':break
                 if status!='observed_progress':break
+                # A real enhance happened. Reading a dim button no longer counts for the level band.
+                service.adapter._owner_growth_item_seen=context
+                reached=getattr(observer,'last_levels',None) or []
+                if reached:seen[index]=max(reached)
+                if ceiling is not None and reached and max(reached)>=ceiling:break
             if intent.pending() is not None:
                 service.adapter._owner_growth_pending_hold=True
                 from owner_gear_hold_capture_candidate import enqueue
@@ -423,21 +412,26 @@ def wrap(original,identity_resolver,readers_factory,*,clock=None,blessing_runner
                 _candidate_continuation.pop(identity,None)
             # A rare weapon with no stones has a dim button and sends nothing, and it used to
             # end the visit with white gear still ready. Each worn item gets one look.
+            started=getattr(service,'_owner_gear_visit_started',None) or time.monotonic()
+            def next_item(tried):
+                service._owner_gear_visit_started=started
+                service._owner_gear_no_stones=tried
+                try:return guarded(service,_tried=tried)
+                finally:
+                    service._owner_gear_no_stones=frozenset();service._owner_gear_visit_started=None
+                    service._owner_gear_short_grades=frozenset();service._owner_gear_seen_levels={}
             if (status=='hold_screen_unverified' and getattr(observer,'last_reason',None)=='재료 또는 실행 버튼 미확인'
                 and intent.pending() is None and index not in _tried):
                 _report(service,f"성장 재료 없음 · 칸={index} · 다음 착용 장비 확인")
-                service._owner_gear_no_stones=_tried|{index}
-                try:return guarded(service,_tried=_tried|{index})
-                finally:service._owner_gear_no_stones=frozenset()
-            # One visit used to raise one item for 20 s, so a level band left the rest of the gear untouched.
-            # Later items get their turn within two minutes; the next visit starts from the priority order again.
-            started=getattr(service,'_owner_gear_visit_started',None) or time.monotonic()
+                if getattr(service,'_owner_gear_chosen_lowest',False) and (observer.ticket or {}).get('grade'):
+                    service._owner_gear_short_grades=getattr(service,'_owner_gear_short_grades',frozenset())|{observer.ticket['grade']}
+                return next_item(_tried|{index})
+            # A turn ends just past the next lowest item, so stones spread across a grade.
+            # The next visit reads the tiles again and picks up from the lowest.
+            reached_turn=status=='observed_progress' and ceiling is not None
             if (status in ('observed_progress','hold_time_limit','hold_policy') and intent.pending() is None
-                and index not in _tried and time.monotonic()-started<120):
-                service._owner_gear_visit_started=started
-                service._owner_gear_no_stones=_tried|{index}
-                try:return guarded(service,_tried=_tried|{index})
-                finally:service._owner_gear_no_stones=frozenset();service._owner_gear_visit_started=None
+                and (reached_turn or index not in _tried) and time.monotonic()-started<120):
+                return next_item(_tried if reached_turn else _tried|{index})
             # Native caller result semantics are unverified; do not assert full
             # completion when one item advanced or an item was held.
             return False

@@ -66,4 +66,7 @@ class IconIdentity:
             own=next((v for v,i in scores if i==index),None)
             competitors=[v for v,i in scores if i!=index]
             if own is not None and competitors and own>=.80 and own-max(competitors)>=.30:return self.token
+            # Dark shoes read .799 against their own tile and .278 against the next (11-05), and ended every visit.
+            # A lead that wide names the item as well as the higher score does.
+            if own is not None and competitors and own>=.75 and own-max(competitors)>=.45:return self.token
         return None
