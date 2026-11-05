@@ -104,4 +104,28 @@ class Hook(unittest.TestCase):
         self.assertEqual(_bound(lambda *a:'old')(),'old')
 
 
+class PolicyAtRealSize(unittest.TestCase):
+    """The priority equip still finds its screens by old pictures: at 1366 it is passed over, and the job does not fail."""
+    def run_policy(self,real_screen):
+        import tempfile,owner_blessing_original_fence_candidate as fence
+        from owner_gear_settings_candidate import Store,DEFAULT
+        import copy,json
+        directory=tempfile.TemporaryDirectory();self.addCleanup(directory.cleanup)
+        document=copy.deepcopy(DEFAULT);document['blessing_equip']={'enabled':True,'priorities':['도깨비']}
+        store=Store(directory.name,'who');store.path.parent.mkdir(parents=True,exist_ok=True);store.path.write_text(json.dumps(document,ensure_ascii=False),encoding='utf-8')
+        module=NS(run_blessing_rewards=lambda *a:True,_blessing_bulk_skip_reason=lambda *a:None,_blessing_tradeable_candidates=lambda *a:None)
+        ran=[]
+        fence.install_runtime(module,NS(inspect_growth_equipment=lambda *a,**k:[]),lambda adapter:'who',runner=lambda *a,**k:ran.append(1) or {'state':'ran'})
+        adapter=NS(project=NS(root=directory.name))
+        with patch.object(fence,'real_screen',return_value=real_screen):
+            result=module.run_blessing_rewards(adapter,NS(checkpoint=lambda:None),None)
+        return result,ran,adapter._owner_blessing_policy_outcome
+    def test_passed_over_at_real_size(self):
+        result,ran,outcome=self.run_policy(True)
+        self.assertIs(result,True);self.assertEqual(ran,[]);self.assertEqual(outcome['state'],'skipped_real_screen')
+    def test_runs_as_before_at_the_old_size(self):
+        result,ran,outcome=self.run_policy(False)
+        self.assertEqual(ran,[1]);self.assertEqual(outcome['state'],'ran')
+
+
 if __name__=='__main__':unittest.main()

@@ -68,6 +68,14 @@ def install(reward_module,market_module,*,should_fence,alias_modules=()):
         replacement=_reward(old,should_fence);reward_module.run_blessing_rewards=replacement
         _rebind_aliases(alias_modules,old,replacement)
 
+def real_screen(adapter,context,inputs):
+    """Is the game window at 1366x768, where frames carry their real pixels? Sends nothing; False when it cannot tell."""
+    try:
+        from project_adapter.town_services import TownServices
+        from project_adapter import market_inventory
+        return getattr(TownServices(adapter,context,inputs,market_inventory.INVENTORY_USE_NAMES).capture(),'hi',None) is not None
+    except (OSError,ValueError,TypeError,RuntimeError,AttributeError,ImportError):return False
+
 def install_runtime(reward_module,market_module,identity_resolver,*,alias_modules=(),runner=None):
     """Run native rewards under the fence, then the separately guarded policy.
 
@@ -103,6 +111,12 @@ def install_runtime(reward_module,market_module,identity_resolver,*,alias_module
         setting=document['blessing_equip']
         if setting.get('enabled') is not True:
             adapter._owner_blessing_policy_outcome={'state':'disabled'};return result
+        if real_screen(adapter,context,inputs):
+            # Its screens are found by pictures cut at 897x479, and at 1366x768 it stopped the whole job (가호 메뉴 확인 필요).
+            # Nothing is equipped until it reads the real screen; the job itself goes on.
+            import logging
+            logging.getLogger('project_gui.DKB').info('가호 높은 등급 우선 장착 건너뜀 · 1366 화면 판독 준비 전 · 장착 변경 없음')
+            adapter._owner_blessing_policy_outcome={'state':'skipped_real_screen'};return result
         def current():return Store(adapter.project.root,identity).revision()==revision and identity_resolver(adapter)==identity
         if callable(runner):execute=runner
         else:
