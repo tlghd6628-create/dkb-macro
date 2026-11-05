@@ -424,6 +424,8 @@ def match_real(image,needle,method,ordinary,scorer=None):
     source=getattr(image,'source',None);real=getattr(image,'hi',None)
     if real is None or method!=5:return None  # 5 is TM_CCOEFF_NORMED
     if source is None and image.shape[:2]!=(LOGICAL[1],LOGICAL[0]):return None
+    state=word_table().get(key_of(needle),{}).get('state')
+    if state and source is not None:return match_state(image,needle,source,real,state)
     found=cut_for(needle)
     if found is None:
         _note_missing(needle)
@@ -448,6 +450,10 @@ def match_real(image,needle,method,ordinary,scorer=None):
     logical_y=np.clip(np.round((top+ys)/F-box[1]).astype(int),0,rows-1)
     logical_x=np.clip(np.round((left+xs-shift)/F-box[0]).astype(int),0,cols-1)
     np.maximum.at(answer,(logical_y,logical_x),scores[ys,xs].astype(np.float32))
+    if float(answer.max())<.85:
+        # Not where the cut says. A button's words can still be there: a window moved it, or it looks a little different.
+        by_words=match_words(image,needle,source,real)
+        if by_words is not None and float(by_words.max())>0:return by_words
     _remember_hits(answer,box,np.asarray(needle).shape,shift)
     return answer
 
@@ -464,6 +470,37 @@ def word_table():
     return _words
 
 
+AUTO_AREA=(1175,695,70,55)  # real pixels; the same on the field and in dungeons
+AUTO_LOGICAL=(794,442)      # where the old pictures of it are looked for
+
+
+def auto_state(real):
+    """AUTO on (gold), off (white) or paused (a thin white II), measured on the real screen. None if it is not there."""
+    import cv2
+    x,y,w,h=AUTO_AREA
+    crop=np.asarray(real)[y:y+h,x:x+w]
+    hsv=cv2.cvtColor(crop,cv2.COLOR_RGB2HSV)
+    gold=int(((hsv[:,:,0]>=12)&(hsv[:,:,0]<=32)&(hsv[:,:,1]>110)&(hsv[:,:,2]>170)).sum())
+    white=int((crop.min(axis=2)>170).sum())
+    if gold>=150:return 'gold'
+    if white>=120:return 'white'
+    if white>=25 and gold<20:return 'paused'
+    return None
+
+
+def match_state(image,needle,source,real,state):
+    """An AUTO picture: colour says the state, which words and scaled pictures cannot tell apart. Only for a search
+    of the place AUTO is really in: the older pictures' place holds the settings icon at this size."""
+    array=np.asarray(needle)
+    rows=max(1,image.shape[0]-array.shape[0]+1);cols=max(1,image.shape[1]-array.shape[1]+1)
+    answer=np.full((rows,cols),-1.,np.float32)
+    x,y=AUTO_LOGICAL
+    if source[0]<=x<source[0]+source[2] and source[1]<=y<source[1]+source[3] and auto_state(real)==state:
+        answer[min(rows-1,y-source[1]),min(cols-1,x-source[0])]=.99
+        _remember_hits(answer,source,array.shape,SHIFTS['right'])
+    return answer
+
+
 def match_words(image,needle,source,real):
     """A picture with no new cut, found by the words on it. A clear answer either way: words that are not there
     are a low score, not a look at the scaled frame, where a picture can pass for what it is not."""
@@ -476,7 +513,7 @@ def match_words(image,needle,source,real):
     wanted=row['words']
     from difflib import SequenceMatcher
     # The table's own reading can be a letter off (전래등화), so close counts, one word against one word.
-    near=[r for r in rows if wanted in owner_text.clean(r['text']) or SequenceMatcher(None,owner_text.clean(r['text']),wanted).ratio()>=.75]
+    near=[r for r in rows if owner_text.clean(r['text'])==wanted or (not row.get('exact') and (wanted in owner_text.clean(r['text']) or SequenceMatcher(None,owner_text.clean(r['text']),wanted).ratio()>=.75))]
     rows_out=max(1,image.shape[0]-array.shape[0]+1);cols=max(1,image.shape[1]-array.shape[1]+1)
     answer=np.full((rows_out,cols),-1.,np.float32)
     if len(near)!=1:return answer
@@ -612,6 +649,16 @@ def ensure_size(hwnd,context=None):
     raise RuntimeError('창 크기 조절 실패: %s (기준 %s)'%(_physical(hwnd),REAL))
 
 
+def _trace_click(logical,real):
+    """Where clicks really go, only while the file assets/hd-clicks.txt exists."""
+    path=STORE.parent/'hd-clicks.txt'
+    if path.exists():
+        try:
+            with path.open('a',encoding='utf-8') as out:
+                out.write('%s %s -> %s map=%s\n'%(time.strftime('%H:%M:%S'),logical,real,getattr(_current,'name',None)))
+        except OSError:pass
+
+
 def install_window():
     """Safe to call again. The rest of the program keeps seeing 897x479."""
     import win32gui,window_resolution,mdt_owned_capture
@@ -635,7 +682,8 @@ def install_window():
     def client_to_screen(hwnd,point):
         point=tuple(point)
         if point!=(0,0) and _is_game(hwnd) and _physical(hwnd)==REAL:
-            point=to_real_point(point[0],point[1],_click_layout())
+            logical=point;point=to_real_point(point[0],point[1],_click_layout())
+            _trace_click(logical,point)
         return plain_point(hwnd,point)
     win32gui.ClientToScreen=client_to_screen
 
