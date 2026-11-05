@@ -54,9 +54,50 @@ def _real_dots(frame,box):
     count,_,stats,_=cv2.connectedComponentsWithStats(((r>170)&(g<95)&(b<95)).astype('uint8'),8);found=[]
     for index in range(1,count):
         l,t,width,height,area=(int(v) for v in stats[index])
-        if 6<=width<=13 and 6<=height<=13 and abs(width-height)<=2 and area>=.35*width*height:
-            found.append(logical_of(left+l+width//2,top+t+height//2,frame.layout))
+        if not (6<=width<=13 and 6<=height<=13 and abs(width-height)<=2 and area>=.35*width*height):continue
+        cx,cy=left+l+width//2,top+t+height//2
+        # Red art shares the colour. The same shape as on the small frame: dots .85-.93, the rest under .75 on the saved screens.
+        crop=real[max(0,cy-16):cy+17,max(0,cx-16):cx+17];shape=_real_dot_shape()
+        if crop.shape[0]<shape.shape[0] or crop.shape[1]<shape.shape[1] or float(cv2.matchTemplate(_redness(crop),shape,cv2.TM_CCOEFF_NORMED).max())<.8:continue
+        at=logical_of(cx,cy,frame.layout)
+        # The search above is wide enough for every anchor, so it also takes in the tab list's dots. A tab's
+        # dot taken for a claimable row was pressed as a reward (11-05 17:32), and the row's own was never looked at.
+        if x<=at[0]<x+w and y<=at[1]<y+h:found.append(at)
     return found
+
+
+@lru_cache(maxsize=1)
+def _real_dot_shape():
+    import cv2
+    return cv2.resize(_dot_shape(),None,fx=1.6,fy=1.6,interpolation=cv2.INTER_CUBIC)
+
+
+# Real pixels of the point panel in the event window: its title, its total, and the column of each prize's points.
+POINT_TITLE=(960,350,115,28);POINT_TOTAL=(1075,350,45,28);POINT_COLUMN=(1068,48);POINT_PANEL_LEFT=620
+
+
+def _digits(area,left,top):
+    """The one number in this array of real pixels, or None. A single digit misreads (6 as O), and then nothing is decided."""
+    import re
+    from owner_text import read_area,clean
+    rows=[clean(row['text']) for row in read_area(None,area,left=left,top=top,scale=4,minimum=.8)]
+    return int(rows[0]) if len(rows)==1 and re.fullmatch(r'\d{1,3}',rows[0]) else None
+
+
+def short_of_points(frame,box):
+    """A prize in the point panel needing more points than the total. Pressing one only opens its detail card (11-05
+    17:32). Nothing is decided on a frame with no real pixels, in another tab, or when a number does not read."""
+    real=getattr(frame,'hi',None)
+    if real is None or box[0]<POINT_PANEL_LEFT:return False
+    import numpy as np
+    from owner_text import read_area,clean
+    real=np.asarray(real);x,y,w,h=POINT_TITLE
+    if not any('누적포인트' in clean(row['text']) for row in read_area(None,real[y:y+h,x:x+w],left=x,top=y)):return False
+    x,y,w,h=POINT_TOTAL;total=_digits(real[y:y+h,x:x+w],x,y)
+    if total is None:return False
+    x,w=POINT_COLUMN;y=round((box[1]+box[3])/2*1.6)-16
+    need=_digits(real[y:y+32,x:x+w],x,y)
+    return need is not None and need>total
 
 
 def notice_dots(frame,box=(305,204,420,182)):
@@ -136,7 +177,7 @@ def install():
         if not opened(self,frame):return []
         # The native search also takes a gold-grade prize for a claim glow:
         # the 7th-day prize and a locked point prize both matched it.
-        kept=[(name,box) for name,box in original_boxes(self,frame,reward_name) if not locked_slot(frame,box) and marked(frame,box)]
+        kept=[(name,box) for name,box in original_boxes(self,frame,reward_name) if not locked_slot(frame,box) and marked(frame,box) and not short_of_points(frame,box)]
         if reward_name in (None,native.REWARD):
             # The native reward search reads only this list, so a marked slot or
             # mission row joins it and takes the same click and recheck path.

@@ -8,6 +8,7 @@ from pathlib import Path
 import logging,threading,time
 LOG=logging.getLogger('project_gui.DKB')
 POPUPS=('체크_보상받기','체크_메인퀘_보상받기','체크_보물찾기_아이템획득')
+RECEIPT_WORDS=('보상받기','아이템획득');RECEIPT_AREAS=((600,150,170,30),(600,85,170,30))  # real pixels
 BLANKS=((288,93),(286,19),(286,19))
 LIST_BOX=(165,125,130,265)
 BODY_TOP=204;BANNER_WAIT=1.5
@@ -22,9 +23,23 @@ def _popup_reader(profile):
         reader=_popup_reader.reader=(str(profile),RoiDetector(Path(profile),list(POPUPS)))
     return reader[1]
 
+def receipt_words(frame):
+    """The receipt's own words on the real frame. Its pictures have no cut at this size. False on a frame with no real pixels."""
+    real=getattr(frame,'hi',None)
+    if real is None:return False
+    import numpy as np
+    from owner_text import read_area,clean
+    real=np.asarray(real)
+    for x,y,w,h in RECEIPT_AREAS:
+        try:rows=read_area(None,real[y:y+h,x:x+w],left=x,top=y)
+        except Exception as exc:
+            LOG.debug('수령 글자 확인 생략 · %s',type(exc).__name__);return False
+        if any(word in clean(row['text']) for row in rows for word in RECEIPT_WORDS):return True
+    return False
+
 def popup(profile,frame):
     reader=_popup_reader(profile)
-    return any(reader.find(name,frame,threshold=.9) for name in POPUPS)
+    return any(reader.find(name,frame,threshold=.9) for name in POPUPS) or receipt_words(frame)
 
 def diff(a,b):
     import numpy as np
@@ -206,6 +221,34 @@ def owning(adapter):
         def __exit__(self,*a):LOCAL.adapter=self.previous
     return Scope()
 
+def left_open(frame):
+    """Where to press for what a reward flow left on this real frame, or None.
+    The window by its title and X; a card over its title goes with a press on the window's own top margin."""
+    if getattr(frame,'hi',None) is None:return None
+    from owner_start_menu import word_window
+    window=word_window(frame)
+    if window:return window[0]+' 창',window[1]
+    return ('상세 카드',BLANKS[0]) if getattr(frame.layout,'name',None)=='event' else None
+
+def close_left_window(capture,inputs,context):
+    """Wherever the flow gave up, its window must not stay over the field: the quest stalls behind it (11-05 17:33)."""
+    from biol_base.session import Cancelled
+    try:
+        for attempt in range(3):
+            context.checkpoint();found=left_open(capture())
+            if found is None:return True
+            name,(x,y)=found
+            def still():
+                if left_open(capture())!=found:raise RuntimeError('화면 변경')
+            inputs.click(x,y,bounds=(x-5,y-5,x+6,y+6),before_down=still)
+            LOG.info('이벤트 보상 뒤 정리 · %s 닫기 · (%d,%d)',name,x,y)
+            context.wait(.6)
+        if left_open(capture()) is None:return True
+        LOG.warning('이벤트 보상 뒤 정리 · 창 닫기 미확인')
+    except Cancelled:raise
+    except Exception as exc:LOG.warning('이벤트 보상 뒤 정리 · 입력 생략 · %s',exc)
+    return False
+
 def tracked(key,function,adapter,args,kwargs):
     needed=('detector','capture','inputs','context')
     if args or any(name not in kwargs for name in needed):return function(*args,**kwargs)
@@ -219,10 +262,15 @@ def tracked(key,function,adapter,args,kwargs):
             if '미확인' in str(text):flow.unconfirmed=True
             return log(text)
         change['user_log']=user_log
-    failed=True;result=None
+    from biol_base.session import Cancelled
+    failed=True;result=None;stopped=False
     try:
         result=function(**change);failed=False
         return result
+    except Cancelled:
+        stopped=True;raise
     finally:
         state=flow.finish(result,failed=failed)
         if adapter is not None:adapter._owner_reward_last_outcome=state
+        # A stop sends nothing more. The start of the next run closes what it finds.
+        if key=='event' and not stopped:close_left_window(kwargs['capture'],kwargs['inputs'],kwargs['context'])
