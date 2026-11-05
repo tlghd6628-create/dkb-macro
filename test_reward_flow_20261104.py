@@ -94,6 +94,13 @@ class Inputs(unittest.TestCase):
         i.click(684,282);i.click(684,282);i.click(684,282)
         self.assertEqual(clicks(log),[(684,282)]);self.assertEqual(f.counts['repeat_skipped'],2)
         self.assertEqual(f.finish(None),flow.PARTIAL)
+    def test_claim_all_on_another_tab_is_pressed_again(self):
+        """pc1 11-06: an empty 서신 tab, then 시스템 with five mails; the same 모두 받기 was skipped there."""
+        empty=load('mail_after');f,i,cur,log=make('mail',empty)
+        i.click(836,455)
+        other=empty.copy();other[60:400,10:600]=255-other[60:400,10:600]  # another tab's list; the button is untouched
+        cur[0]=other;i.click(836,455)
+        self.assertEqual(clicks(log),[(836,455),(836,455)]);self.assertEqual(f.counts['repeat_skipped'],0)
     def test_target_that_changed_may_be_pressed_again(self):
         f,i,cur,log=make('event',load('event_claimed'));i.click(583,260)
         cur[0]=load('event_attendance');i.click(583,260);self.assertEqual(len(clicks(log)),2)

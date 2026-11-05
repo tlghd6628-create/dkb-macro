@@ -46,7 +46,8 @@ def real_table(real):
   if field:hits[field]=row['ry']
  if 'enhance' not in hits or 'awaken' not in hits:return None
  rows=round((hits['awaken']-hits['enhance'])/REAL_ROW_GAP)
- names={2:('enhance','opening','awaken'),3:('enhance','opening','breakthrough','awaken')}.get(rows)
+ # A blessing below 강화 10 has no 개방 row: 강화 and 각성 stand next to each other (pc2 토끼 일반 강화 0, 11-06).
+ names={1:('enhance','awaken'),2:('enhance','opening','awaken'),3:('enhance','opening','breakthrough','awaken')}.get(rows)
  if names is None or abs(hits['awaken']-hits['enhance']-rows*REAL_ROW_GAP)>4:return None
  # 개방 only keeps the spacing: it follows from 강화 and is never read or needed (user, 11-06).
  return {field:(REAL_NUMBER[0],hits['enhance']+index*REAL_ROW_GAP-REAL_NUMBER[2]//2,REAL_NUMBER[1],REAL_NUMBER[2]) for index,field in enumerate(names) if field!='opening'}

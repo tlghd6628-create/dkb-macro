@@ -88,7 +88,7 @@ class Flow:
         self.note_banner(frame)
         if self.rose:self.rose=False;self.spots.pop((x//8,y//8),None);return
         if diff(patch(frame,x,y),before)<3:
-            self.spots[(x//8,y//8)]=before
+            self.spots[(x//8,y//8)]=(before,whole)
             if self.reward_target(x,y):
                 self.counts['no_change']+=1
                 self.evidence('무변화',whole,frame,x,y)
@@ -199,7 +199,9 @@ class FlowInputs:
         if blank and not flow.note_banner(frame):
             flow.counts['blank_skipped']+=1;flow.skip_wait=True;return None
         seen=None if leaving else flow.spots.get((x//8,y//8))
-        if seen is not None and diff(patch(frame,x,y),seen)<3:
+        # The button alone is not enough: 모두 받기 looks the same on every mail tab, and after an empty 서신 tab it
+        # was skipped on 시스템 with five mails waiting (pc1 11-06). Another tab changes the whole screen (46 against 0.4).
+        if seen is not None and diff(patch(frame,x,y),seen[0])<3 and diff(frame,seen[1])<3:
             # Already pressed here with no effect, and nothing has changed since.
             flow.counts['repeat_skipped']+=1;flow.skip_wait=True
             if flow.reward_target(x,y):flow.unconfirmed=True
