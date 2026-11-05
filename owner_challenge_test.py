@@ -277,6 +277,9 @@ def start(gui,key,result):
             ready=getattr(gui,'_owner_ocr_readiness',None)
             runner.active=True
             def one_adapter():
+                # Put the ordinary factory back only here: the worker can reach this after start() has
+                # returned, and then a TEST button would start the whole macro instead.
+                session.adapter_factory=factory
                 outer=factory()
                 if not isinstance(outer,PolicyAdapter):
                     outer.close()
@@ -285,7 +288,8 @@ def start(gui,key,result):
                 return outer
             session.adapter_factory=one_adapter
             try:session.start()
-            finally:session.adapter_factory=factory
+            except BaseException:
+                session.adapter_factory=factory;raise
         result.set('실행 중');gui.root.after(100,lambda:runner.poll(result))
         return True
     except Exception as exc:
