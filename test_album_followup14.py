@@ -67,7 +67,8 @@ class LooksTests(unittest.TestCase):
   return S(capture=lambda:frame,detector=S(find=lambda *_,**__:(1,1) if found else None))
  def test_real_pixels_decide(self):
   service=self.screen();self.assertTrue(a.screen_clear(service))
-  service.capture().hi[300:310,700:710]=(220,30,30);self.assertFalse(a.screen_clear(service))
+  import cv2
+  cv2.circle(service.capture().hi,(700,300),5,(220,30,30),-1);self.assertFalse(a.screen_clear(service))
  def test_not_the_album_or_no_real_pixels_says_nothing(self):
   self.assertFalse(a.screen_clear(self.screen(False)))
   self.assertFalse(a.screen_clear(S(capture=lambda:np.zeros((479,897,3),dtype=np.uint8),detector=S(find=lambda *_,**__:(1,1)))))

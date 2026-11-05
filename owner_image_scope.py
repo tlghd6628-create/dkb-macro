@@ -319,7 +319,10 @@ def word_hit(detector,name,frame,threshold,candidate_filter):
     if len(found)!=1:return None
     l,t,r,b=found[0]['box']
     if not (box[0]<=l<r<=box[0]+box[2] and box[1]<=t<b<=box[1]+box[3]):return None
-    made=((l+r)//2,(t+b)//2,(l,t,r,b))
+    # The native code compares its picture inside the bounds it gets, so they are never smaller than the picture.
+    # A bare word's box raised an OpenCV size error out of the clan boss job (19:42).
+    x,y=(l+r)//2,(t+b)//2;w,h=max(r-l,e['w']),max(b-t,e['h'])
+    made=(x,y,(max(0,x-w//2),max(0,y-h//2),min(897,x-w//2+w),min(479,y-h//2+h)))
     if candidate_filter is not None and not candidate_filter(frame,made):return None
     note(detector.profile,name,'word')
     seen=getattr(word_hit,'seen',None)
@@ -394,11 +397,13 @@ def summon_already_shown(detector,name,frame):
     return (850,440,(845,435,855,445))
 
 # At 1366x768 these are found by their words and nothing else: a softer look at their pictures could take a neighbour.
-REAL_WORDS={'버튼_축지술_가운데':'teleport_word','버튼_귀환':'home_word'}
+REAL_WORDS={'버튼_축지술_가운데':'teleport_word','버튼_귀환':'home_word','버튼_보스_축지술':'map_teleport','버튼_지도_축지술':'map_teleport'}
 
 def real_word_hit(detector,name,frame,candidate_filter):
-    import owner_movement
-    made=getattr(owner_movement,REAL_WORDS[name])(frame)
+    import owner_movement,owner_real_marks
+    reader=REAL_WORDS[name]
+    made=getattr(owner_movement,reader,None) or getattr(owner_real_marks,reader)
+    made=made(frame)
     if made is None or (candidate_filter is not None and not candidate_filter(frame,made)):return None
     note(detector.profile,name,'word')
     seen=getattr(real_word_hit,'seen',None)
@@ -431,6 +436,10 @@ def recover(detector,name,frame,region,threshold,candidate_filter):
             return made if candidate_filter is None or candidate_filter(frame,made) else None
         return None
     if name!='버튼_축지술_가운데' and committed(name):return None
+    # Words before a softer look at the picture: 버튼_문파_전투 matched .905 at 70 pixels off and pressed nothing (19:42).
+    if name in WORDS and not region and getattr(frame,'hi',None) is not None:
+        hit=word_hit(detector,name,frame,threshold,candidate_filter)
+        if hit is not None:return hit
     profile=detector.profile;need=max(threshold,.9);hay=frame[:,:,::-1];hit=None
     def accept(peak,tier):
         if peak is None or not _raw_ok(hay,needle,peak):return None

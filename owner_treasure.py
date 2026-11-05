@@ -29,6 +29,9 @@ ROWS={'체크_보물찾기_타바로1':'타바로성','체크_보물찾기_타�
 ROW_ABOVE={'타바로성':'타바로지방'}
 CASTLE_DONE='체크_보물찾기_타바로1_완료'
 FIRST_CARD_WORDS={'버튼_보물찾기_타바로_바로가기':'바로가기','체크_보물찾기_타바로_현위치':'현위치'}
+# The card you stand on has 현위치 where the others have 바로가기. Unseen, it was pressed for a move window that never
+# comes, and the visit ended on 이동 버튼 확인 시간 초과 with nothing found (other PC, 19:35).
+CURRENT_ICONS=('체크_보물찾기_현위치아이콘','체크_보물찾기_현위치아이콘2');CARD_ROW=(150,110,1216,50)
 GREEN_SPREAD=40;GREEN_PIXELS=20
 LIT_RATIO=1.5;CHOSEN_RATIO=1.15
 _running=[0]
@@ -116,8 +119,17 @@ def has_done_badge(real,row):
     return int((part[:,:,1]-np.maximum(part[:,:,0],part[:,:,2])>GREEN_SPREAD).sum())>=GREEN_PIXELS
 
 
-def word_answer(name,frame):
+def current_card(frame,region):
+    """현위치 on a card, inside the part of the row the caller asks about. Region is (x, y, w, h) in logical terms."""
+    hits=[_hit(row,frame) for row in text.find(text.read(None,frame,CARD_ROW),'현위치')]
+    if isinstance(region,(tuple,list)) and len(region)==4:
+        x,y,w,h=region;hits=[hit for hit in hits if x<=hit[0]<x+w and y<=hit[1]<y+h]
+    return hits[0] if hits else None
+
+
+def word_answer(name,frame,region=None):
     """(answered, hit). Not answered means the picture still decides this one."""
+    if name in CURRENT_ICONS and _on_screen(frame):return True,current_card(frame,region)
     if name=='버튼_보물찾기':
         row=next((r for r in text.read(None,frame,MENU) if _like(r['text'],TITLE)),None)
         return (True,_hit(row,frame,LABEL_UNDER_ICON)) if row else (False,None)
@@ -174,7 +186,7 @@ def install_words():
     @wraps(ordinary)
     def find(detector,name,frame,region=None,threshold=.9,*,candidate_filter=None):
         if _running[0] and _is_real(frame):
-            answered,hit=word_answer(name,frame)
+            answered,hit=word_answer(name,frame,region)
             if answered:return hit if hit is None or candidate_filter is None or candidate_filter(frame,hit) else None
         return ordinary(detector,name,frame,region,threshold,candidate_filter=candidate_filter)
     find._owner_treasure_words=True;RoiDetector.find=find

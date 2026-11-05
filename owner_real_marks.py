@@ -59,16 +59,27 @@ def _map_merchant():
 
 def map_merchant(frame):
     """The potion merchant anywhere on the map, as a hit in the old terms. The map centres on the character, so the
-    native fixed place only holds right after a return. Measured 1.0 and .89 selected, under .48 on other screens."""
+    native fixed place only holds right after a return. Measured 1.0 and .89 selected, .795 under the map's rainy tint,
+    under .48 on other screens."""
     import cv2
     from owner_hd import logical_of
     real=real_of(frame)
     if real is None:return None
     needle=_map_merchant();h,w=needle.shape[:2];x0,y0=60,60
     _,score,_,pos=cv2.minMaxLoc(cv2.matchTemplate(real[y0:680,x0:1340],needle,cv2.TM_CCOEFF_NORMED))
-    if score<.8:return None
+    if score<.7:return None
     x,y=logical_of(x0+pos[0]+w//2,y0+pos[1]+h//2,getattr(frame,'layout',None))
     return x,y,(x-8,y-8,x+9,y+9)
+
+
+MAP_BUTTONS=(1000,700,366,50)  # real pixels: 걸어가기, 축지술, 축지부 사용 along the map's foot
+
+
+def map_teleport(frame):
+    """The map's 축지술 button, in the shape a found picture has. Exactly that word: 축지부 사용 beside it costs an item."""
+    from owner_text import clean,logical_bounds,read
+    found=[row for row in read(None,frame,MAP_BUTTONS) if clean(row['text'])=='축지술']
+    return (found[0]['x'],found[0]['y'],logical_bounds(found[0],frame)) if len(found)==1 else None
 
 
 def install_merchant():

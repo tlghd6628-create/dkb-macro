@@ -128,7 +128,8 @@ def same_item(one,two):
   def icon(v):return np.frombuffer(base64.b64decode(v['icon_rgb'],validate=True),dtype=np.uint8).reshape((20,20,3))
   x,y=title(a),title(b)
   ia,ib=icon(a),icon(b)
-  aligned=(_score(ia,ib)>=.97 or (_score(ia,ib[2:18,2:18])>=.97 and _score(ib,ia[2:18,2:18])>=.97))
+  # Each icon's middle inside the other allows for a pixel of offset. The same ring on two windows scored .982 and .965.
+  aligned=(_score(ia,ib)>=.97 or (_score(ia,ib[2:18,2:18])>=.95 and _score(ib,ia[2:18,2:18])>=.95))
   if x is None or y is None or not aligned:return False
   # A name wider than the title box scrolls, and the title edge does not always show it, so two views
   # can share too little to compare. An identical icon is the same item (rare bracelet, 11-05: icon 1.00).
