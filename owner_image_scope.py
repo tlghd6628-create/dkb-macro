@@ -29,7 +29,10 @@ WINDOWS={
  'mission':_titled('체크_임무','버튼_임무_일일탭','버튼_임무_주간탭','버튼_임무_전래동화탭'),
  'boss':_titled('체크_보스토벌','버튼_보스_필드보스탭','버튼_보스_레이드탭','버튼_보스_세계지도이동'),
  'dungeon':_titled('체크_비경','버튼_비경_전래동화탭'),
- 'clan':_titled('체크_문파','버튼_문파_전투','버튼_문파_전투2','버튼_문파_닫기','버튼_문파_활동보상'),
+ 'clan':{**_titled('체크_문파','버튼_문파_전투','버튼_문파_전투2','버튼_문파_닫기','버튼_문파_활동보상'),'title':'문파'},
+ # The hamburger menu has no title. Its own entries prove it, on a frame with real pixels.
+ 'full_menu':{'anchors':('버튼_전체매뉴_성장','버튼_전체매뉴_임무'),'need':2,'members':(),'zone':None,
+              'words':(('성장','도술','가호','친구','세계지도','제작','임무','업적'),3,(610,37,287,400))},
  'mail':_titled('체크_우편함','버튼_우편탭_모두받기'),
  'exchange':_titled('체크_거래소','버튼_거래소_판매탭'),
  'treasure':_titled('체크_보물찾기','버튼_보물찾기_보상모두받기'),
@@ -136,12 +139,32 @@ def _witnessed(profile,anchors,need,frame):
         if seen>=need:return True
     return False
 
+def _title_says(profile,words,frame):
+    """Does the title read these words? None on a frame with no real pixels, so the picture answers as before."""
+    if getattr(frame,'hi',None) is None:return None
+    try:
+        import owner_text
+        return owner_text.shows_title(frame,words,Path(profile).parents[1])
+    except Exception as exc:
+        LOG.debug('제목 읽기 생략 · %s',type(exc).__name__);return None
+
+def _entries_say(profile,spec,frame):
+    """Are enough of a menu's own entries readable? None with no real pixels or no read, so the picture answers."""
+    if getattr(frame,'hi',None) is None:return None
+    words,need,zone=spec
+    rows=_zone_words(profile,zone,frame)
+    if rows is None:return None
+    return len({r['text'] for r in rows if r['score']>=WORD_SCORE}&set(words))>=need
+
 def window_open(profile,key,frame):
     if getattr(LOCAL,'frame',None) is not frame:LOCAL.frame=frame;LOCAL.windows={}
     known=LOCAL.windows
     if key not in known:
         spec=WINDOWS[key]
-        if 'asset' in spec:
+        seen=_title_says(profile,spec['title'],frame) if 'title' in spec else None
+        if seen is None and 'words' in spec:seen=_entries_say(profile,spec['words'],frame)
+        if seen is not None:known[key]=seen
+        elif 'asset' in spec:
             name,box=spec['asset'];known[key]=unique_peak(frame,asset(name),box,.92) is not None
         else:
             known[key]=_witnessed(profile,spec['anchors'],spec['need'],frame)
@@ -224,7 +247,16 @@ WORDS={'버튼_임무_일일탭':('일일','mission',None),'버튼_임무_주간
        '버튼_보스_레이드탭':('레이드','boss',None),'버튼_보스_세계지도이동':('세계지도이동','boss',None),
        '버튼_기운발현_생명':('생명의기운','aura',(0,30,220,340)),'버튼_기운발현_여명':('여명의기운','aura',(0,30,220,340)),
        '버튼_기운발현_홍염':('홍염의기운','aura',(0,30,220,340)),
-       '버튼_비경_전래동화탭':('전래동화','dungeon',None),'버튼_가호_소환탭':('소환','blessing',None)}
+       '버튼_비경_전래동화탭':('전래동화','dungeon',None),'버튼_가호_소환탭':('소환','blessing',None),
+       # 1366x768 clan battle screen, read off saved real frames: the tab list on the left, the chosen one's big title,
+       # and 전투 in the row of tabs. Places are 897x479 terms. Nothing here applies or spends.
+       '버튼_문파_전투':('전투','clan',(640,30,257,40)),'버튼_문파_전투2':('전투','clan',(640,30,257,40)),
+       '버튼_문파_요신토벌령':('요신토벌령','clan',(0,65,110,135)),'버튼_문파_결계지방어':('결계지방어','clan',(0,65,110,135)),
+       '버튼_문파_미혹의정원':('미혹의정원','clan',(0,65,110,135)),'버튼_문파_신기쟁탈전':('신기쟁탈전','clan',(0,65,110,135)),
+       '체크_문파_요신토벌령':('요신토벌령','clan',(150,70,140,50)),'체크_문파_결계지방어':('결계지방어','clan',(150,70,140,50)),
+       '체크_문파_미혹의정원':('미혹의정원','clan',(150,70,140,50)),'체크_문파_신기쟁탈전':('신기쟁탈전','clan',(150,70,140,50)),
+       # The entry in the hamburger menu. Exactly 문파, so 문파 전투 further down does not answer for it.
+       '버튼_전체매뉴_문파':('문파','full_menu',(610,37,287,400))}
 # Fixed misreads seen on real frames, read as the word they are (the idea of MaaFramework's
 # OCR "replace"; its code is not used). Only for a word already expected inside its window.
 MISREADS={'전래등화':'전래동화','소함':'소환'}
@@ -259,6 +291,19 @@ def _zone_words(profile,box,frame):
     if len(cache)>=16:cache.clear()
     cache[box]=(digest,rows,time.monotonic());return rows
 
+def _joined(rows,word):
+    """A word the reader split at its space (결계지 · 방어), side by side on one line. Letters only: stray strokes come back as ㅣ."""
+    import re
+    parts=[(re.sub('[^가-힣]','',r['text']),r) for r in rows or () if r['score']>=WORD_SCORE]
+    found=[]
+    for left,a in parts:
+        for right,b in parts:
+            if a is b or not left or left+right!=word:continue
+            p,q=a['box'],b['box']
+            if abs(p[1]+p[3]-q[1]-q[3])<=8 and -8<=q[0]-p[2]<=12:
+                found.append({'text':word,'score':min(a['score'],b['score']),'box':(p[0],min(p[1],q[1]),q[2],max(p[3],q[3]))})
+    return found
+
 def word_hit(detector,name,frame,threshold,candidate_filter):
     spec=WORDS.get(name)
     if spec is None or committed(name) or threshold>WORD_CEILING:return None
@@ -266,7 +311,7 @@ def word_hit(detector,name,frame,threshold,candidate_filter):
     if e is None or not window_open(detector.profile,key,frame):return None
     box=zone or _clip(e['x']-WIDE[0],e['y']-WIDE[1],e['w']+2*WIDE[0],e['h']+2*WIDE[1])
     rows=_zone_words(detector.profile,box,frame)
-    found=[r for r in rows or () if MISREADS.get(r['text'],r['text'])==word and r['score']>=WORD_SCORE]
+    found=[r for r in rows or () if MISREADS.get(r['text'],r['text'])==word and r['score']>=WORD_SCORE] or _joined(rows,word)
     if len(found)!=1:return None
     l,t,r,b=found[0]['box']
     if not (box[0]<=l<r<=box[0]+box[2] and box[1]<=t<b<=box[1]+box[3]):return None
