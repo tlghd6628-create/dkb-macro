@@ -131,11 +131,55 @@ def _price(text):
  text=str(text).strip().replace('.',',')
  return int(text.replace(',','')) if re.fullmatch(r'\d{1,3}(?:,\d{3})*',text) else None
 
+REAL_LIST=(10,90,300,678)
+
+def quote_from_words(rows,item):
+ """This item's row from the words of the list, top to bottom: name, price, then the limit under it. None when it
+ is not all on screen. Places are real pixels, so a row is what stands within one row height under its name."""
+ names=[r for r in rows if r['bounds'][0]>=60 and re.search(r'[가-힣]{2}',r['text']) and _name_candidate(r['text'],(item,))==item]
+ if len(names)>1:raise Hold('같은 상품으로 읽힌 행이 둘 이상입니다')
+ if not names:return None
+ top=names[0]['ry'];below=[r for r in rows if top<r['ry']<=top+60]
+ price=[v for v in (_price(r['text']) for r in below if r['score']>=.85) if v is not None]
+ limit=[re.search(r'(\d{1,4})\s*/\s*(\d{1,4})',r['text']) for r in below]
+ limit=[(m[1],m[2],r) for m,r in zip(limit,below) if m]
+ if len(price)!=1 or len(limit)!=1:return None
+ used,maximum,row=int(limit[0][0]),int(limit[0][1]),limit[0][2]
+ words=dict(name=item,name_row=names[0],price=price[0],first=used,limit=maximum,bracketed='(' in row['text'],
+            sold_out=any(re.sub(r'\s','',r['text']).startswith('구매불가') for r in below))
+ return words
+
+
+def _real_quote(ui,item):
+ """The whole list as words: every name, price and limit in two seconds, and no fixed row places."""
+ from owner_text import read
+ frames=[ui.frame()]
+ ui.context.wait(.12);frames.append(ui.frame())
+ pages=[read(ui.adapter.project.root,frame,REAL_LIST,scale=3) for frame in frames]
+ ui._owner_shop_last_page=[r['text'] for r in pages[-1] if re.search(r'[가-힣]{2}',r['text']) and '한정' not in r['text'] and '구매' not in r['text']]
+ found=[quote_from_words(rows,item) for rows in pages]
+ if found[0] is None or found[1] is None:
+  if found[0] is None and found[1] is None:return None
+  raise Pending('상점 목록 두 화면 확인 필요')
+ a,b=found
+ if any(a[key]!=b[key] for key in ('price','first','limit','bracketed','sold_out')):raise Pending('상점 목록 두 화면 확인 필요')
+ limit,first=a['limit'],a['first']
+ if limit==0 or first>limit:raise Pending('구매 수량 판독 확인 필요')
+ kind,used=('observed_weekly_quote',first) if a['bracketed'] else ('observed_available_quote',limit-first)
+ if a['sold_out']:used=limit
+ # The row's name line, in the 897x479 terms the buying steps click and compare in.
+ y=a['name_row']['y'];box=(44,y-8,121,14)
+ samples=[frame[box[1]:box[1]+14,44:165].copy() for frame in frames]
+ return {'name':item,'click_y':y+8,'row_proof':lambda frame:all(_same_patch(frame,sample,box) for sample in samples),
+         'currency':'엽전','unit_price':a['price'],'used':used,'limit':limit,'remaining':limit-used,'kind':kind}
+
+
 def _read_quote(ui,item):
  """The item's row on the visible page, or None. Rows are found by their price line.
 
  A line that does not read yet is Pending, so the caller reads a fresh pair.
  """
+ if getattr(ui.frame(),'hi',None) is not None:return _real_quote(ui,item)
  answers,_=_read_pair(ui,[(LIST,'number')])
  def prices(rows):return {r['y']:_price(r['text']) for r in rows if r.get('score',0)>=.85 and _price(r.get('text')) is not None}
  first,second=(prices(rows) for rows in answers[0])
@@ -178,9 +222,37 @@ def _read_quote(ui,item):
  return {'name':item,'click_y':y-13,'row_proof':lambda frame:all(_same_patch(frame,sample,box) for sample in samples),
          'currency':'엽전','unit_price':values[0],'used':used,'limit':limit,'remaining':limit-used,'kind':kind}
 
+REAL_POPUP=(540,290,420,80)
+
+def popup_from_words(rows,item):
+ """(name is this item, price, owned) from the words of the quantity popup, or None for what did not read."""
+ named=any(_name_candidate(r['text'],(item,))==item for r in rows)
+ def number(word):
+  for row in rows:
+   found=re.search(word+r'[^0-9]*([0-9][0-9,]*)',re.sub(r'\s','',row['text']))
+   if found:return int(found[1].replace(',',''))
+  return None
+ return named,number('가격'),number('개수')
+
+
 def _popup(ui,price,item):
  """Owned count and a proof of this popup, after reading its name and price from two frames."""
  def title(frame):return _asset_match(frame,'quantity-title',TITLE)
+ if getattr(ui.frame(),'hi',None) is not None:
+  from owner_text import read
+  ui.wait(title,seconds=5)
+  reason='수량창 판독 확인 필요'
+  for attempt in range(6):
+   if attempt:ui.context.wait(.3)
+   frames=[ui.frame()];ui.context.wait(.12);frames.append(ui.frame())
+   if not all(title(frame) for frame in frames):raise Hold('수량 화면 변경')
+   a,b=(popup_from_words(read(ui.adapter.project.root,frame,REAL_POPUP,scale=3),item) for frame in frames)
+   if not (a[0] and b[0]):reason='수량창 상품명 두 화면 확인 필요';continue
+   if None in a or a!=b:reason='수량 또는 금액 판독 확인 필요';continue
+   if a[1]!=price:raise Hold('상품 개당 가격 불일치')
+   x,y,w,h=POPUP_NAME;samples=[frame[y:y+h,x:x+w].copy() for frame in frames]
+   return a[2],lambda frame:title(frame) and all(_same_patch(frame,sample,POPUP_NAME) for sample in samples)
+  raise Hold(reason)
  def number(rows):
   # A long price pushes its colon out of the box, so only the trailing digits count.
   found=[re.search(r'([0-9][0-9,]*)$',str(r.get('text','')).strip()) for r in rows if r.get('score',0)>=.85]
@@ -211,7 +283,15 @@ def _total(ui):
  box=TOTAL_BOXES[getattr(ui,'_owner_shop_kind','remote')]
  for attempt in range(6):
   if attempt:ui.context.wait(.3)
-  answers,_=_read_pair(ui,[(box,'number')])
+  frames=[ui.frame()]
+  ui.context.wait(.12);frames.append(ui.frame())
+  if getattr(frames[0],'hi',None) is not None:
+   # On real pixels: a lone 0 is only read reliably at 3 times, and it comes back at any place in the pill.
+   from owner_text import read
+   from owner_hd import real_box
+   x,y,w,h=real_box(box,frames[0].layout)
+   answers=[[read(ui.adapter.project.root,frame,(max(0,x-10),max(0,y-6),w+20,h+12),language='number',scale=3) for frame in frames]]
+  else:answers,_=_read_pair(ui,[(box,'number')])
   values=[[_price(r['text']) for r in rows if r.get('score',0)>=.85 and _price(r.get('text')) is not None] for rows in answers[0]]
   if len(values[0])==1 and values[0]==values[1]:return values[0][0]
  raise Hold('장바구니 합계 판독 확인 필요')
@@ -235,12 +315,20 @@ def _find_quote(ui,item):
  ui.drag((120,110),(120,400),list_proof);ui.drag((120,110),(120,400),list_proof)
  # The list flings: the same drag moved it 65 to 206 px and a long one skipped whole rows.
  # This one always leaves the rows of the page before on screen.
+ real=getattr(ui.frame(),'hi',None) is not None
+ before=None
  for _ in range(14):
   ui.context.checkpoint()
   ui.context.wait(.4)
   quote=visible()
   if quote:return quote
-  ui.drag((120,300),(120,180),list_proof,hold=.3)
+  if real:
+   # A page unchanged by a drag is the end of the list.
+   page=getattr(ui,'_owner_shop_last_page',None)
+   if page and page==before:break
+   before=page
+  ui.drag((120,400),(120,130) if real else (120,180),list_proof,hold=.3) if real else ui.drag((120,300),(120,180),list_proof,hold=.3)
+ LOG.info('상점 목록 마지막 화면 · %s',getattr(ui,'_owner_shop_last_page',None))
  raise Hold('선택 상품을 현재 보이는 상점 목록에서 찾지 못했습니다')
 
 def _same_cart(frame,verified_cart):

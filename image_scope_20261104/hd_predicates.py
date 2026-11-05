@@ -10,6 +10,8 @@ import numpy as np
 from PIL import Image
 import owner_hd as hd
 hd.install_reading()
+import owner_text
+owner_text.set_root(bootstrap.A)
 logging.disable(logging.CRITICAL)
 SKIP_MODULES=('owner_main','owner_hd','owner_settings','owner_challenge_test','owner_diagnostic','owner_update')
 SKIP_WORDS=('save','write','log','install','frame_','capture','grab')

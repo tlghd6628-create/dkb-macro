@@ -44,10 +44,26 @@ def _redness(rgb):
     return np.clip(pixels[:,:,0]-pixels[:,:,1:].max(axis=2),0,255).astype('uint8')
 
 
+def _real_dots(frame,box):
+    """The same dots on the real pixels, where they keep their colour. Small, round and red."""
+    import cv2,numpy as np
+    from owner_hd import real_box,logical_of,SHIFTS,F
+    real=np.asarray(frame.hi);x,y,w,h=box
+    left,top=max(0,round(x*F+SHIFTS['right'])),max(0,round(y*F));right,bottom=min(real.shape[1],round((x+w)*F)),min(real.shape[0],round((y+h)*F))
+    part=real[top:bottom,left:right].astype('int16');r,g,b=part[:,:,0],part[:,:,1],part[:,:,2]
+    count,_,stats,_=cv2.connectedComponentsWithStats(((r>170)&(g<95)&(b<95)).astype('uint8'),8);found=[]
+    for index in range(1,count):
+        l,t,width,height,area=(int(v) for v in stats[index])
+        if 6<=width<=13 and 6<=height<=13 and abs(width-height)<=2 and area>=.35*width*height:
+            found.append(logical_of(left+l+width//2,top+t+height//2,frame.layout))
+    return found
+
+
 def notice_dots(frame,box=(305,204,420,182)):
     """Centres of real notification dots. Red art (a potion, a pattern inside a
     gold item) shares the colour but not this small round shape."""
     import cv2,numpy as np
+    if getattr(frame,'hi',None) is not None:return _real_dots(frame,box)
     x,y,w,h=box;part=frame[y:y+h,x:x+w].astype('int16');r,g,b=part[:,:,0],part[:,:,1],part[:,:,2]
     mask=((r>170)&(g<95)&(b<95)).astype('uint8')
     count,_,stats,_=cv2.connectedComponentsWithStats(mask,8);shape=_dot_shape();found=[]

@@ -4,40 +4,21 @@ Camera shake and effects cover what the program has to see, and both PCs must dr
 by its label and each option by its word, so a patch that moves or adds rows changes nothing here. Asked once per
 program start, on the field. A failure is logged and never stops the work.
 """
-import logging,re
+import json,logging,re,time
 from difflib import SequenceMatcher
+from pathlib import Path
 import numpy as np
 import owner_text as text
 
 LOG=logging.getLogger('project_gui.DKB')
 RESOLUTION='1366x768'
-# tab, side tab, then label and option. Rows with sliders are only switched here; owner_boss_range moves the slider.
+# Only the environment tab's graphics page: what changes how the screen is drawn.
 WANTED={
     ('환경','그래픽'):(
         ('UI 크기 설정','보통'),('화면 모드','창 모드'),('카메라 흔들림','사용 안 함'),('최대 프레임 설정','60fps'),
         ('이펙트 표시','끄기'),('구름 효과','끄기'),('도술 이펙트 제한','높음'),('저사양 모드','사용 안 함'),
         ('그림자 표시','켜기'),('물 반사 효과','켜기'),('3D 객체 아웃라인 효과','켜기'),('렌더 스케일','높음'),
         ('후처리 효과','사용'),('SSAO','사용'),('DOF','사용'),
-    ),
-    ('전투','전투/타겟'):(
-        ('타게팅 시 카메라 자동 회전','사용 안 함'),('마우스 오버 기능','끄기'),('도사 이동','좌측'),
-        ('마우스로 카메라 회전','사용'),('타겟팅 범위 사용','사용 안 함'),('매너 모드','사용 안 함'),
-        ('자동전투 중 이동 고정','사용'),('자동 조작 재 작동 대기 시간','사용 안 함'),('자율 수행 범위','사용'),
-        ('자동 반격','사용 안 함'),('기본 공격 사용 유지','사용 안 함'),('길라잡이 사냥터 이동 후 자동전투','사용'),
-    ),
-    ('전투','획득'):(('장비 아이템 자동 획득','모두 획득'),('물약 자동 획득','모두 획득')),
-    ('기능','인터페이스'):(
-        ('내 도사 정보 표기','사용'),('다른 도사 정보 표기','사용'),('요귀 정보 상시 표기','사용 안 함'),
-        ('다른 도사의 탈것을 기본 탈것으로 표시','사용 안 함'),('내 도사 표시 강조','사용 안 함'),
-    ),
-    ('기능','편의'):(
-        ('대화/임무 보상 자동 넘기기','사용'),('탈것 자동 탑승','사용'),('퀘스트 목표 가이드 표시','사용 안 함'),
-        ('다른 도사에게 피격 시 절전모드 해제','사용'),('날씨 효과','사용'),
-    ),
-    # Push consent on this tab is the player's own agreement, so it is not touched.
-    ('알림',None):(
-        ('다른 도사에게 피격 후 미조작 알림','사용 안 함'),('대련 신청 자동 거절','사용 안 함'),('커뮤니티 알림','사용 안 함'),
-        ('친구 접속 알림','사용 안 함'),('문파원 접속 알림','사용 안 함'),
     ),
 }
 RESOLUTION_WORD=re.compile(r'\d{3,4}\s*[xX×]\s*\d{3,4}')
@@ -212,13 +193,25 @@ def ensure(adapter,context,inputs):
     return session.changed,session.failed
 
 
+def _record(root):
+    return Path(root)/'settings/owner-game-settings.json'
+
+
+def checked_today(root,today=None):
+    try:return json.loads(_record(root).read_text(encoding='utf-8')).get('date')==(today or time.strftime('%Y-%m-%d'))
+    except (OSError,ValueError,AttributeError):return False
+
+
 def ensure_once(adapter,context,inputs):
-    """Once per program start. It must never stop the work it comes before."""
-    if getattr(adapter,'_owner_game_settings_done',False):return
-    adapter._owner_game_settings_done=True
+    """Once a day, at the first start on the field. It must never stop the work after it.
+    Only a check with nothing left unconfirmed counts, so anything else is asked again at the next start."""
+    root=adapter.project.root
+    if checked_today(root):return
     try:
         changed,failed=ensure(adapter,context,inputs)
     except (RuntimeError,ValueError,OSError) as exc:
         LOG.warning('게임 설정 확인 중단 · %s',str(exc)[:120]);return
     LOG.info('게임 설정 확인 · 변경 %d개%s',len(changed),' · '+', '.join(changed) if changed else '')
-    if failed:LOG.warning('게임 설정 미확인 · %s',', '.join(failed))
+    if failed:LOG.warning('게임 설정 미확인 · %s',', '.join(failed));return
+    try:_record(root).write_text(json.dumps({'date':time.strftime('%Y-%m-%d')}),encoding='utf-8')
+    except OSError as exc:LOG.warning('게임 설정 확인 기록 저장 보류 · %s',exc)

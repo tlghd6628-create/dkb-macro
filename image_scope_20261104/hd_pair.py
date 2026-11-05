@@ -6,6 +6,7 @@ picture. The two frames also give this screen's layout map. Leave the game on a 
 be stopped, since this resizes the window.
 
 Usage: hd_pair.py SCREEN_NAME        takes one screen (prints what was cut and what was already there)
+       hd_pair.py --again SCREEN...  cuts again from a screen's saved frames, keeping everything else
        hd_pair.py --rebuild          makes everything again from the frames saved in hd_frames
 """
 from pathlib import Path
@@ -95,7 +96,8 @@ def process(screen,small,small2,real,idx):
     for label,image in ASSETS:
         a=best(small,image);b=best(small2,image)
         # These are searched over the whole frame with no fixed place, so a chance look-alike must be ruled out.
-        if a[0]>=.965 and b[0]>=.965 and a[1]==b[1] and image.shape[0]*image.shape[1]>=200:
+        # Worn marks are tiny and sit on the bag's own slots, which is only where they are looked for.
+        if a[0]>=.965 and b[0]>=.965 and a[1]==b[1] and (image.shape[0]*image.shape[1]>=200 or 'equipped_badge' in label):
             add(image,a[1][0],a[1][1],'owner:'+label,a[0],False)
     return made,known,weak
 def rebuild():
@@ -111,6 +113,12 @@ def rebuild():
     print('total',len(idx),'screens',len(maps))
 def main():
     if sys.argv[1:]==['--rebuild']:return rebuild()
+    if sys.argv[1:2]==['--again']:
+        rows=load_rows('index.jsonl');idx={r['key']:r for r in rows}
+        for screen in sys.argv[2:]:
+            small=np.asarray(Image.open(FRAMES/(screen+'_1x.png')).convert('RGB'));real=np.asarray(Image.open(FRAMES/(screen+'_hd.png')).convert('RGB'))
+            made,known,weak=process(screen,small,small,real,idx);print(screen,'new',len(made),'known',known,'weak',len(weak))
+        save_rows('index.jsonl',sorted(idx.values(),key=lambda r:r['key']));return
     screen=sys.argv[1] if len(sys.argv)>1 else 'screen'
     H=game()
     def grab(size):return runtime_capture.capture(H,dict(target,client_size=list(size)))

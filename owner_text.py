@@ -9,7 +9,7 @@ import numpy as np
 SPACE=re.compile(r'[\s·.,:;\'"`\-_~]+')
 BORDER=16
 TITLE=(20,0,330,50)   # real pixels: the title of a full panel, the place name on the field, the level and name in the bag
-_ROOT=[None];_titles={}
+_ROOT=[None];_titles={};_areas={}
 
 
 def set_root(root):
@@ -43,6 +43,8 @@ def read_area(root,area,*,left=0,top=0,language='korean',scale=2,bright=False,mi
     """Words in this array of real pixels. Places are real, counting from (left, top)."""
     import cv2
     area=np.asarray(area)
+    key=(hash(area.tobytes()),area.shape,left,top,language,scale,bright,minimum)
+    if key in _areas:return [dict(row) for row in _areas[key]]
     source=brighten(area) if bright else area
     if scale!=1:source=cv2.resize(source,None,fx=scale,fy=scale,interpolation=cv2.INTER_CUBIC)
     source=cv2.copyMakeBorder(source,BORDER,BORDER,BORDER,BORDER,cv2.BORDER_CONSTANT,value=(40,40,40))
@@ -55,7 +57,10 @@ def read_area(root,area,*,left=0,top=0,language='korean',scale=2,bright=False,mi
             low=poly.min(axis=0);high=poly.max(axis=0)
             rows.append(dict(text=str(text),score=float(score),rx=round(float((low[0]+high[0])/2)+left),ry=round(float((low[1]+high[1])/2)+top),
                              bounds=(round(float(low[0]))+left,round(float(low[1]))+top,round(float(high[0]))+left,round(float(high[1]))+top)))
-    return sorted(rows,key=lambda r:(r['ry'],r['rx']))
+    rows.sort(key=lambda r:(r['ry'],r['rx']))
+    if len(_areas)>32:_areas.clear()
+    _areas[key]=rows
+    return [dict(row) for row in rows]
 
 
 def read(root,frame,real_box=None,**options):
@@ -100,6 +105,30 @@ def level_and_name(frame,root=None):
         found=re.search(r'레벨\s*(\d{1,3})\s*(\S+)',str(line))
         if found:return int(found[1]),found[2]
     return None,None
+
+
+def shows_field_words(frame,root=None):
+    """The bare field: the key labels under its icons (Home, Tab, H, T) are all showing, in the bottom right corner."""
+    real=_real(frame)
+    if real is None:return False
+    words={clean(row['text']).lower() for row in read_area(root,np.asarray(real)[712:768,985:1366],left=985,top=712,scale=3)}
+    return 'home' in words and len(words&{'h','t','tab','tob','toab'})>=2
+
+
+def word_box(box):
+    """Real pixels covering a logical (x, y, w, h) under any of the three anchors."""
+    import owner_hd
+    x,y,w,h=box;F=owner_hd.F
+    left=max(0,round(x*F+owner_hd.SHIFT_RIGHT)-12);right=min(owner_hd.REAL[0],round((x+w)*F)+12)
+    top=max(0,round(y*F)-8);bottom=min(owner_hd.REAL[1],round((y+h)*F)+8)
+    return left,top,right-left,bottom-top
+
+
+def logical_bounds(row,frame):
+    """A word's box in 897x479 terms, around where a click on it goes."""
+    x0,y0,x1,y1=row['bounds'];half=max(2,round((x1-x0)/3.2));high=max(2,round((y1-y0)/3.2))
+    x,y=row['x'],row['y']
+    return max(0,x-half),max(0,y-high),min(897,x+half+1),min(479,y+high+1)
 
 
 def find(rows,words):

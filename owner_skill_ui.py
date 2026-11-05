@@ -102,7 +102,8 @@ def parse_ratio(rows):
 def selected_quest_box(frame):
     import numpy as np
     if getattr(frame,'shape',None)!=(479,897,3):return None
-    mask=(frame[110:438,654:660].min(axis=2)>160).any(axis=1)
+    # A thin white rim loses brightness when the real screen is scaled down, and nothing else reaches this.
+    mask=(frame[110:438,654:660].min(axis=2)>(110 if getattr(frame,'hi',None) is not None else 160)).any(axis=1)
     edges=np.diff(np.r_[False,mask,False].astype(np.int8));starts=np.flatnonzero(edges==1);ends=np.flatnonzero(edges==-1)
     runs=[(int(a)+110,int(b)+110) for a,b in zip(starts,ends) if 16<=b-a<=55]
     if len(runs)!=1:return None
@@ -429,12 +430,27 @@ class SkillUI:
         self.last_text_frame=frames[-1];self.last_text_tick=ticks[-1]
         return [p[1] for p in answers]
     def word(self,text,box,minimum=.90,*,exact=False):
+        if getattr(self.frame(),'hi',None) is not None:return self._real_word(text,box,minimum,exact)
         rows=self.rows(box)
         candidates=[r for r in rows if r['score']>=minimum and (clean(r['text'])==clean(text) if exact else clean(text) in clean(r['text']))]
         if len(candidates)!=1:
             LOG.debug('도술 판독 대조 보류 · 기대=%s · 후보=%s',text,[(r['text'][:60],round(r['score'],3)) for r in rows])
             raise Pending('도술 표시 확인 필요: '+text)
         return candidates[0]
+    def _real_word(self,text,box,minimum,exact):
+        """The word anywhere the box could be under the three anchors, read from two frames of real pixels."""
+        from owner_text import read,word_box,logical_bounds
+        area=word_box(box);frames=[self.frame()];self.context.wait(.12);frames.append(self.frame())
+        found=[]
+        for frame in frames:
+            rows=read(self.adapter.project.root,frame,area,scale=3)
+            found.append([r for r in rows if r['score']>=minimum and (clean(r['text'])==clean(text) if exact else clean(text) in clean(r['text']))])
+        if len(found[0])!=1 or len(found[1])!=1:
+            LOG.debug('도술 판독 대조 보류 · 기대=%s · 후보=%s',text,[(r['text'][:60],round(r['score'],3)) for r in rows])
+            raise Pending('도술 표시 확인 필요: '+text)
+        row=found[1][0]
+        self.last_text_frame=frames[-1];self.last_text_tick=time.monotonic()
+        return dict(row,bounds=logical_bounds(row,frames[-1]))
     def click_word(self,text,box,proof,minimum=.90):
         import cv2,numpy as np
         row=self.word(text,box,minimum);l,t,r,b=row['bounds'];source=self.last_text_frame[t:b,l:r].copy();tick=self.last_text_tick
