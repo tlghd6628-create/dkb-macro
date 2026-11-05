@@ -93,4 +93,14 @@ class Rules(unittest.TestCase):
   self.assertEqual(len(t.allowed_points(127575)),4)
 
 
+class CurrentCard(unittest.TestCase):
+ """Stand-in rows, not a game test: only the card that says 현위치 loses its green power."""
+ def test_only_the_current_card(self):
+  from unittest.mock import patch
+  rows=[{'text':'현위치','x':171,'y':85},{'text':'바로가기','x':334,'y':85}]
+  with patch.object(t.text,'read',lambda *a,**k:rows):
+   self.assertTrue(t.on_current_card(None,(180,99)))
+   self.assertFalse(t.on_current_card(None,(334,99)))
+
+
 if __name__=='__main__':unittest.main(verbosity=1)
