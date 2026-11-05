@@ -122,6 +122,11 @@ def accepted_quota(ui):
   if m and row['score']>=.99 and 0<=int(m[1])<=20:values.add(int(m[1]))
  return next(iter(values)) if len(values)==1 else None
 
+def side_story_gate(text):
+ """The side story a main step is waiting on, named in its objective: 외전 '기묘리의 방랑 도사' 완료하기."""
+ found=re.search(r"외전\s*['‘\"]?\s*([^'’\"]+?)\s*['’\"]?\s*완료",text)
+ return normalize(found[1]) if found else None
+
 class MissionUI(SkillUI):
  def __init__(self,adapter,context,inputs):
   super().__init__(adapter,context,inputs)
@@ -197,6 +202,12 @@ class MissionUI(SkillUI):
     if send(1,ctypes.byref(event),ctypes.sizeof(I))!=1:raise Pending('임무 목록 휠 입력 미완료')
     self.context.wait(.04)
   self.context.wait(.35)
+ def startable_main(self,frame,y):
+  """A new chapter's first step stays grey until started, though the game has selected it and offers AUTO.
+  A step locked behind another quest shows the same button; its condition text still blocks it in _selected."""
+  if selected_center(frame)!=y:return False
+  if auto_button_hit(self.service.detector,frame):return True
+  return any('자동진행' in clean(row['text']) and row['score']>=.88 for row in self.rows((674,432,205,40)))
  def selected(self,mode,y,book,power):
   self._owner_last_mission_read={}
   try:return self._selected(mode,y,book,power)
@@ -219,11 +230,15 @@ class MissionUI(SkillUI):
   # Grey future steps remain unsuitable for execution even when their power
   # badge is green. Their prerequisites have not necessarily been satisfied.
   bright=int((frame[max(96,y-8):min(438,y+9),70:480].min(axis=2)>180).sum())>=20
+  if mode=='main_quest' and not bright:bright=self.startable_main(frame,y)
   rows=self.rows((674,229,202,111));text=' '.join(r['text'] for r in rows if r['score']>=.85)
   required=required_power(rows);prereq=None
   found=re.search(r'(\[[^\]]+\][^\n]+?)\s*임무.*완료',text)
   if found:prereq=normalize(found[1])
   has_prereq=any(s in clean(text) for s in ('선행','임무완료후','임무를완료'))
+  # '[4장] 쉬어가는 길' only asks for a side story to be finished; AUTO on it stood still for minutes.
+  side=side_story_gate(text)
+  if side:has_prereq=True;prereq=side
   gated=required is not None and (power is None or power<required)
   objective=clean(text).split('실행조건')[0].split('완료보상')[0].replace('임무목표','')
   objective=re.sub(r'[0-9,]+/[0-9,]+','',objective)
@@ -293,6 +308,13 @@ class MissionUI(SkillUI):
     # It then blocks the current row it just read, and the block at the end of this function is never reached.
     stale=book.item.get('active')
     LOG.info('본편 목록 확인 결과 · 읽은 행=%d · 판독 보류=%d · 저장된 진행 임무=%s',len(keys),unknown,book.item['quests'][stale]['title'] if stale else '없음')
+    # The same row can read 탐방 then 탈방, and that used to retire the quest it was running.
+    if stale and stale not in keys:
+     from difflib import SequenceMatcher
+     near=[k for k in keys if SequenceMatcher(None,book.item['quests'][k]['title'],book.item['quests'][stale]['title']).ratio()>=.8]
+     if near:
+      LOG.info('본편 진행 임무 제목 차이 흡수 · %s',book.item['quests'][near[0]]['title'])
+      book.activate(near[0]);return near[0]
     if stale and book.item['quests'][stale]['mode']=='main_quest' and stale not in keys and book.choose(keys,'main_quest',power) and reconcile_depth<2:
      book.defer(stale,'condition',detail='본편 목록 밝은 행에 없음 · 완료로 단정하지 않음')
      LOG.info('본편 이전 진행 임무 미표시 · 완료 처리 없이 보류 · 현재 임무 재선택')
@@ -310,7 +332,8 @@ class MissionUI(SkillUI):
      import numpy as np
      # Grey future steps cannot be executed. Do not OCR every future row
      # while looking for the saved active/current mission.
-     if int((frame[max(96,y-8):min(438,y+9),70:480].min(axis=2)>180).sum())<20:continue
+     if (int((frame[max(96,y-8):min(438,y+9),70:480].min(axis=2)>180).sum())<20
+         and not (mode=='main_quest' and self.startable_main(frame,y))):continue
      sig=(mode,row_signature(frame,y))
      if sig in seen:continue
      seen.add(sig)

@@ -166,7 +166,11 @@ def read_short_power(engine,frame):
     patch=cv2.copyMakeBorder(frame[y:y+h,x:x+w],8,8,8,8,cv2.BORDER_CONSTANT,value=(40,40,40))
     a=parse_power(engine.predict(cv2.resize(patch,None,fx=4,fy=4,interpolation=cv2.INTER_CUBIC)),.92)
     b=parse_power(engine.predict(cv2.resize(patch,None,fx=3,fy=3,interpolation=cv2.INTER_LINEAR)),.92)
-    return a if a is not None and a==b else None
+    if a is not None and a==b:return a
+    # 59,623, 63,221 and 63,620 stayed under the line on those two and ended F1 after three minutes. Cubic also
+    # reads 63 as 68 at .98, so the score proves little; linear sizes read .91 to .96 and agree on the digits.
+    values={parse_power(engine.predict(cv2.resize(patch,None,fx=scale,fy=scale,interpolation=cv2.INTER_LINEAR)),.90) for scale in (3,4,5,6)}
+    return values.pop() if len(values)==1 else None
 
 
 class Progress(QuestMemory):
@@ -281,6 +285,8 @@ def observe_inventory(service,*,force=False):
     from owner_character_binding import observe as bind_character,name_head
     character=bind_character(service.adapter,character,level,name_head(frames[-1]))
     progress.accept(level,power,character)
+    # The same paired reading read_power takes, so box work right after a bag check need not open the panels again.
+    service.adapter._owner_progression_observation=(service.context,progress.observed,character)
     from owner_equipment_boxes import agree
     from owner_startup_receipts import Preparation
     try:Preparation(service.adapter.project.root,character).worn(agree(frames[0],frames[1]))

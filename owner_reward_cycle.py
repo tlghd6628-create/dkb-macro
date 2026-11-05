@@ -148,6 +148,9 @@ def install(gui,aliases=()):
     from project_adapter import market_inventory
     from owner_reward_action_test import PATHS
     from owner_gear_native_install_candidate import _rebind_aliases
+    if not hasattr(Adapter,'run_training_log'):
+        from owner_training_log import run as training_log
+        Adapter.run_training_log=training_log
     for key,path in PATHS.items():
         if path is None:continue
         target=Adapter if path[0]=='adapter' else market_inventory

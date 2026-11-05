@@ -311,8 +311,11 @@ def scan_learned(adapter,context,inputs):
  from owner_skill_ui import SkillUI
  progress=state(adapter)
  if type(progress.level) is not int or progress.level<30:return 'level_wait'
- start=time.monotonic();read_power(adapter,context,inputs);progress=state(adapter)
- if not progress.character or progress.observed<start or type(progress.level) is not int or progress.level<30:raise Pending('상자 확인 전 캐릭터·레벨 재확인 필요')
+ from owner_energy_box_runtime_candidate import fresh_character
+ # A reading under 30 seconds old is this same visit's; the panels were opened three times in a row before.
+ if not fresh_character(adapter,context,progress) or time.monotonic()-progress.observed>30:
+  start=time.monotonic();read_power(adapter,context,inputs);progress=state(adapter)
+  if not progress.character or progress.observed<start or type(progress.level) is not int or progress.level<30:raise Pending('상자 확인 전 캐릭터·레벨 재확인 필요')
  character=progress.character;profile=configured_identity(adapter.project.root);ledger=runtime_ledger(adapter,character)
  learned=LearnedSkills(adapter.project.root,ledger.receipt_key)
  attested=SkillAttestation(adapter.project.root,ledger.receipt_key)

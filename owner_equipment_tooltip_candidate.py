@@ -6,7 +6,7 @@ Unknown layouts and unverified item categories always hold.
 """
 from pathlib import Path
 from functools import lru_cache
-import base64,hashlib,json,re,time,math
+import base64,hashlib,json,logging,re,time,math
 import cv2,numpy as np
 from PIL import Image
 from owner_equipment_upgrade_candidate import Hold,Journal,run_once,confirm_category,confirm,SLOTS
@@ -76,9 +76,10 @@ def worn_detail_frame(frame,engine):
  return {'slot':PART_MAP[kind],'grade':grade,'item':_item_token(frame[97:115,390:502],frame[128:148,434:454].copy())}
 
 def _part_name(engine,frame,box):
- """The glyph 찌 reads near .70 and sometimes as 짜. Only an exact part name passes the caller's check."""
- text=_ocr(engine,frame,box,minimum=.60)
- return '팔찌' if text=='팔짜' else text
+ """The glyph 찌 reads near .70 and sometimes as 짜, and a lone 검 near .33. Only an exact part name
+ passes the caller's check, so a weak reading can only say 'a different part', as 검 beside a fan is."""
+ text=_ocr(engine,frame,box,minimum=.30)
+ return '팔찌' if text in ('팔짜','팔째','팔쩌') else text
 
 def initial_candidate_frame(frame,engine):
  """Single un-worn tooltip; blank slot must be proved separately."""
@@ -109,6 +110,11 @@ def same_item(one,two):
   ia,ib=icon(a),icon(b)
   aligned=(_score(ia,ib)>=.97 or (_score(ia,ib[2:18,2:18])>=.97 and _score(ib,ia[2:18,2:18])>=.97))
   if x is None or y is None or not aligned:return False
+  # A name wider than the title box scrolls, and the title edge does not always show it, so two views
+  # can share too little to compare. An identical icon is the same item (rare bracelet, 11-05: icon 1.00).
+  if x.shape!=y.shape and _score(ia,ib)>=.99:return True
+  # The worn detail shows the same long name in another phase of its scroll, so the same width says little.
+  if max(x.shape[1],y.shape[1])>=90:return True
   if x.shape==y.shape:
    union=np.logical_or(x,y).sum()
    if union and np.logical_and(x,y).sum()/union>=.92:return True
@@ -229,8 +235,10 @@ def same_comparison_for_close(first,second):
  try:
   proof={'current_item':_item_token(first[97:115,313:425],first[128:148,356:376].copy()),
          'candidate_item':_item_token(first[97:115,468:568],first[128:148,511:531].copy())}
-  return comparison_item_proof(proof,second)
- except Hold:return False
+  if comparison_item_proof(proof,second):return True
+ except Hold:pass
+ # A long name scrolls, so it cannot match between two frames (11-05 12:02). This only decides to close, so the icons do.
+ return _score(first[128:148,356:376],second[128:148,356:376])>=.97 and _score(first[128:148,511:531],second[128:148,511:531])>=.97
 
 def single_item_proof(token,frame):
  try:return same_item(token,_item_token(frame[97:115,390:502],frame[128:148,434:454].copy()))
@@ -706,7 +714,7 @@ def run_in_open_inventory(adapter,context,inputs):
   initial=other;context.wait(.15);other,_=port._frame()
   if not equipment_tab_selected(initial) or not equipment_tab_selected(other):raise Hold('장비탭 전환 후 화면 확인 필요')
  inventory=other.copy()
- pages=0;reordered=0;confirmed_count=0;deadline=time.monotonic()+90
+ pages=0;reordered=0;confirmed_count=0;deadline=time.monotonic()+90;seen_cells={}
  for _ in range(160):
   context.checkpoint();service.check()
   if time.monotonic()>=deadline:return 'confirmed' if confirmed_count else 'equipment_scan_partial'
@@ -716,8 +724,15 @@ def run_in_open_inventory(adapter,context,inputs):
    if pages<8 and callable(scroll) and scroll():
     pages+=1;excluded=[];inventory,_=port._frame();continue
    return 'confirmed' if confirmed_count else ('visible_unknown_cells_held' if getattr(port,'unknown_cells_held',False) else 'no_more_visible_candidates')
+  # Row exclusions reset when the bag redraws, and the same unreadable cells were opened again until the
+  # 90 seconds ran out (12:41). Twice is enough for this visit.
+  seen_cells[tuple(hit[2])]=seen_cells.get(tuple(hit[2]),0)+1
+  if seen_cells[tuple(hit[2])]>2:
+   port.close_unresolved_known()
+   return 'confirmed' if confirmed_count else 'visible_unknown_cells_held'
   try:status=port.try_comparison()
-  except Hold:
+  except Hold as exc:
+   logging.getLogger('project_gui.DKB').info('장비 후보 건너뜀 · 칸=%s · %s',tuple(hit[2])[:2],exc)
    if port.journal.read()['pending'] is not None:raise Hold('장비 입력 결과 미확인 · 추가 조작 보류')
    if port.last is None:port.close_unresolved_known()
    else:port.close_comparison()

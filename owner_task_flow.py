@@ -12,6 +12,7 @@ import time
 class ServiceThreat(BaseException):pass
 
 LOCAL=threading.local()
+BAND_RETRY_SECONDS=1800
 IN_PLACE={
     'auto_rewards.guide.enabled','auto_rewards.event.enabled','auto_rewards.mail.enabled',
     'auto_rewards.achievement.enabled','auto_rewards.album.enabled','auto_rewards.training_log.enabled',
@@ -83,6 +84,8 @@ def dispatch(adapter,context,ordinary):
     if adapter.mode in ('main_quest','sub_quest'):
         from owner_progression import state,GROWTH
         milestone=state(adapter).due()
+        # A band left open by missing stones comes back, but not at every quest opportunity.
+        if milestone is not None and time.monotonic()<getattr(adapter,'_owner_band_retry_at',-1e30):milestone=None
         if milestone is None:keys.discard(GROWTH)
     # A quest opportunity processes one feature, then gives control back to
     # the native quest/death/boss watcher. Hunting can drain the full queue.
@@ -118,6 +121,7 @@ def dispatch(adapter,context,ordinary):
     previous_servicing=getattr(LOCAL,'servicing',False);LOCAL.servicing=True
     previous_milestone=getattr(adapter,'_owner_growth_milestone',None)
     adapter._owner_growth_milestone=milestone
+    adapter._owner_growth_item_seen=None
     try:
         logger=logging.getLogger('project_gui.DKB')
         logger.info('퀘스트 이동·자동사냥 확인 · 현재 자리에서 보상·성장 처리')
@@ -131,8 +135,13 @@ def dispatch(adapter,context,ordinary):
                            (adapter,context,item['inputs']),{},adapter)
         if milestone is not None and 'auto_growth.equipment.enabled' in keys:
             from owner_progression import state
-            state(adapter).attempted(milestone)
-            logger.info('레벨 구간 강화 점검 완료 · %d레벨 구간 · 재료 부족 시 실제 강화 생략',milestone)
+            # A band counts only after a real enhance, or when nothing was left to raise.
+            if getattr(adapter,'_owner_growth_item_seen',None) is context:
+                state(adapter).attempted(milestone)
+                logger.info('레벨 구간 강화 완료 · %d레벨 구간',milestone)
+            else:
+                adapter._owner_band_retry_at=time.monotonic()+BAND_RETRY_SECONDS
+                logger.info('레벨 구간 강화 미완료 · %d레벨 구간 · 재료 부족 또는 판독 실패 · %d분 뒤 다시 확인',milestone,BAND_RETRY_SECONDS//60)
         return True
     except __import__('owner_chore_transition').ChoreYield:
         adapter._owner_pending_services=dict(item,keys=eligible)

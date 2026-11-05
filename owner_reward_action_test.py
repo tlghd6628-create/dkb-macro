@@ -24,14 +24,13 @@ TARGETS={
  'auto_register.equipment_disassembly.enabled':('disassembly','장비 분해'),
 }
 # Production entry points, exactly those called by the original orchestrator.
-# The original DKB capability list and native dispatcher have no training-log
-# implementation. Keep that slot disabled instead of inventing a substitute.
+# The original has no training-log path, so owner_reward_cycle adds run_training_log.
 PATHS={
  'auto_rewards.guide.enabled':('adapter','run_guide_rewards'),
  'auto_rewards.event.enabled':('adapter','run_event_rewards'),
  'auto_rewards.mail.enabled':('adapter','run_mail_rewards'),
  'auto_rewards.achievement.enabled':('adapter','run_achievement_rewards'),
- 'auto_rewards.training_log.enabled':None,
+ 'auto_rewards.training_log.enabled':('adapter','run_training_log'),
  'auto_register.market.enabled':('adapter','run_market_inventory'),
  'auto_register.equipment_disassembly.enabled':('project_adapter.market_inventory','run_equipment_disassembly'),
 }

@@ -56,7 +56,7 @@ def kind(frame):
 # Menus a stop can leave open, with nothing to lose by backing out. Named by their title words, so a
 # new menu needs one word here and no new picture. A menu not named here is left alone: a running
 # spirit training also has a back button and has its own resume path.
-PLAIN_MENUS=('우편함','이벤트','길라잡이','업적','거래소','잡화상점','보스토벌','상점')
+PLAIN_MENUS=('우편함','이벤트','길라잡이','업적','거래소','잡화상점','보스토벌','상점','도사수행록')
 
 def plain_menu(service,frame):
  """The title word of a plain menu with its back button showing, or None."""

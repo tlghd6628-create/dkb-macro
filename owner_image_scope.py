@@ -407,9 +407,23 @@ def drift_scan(detector,name,frame,now=time.monotonic):
     except OSError:pass
     return row
 
+# The zoom bar moved in the patch, and the native treasure route re-checks the button itself before
+# clicking, so a recovered hit is refused. It has to see the current image at the current place.
+MOVED_IMAGES={'버튼_보물찾기_지도축소':('map-zoom-out',354,450)}
+
 def install(gui=None):
     from roi_runtime import RoiDetector
     from project_adapter.sleep_mode import SleepModeActions
+    if not getattr(RoiDetector.__init__,'_owner_moved_images',False):
+        construct=RoiDetector.__init__
+        @wraps(construct)
+        def made(detector,*args,**kwargs):
+            construct(detector,*args,**kwargs)
+            for name,(image,x,y) in MOVED_IMAGES.items():
+                if name in detector.templates and name in detector.entries:
+                    detector.templates[name]=_redrawn_image(image)[:,:,::-1].copy()
+                    detector.entries[name]=dict(detector.entries[name],x=x,y=y)
+        made._owner_moved_images=True;RoiDetector.__init__=made
     if not getattr(install,'reported',False):
         install.reported=True
         line=health_summary(_health_path())

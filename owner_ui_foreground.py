@@ -32,4 +32,5 @@ def same_dimmed_text(reference,current,anchor_reference,anchor_current):
     expected=reference.min(axis=2).astype(np.float64)
     actual=(current.min(axis=2).astype(np.float64)-bias)/gain
     ink=expected>150
-    return bool(ink.sum()>=8 and np.abs(actual-expected).max()<=3 and np.array_equal(actual>150,ink))
+    # Within 3 everywhere already means the same strokes; a pixel at 150 can land either side of a mask.
+    return bool(ink.sum()>=8 and np.abs(actual-expected).max()<=3)
