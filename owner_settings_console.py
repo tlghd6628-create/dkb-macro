@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk,messagebox
 from gui_settings import fields,parse_value
 
-UNAVAILABLE={'auto_rewards.training_log.enabled':'사용 불가 · 이미지 수집 필요'}
+UNAVAILABLE={}
 
 def category(key):
  # Removed from the console only: the saved value and its consumer stay as they are.
