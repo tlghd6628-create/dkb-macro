@@ -90,8 +90,10 @@ def scene(detector,frame):
     # A notification dot breaks the menu match and a bright backdrop breaks the settings icon, both in
     # town. With no panel open, the Home icon and AUTO still prove the bare field.
     if hud_anchor(frame,'home-hud',(662,441,25,29)) and any(detector.find(n,frame,threshold=.95) for n in AUTO_NAMES):return outside()
-    from owner_text import shows_field_words
+    from owner_text import shows_field_words,level_and_name
     if shows_field_words(frame):return outside()
+    # The bag's own check is a fixed place. Its title names the character, which nothing else shows there.
+    if level_and_name(frame)[0] is not None:return 'inventory'
     return 'unknown'
 
 def timer_pair(service):

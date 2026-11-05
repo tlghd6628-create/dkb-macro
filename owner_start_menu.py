@@ -69,6 +69,8 @@ def title_menu(frame):
  for words in title(frame) or ():
   name=re.sub(r'[^가-힣]','',str(words))
   if name in TITLE_MENUS:return name
+  # The icon before a title can come back as one letter: 숫 제작, 뭘유물수집.
+  if name[1:] in TITLE_MENUS and len(name)>=3:return name[1:]
  return None
 
 # Windows in the middle of the screen a stopped job can leave open, with nothing to lose by closing.

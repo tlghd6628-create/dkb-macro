@@ -37,6 +37,7 @@ MARK_SCORE=.9
 TITLED_SCREENS=(('native:체크_전체매뉴_기운발현','m_energy'),('native:체크_영기수련','m_spirit'));TITLE_SLACK=6;TITLE_SCORE=.85
 STORE=Path(__file__).parent/'assets/hd'
 HIT_LIFE=5.0
+WORTH_READING=.5
 _index=None;_images={};_missing=set();_layouts=None;_words=None;_marks=None
 _current=None;_last_capture=None;_hits=collections.deque(maxlen=64);_pins=collections.deque(maxlen=16);_lock=threading.Lock()
 
@@ -466,8 +467,8 @@ def match_real(image,needle,method,ordinary,scorer=None):
     logical_y=np.clip(np.round((top+ys)/F-box[1]).astype(int),0,rows-1)
     logical_x=np.clip(np.round((left+xs-shift)/F-box[0]).astype(int),0,cols-1)
     np.maximum.at(answer,(logical_y,logical_x),scores[ys,xs].astype(np.float32))
-    if float(answer.max())<.85:
-        # Not where the cut says. A button's words can still be there: a window moved it, or it looks a little different.
+    if float(answer.max())<.96:
+        # Callers ask for up to .95, and the raid tab's cut scored .935 on its own screen. Not where the cut says. A button's words can still be there: a window moved it, or it looks a little different.
         by_words=match_words(image,needle,source,real,key)
         if by_words is not None and float(by_words.max())>0:return by_words
     _remember_hits(answer,box,np.asarray(needle).shape,shift)
@@ -517,6 +518,13 @@ def match_words(image,needle,source,real,key=None):
     array=np.asarray(needle)
     row=word_table().get(key or key_of(needle)) or (word_table().get(key_of(array[:,:,::-1])) if array.ndim==3 else None)
     if row is None or 'words' not in row or source is None or source[2]*source[3]>=LOGICAL[0]*LOGICAL[1]/2:return None
+    # Reading takes about .2 s and this runs on every poll of every picture not on screen, which took one look at
+    # the screen from 15 ms to 2 s. Measured on saved screens: the old picture over the scaled frame scores at least
+    # .796 where its words really are, and under .5 on 90% of the others. A window that moves at this size has pad.
+    if not row.get('pad') and image.shape[0]>=array.shape[0] and image.shape[1]>=array.shape[1] and _PLAIN_MATCH[0] is not None:
+        rough=_PLAIN_MATCH[0](np.asarray(image),array,5)
+        if float(np.nan_to_num(rough,nan=-1).max())<WORTH_READING:
+            return np.full((max(1,image.shape[0]-array.shape[0]+1),max(1,image.shape[1]-array.shape[1]+1)),-1.,np.float32)
     import owner_text
     x,y,w,h=owner_text.word_box(source,row.get('pad',0))
     wanted=row['words']
