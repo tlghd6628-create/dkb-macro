@@ -11,6 +11,7 @@ NEEDED=3
 # Real pixels on the 1366x768 screen.
 LIMIT_NAME=(75,108,200,22);LIMIT_ROW=(75,150,180,20);SLOT_COUNT=(562,722,44,24);SLOT_PRESS=(581,722)
 GOAL_COUNT=(790,262,85,20)  # the first objective's count, in the frame's own terms
+SLOT_DIGITS=(572,725,30,15)
 
 class PotionFull(BaseException):pass
 
@@ -116,8 +117,16 @@ def slot_count(ui):
  """Potions left in the first quick slot, on the real screen. Or None."""
  from owner_text import read_area
  import numpy as np
- x,y,w,h=SLOT_COUNT;real=np.asarray(ui.frame().hi)
- values=[r['text'] for r in read_area(None,real[y:y+h,x:x+w],language='number',scale=3,minimum=.6) if re.fullmatch(r'\d{1,4}',str(r['text']).strip())]
+ real=np.asarray(ui.frame().hi)
+ # The count is drawn in red right over scenery and the red potion. Lifted out by colour it reads .99 where the plain
+ # pixels gave 89, 589 or nothing.
+ x,y,w,h=SLOT_DIGITS;part=real[y:y+h,x:x+w].astype(np.int16)
+ ink=(part[:,:,0]>150)&(part[:,:,0]-part[:,:,1]>70)&(part[:,:,0]-part[:,:,2]>50)&(part[:,:,2]>45)
+ lifted=np.stack([255-ink.astype(np.uint8)*255]*3,axis=2)
+ values=[r['text'] for r in read_area(None,lifted,language='number',scale=4,minimum=.8) if re.fullmatch(r'\d{1,4}',str(r['text']).strip())]
+ if not values:
+  x,y,w,h=SLOT_COUNT
+  values=[r['text'] for r in read_area(None,real[y:y+h,x:x+w],language='number',scale=3,minimum=.6) if re.fullmatch(r'\d{1,4}',str(r['text']).strip())]
  return int(values[0]) if len(values)==1 else None
 
 def use_potions(ui,receipt,commit,guard):
