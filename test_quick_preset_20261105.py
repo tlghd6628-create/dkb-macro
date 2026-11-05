@@ -54,6 +54,39 @@ class Select(unittest.TestCase):
   game=FakeGame();self.assertFalse(quick.select(game,'Z'));self.assertEqual(game.keys,0)
 
 
+class RealPixels(unittest.TestCase):
+ """Real-size arrays and a stand-in reader. What real letters read as is checked in the game, not here."""
+ def real(self,*white):
+  image=np.full((768,1366,3),60,dtype=np.uint8)
+  for letter in white:
+   x,y=round(quick.X*1.6-69.2),round(quick.LETTERS[letter]*1.6)
+   image[y-5:y+5,x-5:x+5]=255
+  return image
+ def lit(self,image,reads):
+  from unittest.mock import patch
+  import owner_text
+  calls=[]
+  def read_area(root,area,**options):
+   calls.append(options['top'])
+   return [{'text':reads.pop(0),'score':.9}]
+  with patch.object(owner_text,'read_area',read_area):return quick._real_lit(image),calls
+ def test_white_letter_that_reads_as_itself(self):
+  self.assertEqual(self.lit(self.real('B'),['B'])[0],'B')
+ def test_white_art_that_reads_as_something_else(self):
+  self.assertIsNone(self.lit(self.real('A'),['F2'])[0])
+ def test_nothing_white_is_not_read_at_all(self):
+  found,calls=self.lit(self.real(),[])
+  self.assertIsNone(found);self.assertEqual(calls,[])
+ def test_two_lit_letters_answer_nothing(self):
+  self.assertIsNone(self.lit(self.real('A','B'),['A','B'])[0])
+ def test_every_letter_is_clicked_on_the_column(self):
+  import owner_hd
+  frame=S(hi=self.real())
+  for letter,y in quick.LETTERS.items():
+   hit=quick._letter_hit(frame,letter)
+   self.assertEqual(owner_hd.to_real_point(hit[0],hit[1]),(round(quick.X*1.6-69.2),round(y*1.6)),letter)
+
+
 class Off(unittest.TestCase):
  def test_switch_off_does_nothing(self):
   adapter=S(values={'common.skill_preset.enabled':False})
