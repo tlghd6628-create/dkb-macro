@@ -23,9 +23,6 @@ WINDOWS={
  'move_method':{'asset':('move-method-title',(340,125,220,50)),'members':('버튼_축지술_가운데',),'zone':(340,255,220,75),'same_spot':True},
  'world_map':{'anchors':('버튼_지도_일반','버튼_지도_즐겨찾기','버튼_지도_저장위치'),'need':2,
               'members':('버튼_지도_축지술','버튼_보스_축지술'),'zone':(600,425,297,54),'same_spot':True},
- # The zoom bar moved 11 left in the patch, so every treasure candidate stopped at the map.
- 'treasure_map':{'anchors':('버튼_지도_일반','버튼_지도_즐겨찾기','버튼_지도_저장위치'),'need':2,
-                 'members':('버튼_보물찾기_지도축소',),'zone':(340,442,50,20),'same_spot':True},
  'hud_top':{'anchors':('버튼_우편','버튼_인벤토리','버튼_전체매뉴','버튼_길라잡이2','버튼_이벤트2'),'need':2,
             'members':('버튼_길라잡이','버튼_길라잡이2','버튼_이벤트','버튼_이벤트2','버튼_거래소','버튼_우편','버튼_인벤토리','버튼_전체매뉴'),'zone':(600,0,297,36)},
  'growth':{'anchors':('체크_성장','체크_전체매뉴_성장'),'need':1,'members':('버튼_성장_장비탭','버튼_성장_가호탭','버튼_성장_도술탭','버튼_성장_강화','버튼_성장_장비_돌파','버튼_성장_장비_돌파2','버튼_성장_장비_각성','버튼_성장_장비_각성2'),'zone':None},
@@ -410,9 +407,23 @@ def drift_scan(detector,name,frame,now=time.monotonic):
     except OSError:pass
     return row
 
+# The zoom bar moved in the patch, and the native treasure route re-checks the button itself before
+# clicking, so a recovered hit is refused. It has to see the current image at the current place.
+MOVED_IMAGES={'버튼_보물찾기_지도축소':('map-zoom-out',354,450)}
+
 def install(gui=None):
     from roi_runtime import RoiDetector
     from project_adapter.sleep_mode import SleepModeActions
+    if not getattr(RoiDetector.__init__,'_owner_moved_images',False):
+        construct=RoiDetector.__init__
+        @wraps(construct)
+        def made(detector,*args,**kwargs):
+            construct(detector,*args,**kwargs)
+            for name,(image,x,y) in MOVED_IMAGES.items():
+                if name in detector.templates and name in detector.entries:
+                    detector.templates[name]=_redrawn_image(image)[:,:,::-1].copy()
+                    detector.entries[name]=dict(detector.entries[name],x=x,y=y)
+        made._owner_moved_images=True;RoiDetector.__init__=made
     if not getattr(install,'reported',False):
         install.reported=True
         line=health_summary(_health_path())
