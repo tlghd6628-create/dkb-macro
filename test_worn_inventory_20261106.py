@@ -33,9 +33,6 @@ class Table(unittest.TestCase):
  def test_without_both_ends_there_is_no_table(self):
   self.assertIsNone(self.table([word('강화',415),word('개방',443)]))
   self.assertIsNone(self.table([word('개방',443),word('각성',499)]))
- def test_a_table_without_opening_has_two(self):
-  hits=self.table([word('강화',483),word('각성',511)])
-  self.assertEqual(list(hits),['enhance','awaken']);self.assertEqual(hits['awaken'][1],511-13)
  def test_rows_at_another_spacing_are_no_table(self):
   self.assertIsNone(self.table([word('강화',415),word('각성',433)]))
  def test_the_lower_rows_of_a_blessing_are_inside_the_area(self):

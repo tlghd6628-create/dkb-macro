@@ -46,8 +46,7 @@ def real_table(real):
   if field:hits[field]=row['ry']
  if 'enhance' not in hits or 'awaken' not in hits:return None
  rows=round((hits['awaken']-hits['enhance'])/REAL_ROW_GAP)
- # A table with no 개방 row has 강화 and 각성 next to each other.
- names={1:('enhance','awaken'),2:('enhance','opening','awaken'),3:('enhance','opening','breakthrough','awaken')}.get(rows)
+ names={2:('enhance','opening','awaken'),3:('enhance','opening','breakthrough','awaken')}.get(rows)
  if names is None or abs(hits['awaken']-hits['enhance']-rows*REAL_ROW_GAP)>4:return None
  return {field:(REAL_NUMBER[0],hits['enhance']+index*REAL_ROW_GAP-REAL_NUMBER[2]//2,REAL_NUMBER[1],REAL_NUMBER[2]) for index,field in enumerate(names)}
 
