@@ -194,7 +194,8 @@ def _resume_dungeon(gui,adapter,context,inputs,service,*,goal=None):
             from owner_scene_archive import unknown_observed
             unknown_observed(gui,adapter,context,frame,'dungeon_unrecognized')
             if unknown_at is None:unknown_at=time.monotonic()
-            if time.monotonic()-unknown_at>20:raise RuntimeError('비경 복귀 중 현재 화면을 20초간 확인하지 못했습니다. 진단 확인이 필요합니다.')
+            # A raid's death screen stays unnamed through its revive countdown, which ended this at 20 (11-05 14:28).
+            if time.monotonic()-unknown_at>45:raise RuntimeError('비경 복귀 중 현재 화면을 45초간 확인하지 못했습니다. 진단 확인이 필요합니다.')
         if time.monotonic()>deadline:raise RuntimeError('비경 기존 진행 이어가기 제한시간 초과 · 새 입장 없이 중단합니다.')
         context.wait(.5)
 

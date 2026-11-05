@@ -19,11 +19,13 @@ class Return(unittest.TestCase):
    self.assertFalse(resume(self.adapter,self.context,None))
  def test_flag_goes_back_then_clears(self):
   _flag(self.adapter).write_text('1')
-  with patch.object(owner_skill_ui,'SkillUI',return_value=self.ui):self.assertTrue(resume(self.adapter,self.context,None))
-  self.ui.select_preset.assert_called_once_with(1);self.ui.close_known.assert_called_once();self.assertFalse(_flag(self.adapter).exists())
+  with patch('owner_quick_preset.select',return_value=True) as select,patch('project_adapter.town_services.TownServices'):
+   self.assertTrue(resume(self.adapter,self.context,None))
+  self.assertEqual(select.call_args[0][1],'A');self.assertFalse(_flag(self.adapter).exists())
  def test_failed_return_keeps_the_flag_for_the_next_run(self):
-  _flag(self.adapter).write_text('1');self.ui.select_preset.side_effect=Pending('메뉴')
-  with patch.object(owner_skill_ui,'SkillUI',return_value=self.ui):self.assertFalse(resume(self.adapter,self.context,None))
+  _flag(self.adapter).write_text('1')
+  with patch('owner_quick_preset.select',return_value=False),patch('project_adapter.town_services.TownServices'):
+   self.assertFalse(resume(self.adapter,self.context,None))
   self.assertTrue(_flag(self.adapter).exists())
 
 

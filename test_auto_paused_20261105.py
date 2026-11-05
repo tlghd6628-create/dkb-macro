@@ -46,7 +46,12 @@ class Flow(unittest.TestCase):
   detector=Mock();detector.find=lambda name,frame,threshold=0:self.HIT if name==PAUSED else None
   actions=S(capture=lambda:'frame',click=Mock())
   wrap(self.original,lambda:detector)(actions,self.context,None)
-  actions.click.assert_called_once_with(PAUSED,self.HIT,threshold=.90,pre_wait=.1)
+  actions.click.assert_called_once_with(PAUSED,self.HIT,threshold=.90,pre_wait=.1,revalidate_template=False)
+ def test_a_failed_press_does_not_stop_the_run(self):
+  detector=Mock();detector.find=lambda name,frame,threshold=0:self.HIT if name==PAUSED else None
+  actions=S(capture=lambda:'frame',click=Mock(side_effect=RuntimeError('절전 버튼 위치 변경')))
+  self.assertTrue(wrap(self.original,lambda:detector)(actions,self.context,None))
+  self.original.assert_called_once()
 
 
 if __name__=='__main__':unittest.main()

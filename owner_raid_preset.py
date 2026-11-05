@@ -27,7 +27,7 @@ def add_fields(schema):
 def guarded(change,*args,**kwargs):
  """A preset that could not be changed must not cost the raid itself."""
  from biol_base.session import Cancelled
- try:change(*args,**kwargs);return True
+ try:return change(*args,**kwargs) is not False
  except Cancelled:raise
  except Exception:
   LOG.exception('레이드 스킬 프리셋 변경 실패 · 레이드는 계속 진행');return False
@@ -39,6 +39,36 @@ def restore(adapter,context,inputs,change):
  if adapter.values.get(COMMON) is True and guarded(change,adapter,context,inputs):
   from owner_single_preset import mark
   mark(adapter,False)
+
+MATCH_SCALE=.4
+
+class MatchClock:
+ """The raid module's clock, running slower while it waits for a match.
+
+ The native wait gives up after 5 minutes. A vote that fails takes 90 seconds, so three failed votes use
+ it up, and the fourth can pass after the flow stopped looking: the character then stood inside the raid
+ with AUTO off and no raid preset (real TEST 11-05 14:23) and died. At this rate it waits 12.5 minutes.
+ Everything else in the module keeps real time.
+ """
+ def __init__(self,real):
+  self._real=real;self._last=real.monotonic();self._value=self._last;self.scale=1
+ def monotonic(self):
+  now=self._real.monotonic();self._value+=(now-self._last)*self.scale;self._last=now
+  return self._value
+ def __getattr__(self,name):return getattr(self._real,name)
+
+def slow_matching(flow_class,module):
+ if getattr(flow_class,'_owner_match_clock',False):return
+ clock=MatchClock(module.time)
+ module.time=clock
+ ordinary_matching=flow_class.matching
+ @wraps(ordinary_matching)
+ def matching(flow,*args,**kwargs):
+  clock.monotonic();clock.scale=MATCH_SCALE
+  try:return ordinary_matching(flow,*args,**kwargs)
+  finally:clock.monotonic();clock.scale=1
+ flow_class.matching=matching
+ flow_class._owner_match_clock=True
 
 def install_on(flow_class,module,change):
  """Patch one flow class. Entry and matching are never touched: the preset can
@@ -86,5 +116,8 @@ def install_on(flow_class,module,change):
 
 def install():
  from project_adapter import boss_raid
+ import owner_quick_preset
+ owner_quick_preset.install()
  from project_adapter.skill_preset import run_skill_preset
  install_on(boss_raid.RaidFlow,boss_raid,run_skill_preset)
+ slow_matching(boss_raid.RaidFlow,boss_raid)
