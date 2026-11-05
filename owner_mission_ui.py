@@ -197,6 +197,12 @@ class MissionUI(SkillUI):
     if send(1,ctypes.byref(event),ctypes.sizeof(I))!=1:raise Pending('임무 목록 휠 입력 미완료')
     self.context.wait(.04)
   self.context.wait(.35)
+ def startable_main(self,frame,y):
+  """A new chapter's first step stays grey until started, though the game has selected it and offers AUTO.
+  A step locked behind another quest shows the same button; its condition text still blocks it in _selected."""
+  if selected_center(frame)!=y:return False
+  if auto_button_hit(self.service.detector,frame):return True
+  return any('자동진행' in clean(row['text']) and row['score']>=.88 for row in self.rows((674,432,205,40)))
  def selected(self,mode,y,book,power):
   self._owner_last_mission_read={}
   try:return self._selected(mode,y,book,power)
@@ -219,6 +225,7 @@ class MissionUI(SkillUI):
   # Grey future steps remain unsuitable for execution even when their power
   # badge is green. Their prerequisites have not necessarily been satisfied.
   bright=int((frame[max(96,y-8):min(438,y+9),70:480].min(axis=2)>180).sum())>=20
+  if mode=='main_quest' and not bright:bright=self.startable_main(frame,y)
   rows=self.rows((674,229,202,111));text=' '.join(r['text'] for r in rows if r['score']>=.85)
   required=required_power(rows);prereq=None
   found=re.search(r'(\[[^\]]+\][^\n]+?)\s*임무.*완료',text)
@@ -317,7 +324,8 @@ class MissionUI(SkillUI):
      import numpy as np
      # Grey future steps cannot be executed. Do not OCR every future row
      # while looking for the saved active/current mission.
-     if int((frame[max(96,y-8):min(438,y+9),70:480].min(axis=2)>180).sum())<20:continue
+     if (int((frame[max(96,y-8):min(438,y+9),70:480].min(axis=2)>180).sum())<20
+         and not (mode=='main_quest' and self.startable_main(frame,y))):continue
      sig=(mode,row_signature(frame,y))
      if sig in seen:continue
      seen.add(sig)
