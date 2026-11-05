@@ -22,8 +22,34 @@ def yield_readonly_if_interrupted(service,context,inputs,slot,ui=None):
 def label(field):
  return np.asarray(Image.open(Path(__file__).parent/'assets/worn-stats'/(field+'.png')).convert('RGB'))
 
+REAL_ROWS=(565,335,235,190)  # the tooltip's rows, in real pixels
+REAL_NUMBER=(690,45,26)      # left edge, width and height of a row's number, between its - and + buttons
+WORDS={'강화':'enhance','개방':'opening','돌파':'breakthrough','각성':'awaken'}
+
+def real_table(real):
+ """The rows by their words, in real pixels. Label pictures shrunk from 1366 score around .89 either side of the bar,
+ and three slots of eleven came back unread (18:23)."""
+ from owner_text import clean,read_area
+ x,y,w,h=REAL_ROWS
+ hits={}
+ for row in read_area(None,real[y:y+h,x:x+w],left=x,top=y,minimum=.8):
+  field=WORDS.get(clean(row['text']))
+  if field:hits[field]=(REAL_NUMBER[0],row['ry']-REAL_NUMBER[2]//2,REAL_NUMBER[1],REAL_NUMBER[2])
+ return {field:hits[field] for field in FIELDS if field in hits} if 'enhance' in hits and 'awaken' in hits else None
+
+def real_read(real):
+ from owner_text import clean,read_area
+ hits=real_table(real)
+ if hits is None:return None
+ result={}
+ for field,(x,y,w,h) in hits.items():
+  values=[clean(row['text']) for row in read_area(None,real[y:y+h,x:x+w],language='number',scale=3,minimum=.6)]
+  if len(values)==1 and re.fullmatch(r'0|[1-9][0-9]{0,2}',values[0]):result[field]=int(values[0])
+ return result
+
 def table(frame):
  if getattr(frame,'shape',None)!=(479,897,3):return None
+ if getattr(frame,'hi',None) is not None:return real_table(np.asarray(frame.hi))
  hits={};area=frame[170:385,260:650]
  # Only common Korean field labels are templates. Their numeric values and
  # the equipment/character names are always read from the current frame.
@@ -39,6 +65,7 @@ def table(frame):
  return hits
 
 def read(frame,engine):
+ if getattr(frame,'hi',None) is not None:return real_read(np.asarray(frame.hi))
  hits=table(frame)
  if hits is None:return None
  result={}
