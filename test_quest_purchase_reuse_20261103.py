@@ -20,7 +20,7 @@ class Tests(unittest.TestCase):
  def setUp(self):
   Service.calls=[];self.context=NS(checkpoint=lambda:None,wait=lambda *a:None)
   self.adapter=NS(project=NS(root='fake'),values={'common.potion_and_favorite.enabled':False})
-  self.ui=NS(adapter=self.adapter,context=self.context,inputs=object(),normal=lambda:True,close_known=lambda:None)
+  self.ui=NS(adapter=self.adapter,context=self.context,inputs=object(),normal=lambda:True,close_known=lambda:None,frame=lambda:None)
  def test_counter_requires_strong_single_three_target(self):
   self.assertEqual(q.counter([{'text':'1/3','score':.99}]),1)
   for rows in ([{'text':'1/3','score':.8}],[{'text':'1/5','score':1}],[{'text':'0/3','score':1},{'text':'1/3','score':1}]):self.assertIsNone(q.counter(rows))

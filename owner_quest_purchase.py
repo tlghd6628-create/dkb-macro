@@ -12,6 +12,11 @@ NEEDED=3
 LIMIT_NAME=(75,108,200,22);LIMIT_ROW=(75,150,180,20);SLOT_COUNT=(562,722,44,24);SLOT_PRESS=(581,722)
 
 class PotionFull(BaseException):pass
+class NoCoins(BaseException):pass
+
+def coins_allow(ui):
+ from owner_coin_reserve import can_spend
+ return can_spend(ui.frame(),'물약 서사 구매')
 
 def eligible_root(row):
  return bool(row.get('mode')=='sub_quest' and row.get('group') and not row.get('completed') and '메마른' in str(row.get('title','')))
@@ -82,6 +87,8 @@ def native_purchase_watch(adapter,context,ui,receipt,commit,guard):
     full(ui,'1단물약')
    if name=='버튼_물약상인_구매':
     if evidence['buy_sent']:raise Pending('같은 퀘스트 중복 구매 입력 차단')
+    # The picture would be refused below the floor anyway, and this mark would then wait for a purchase never sent.
+    if not coins_allow(ui):raise NoCoins()
     evidence['buy_sent']=True;receipt.update(phase='purchase_sent',sent_at=time.time());commit()
   return previous_button(service,name,*a,**k)
  def cached(other,tier):
@@ -146,6 +153,9 @@ def execute(ui,book,key):
    LOG.info('퀘스트 구매 조건 완료 확인 · %s · 현재 단계=%s',row['title'],stage['stage'])
   return False
  if not needs_purchase(stage,receipt):return False
+ # Before the trip and before any potion is drunk: with the coins at the floor neither would lead to a purchase.
+ if not coins_allow(ui):
+  book.defer(key,'condition',detail='엽전 기준 · 물약 구매 보류');return True
  from owner_progression import state
  from owner_hunt_rules_candidate import configured_identity
  from project_adapter.town_services import _close_potion_screen
@@ -167,6 +177,9 @@ def execute(ui,book,key):
     adapter.run_potion_purchase(context,ui.inputs)
   except PotionFull:
    full=True
+  except NoCoins:
+   if not ui.normal():_close_potion_screen(ui.service)
+   receipt.update(phase='not_purchased');book.defer(key,'condition',detail='엽전 기준 · 물약 구매 보류');return True
   if full:
    if not ui.normal():_close_potion_screen(ui.service)
    if not ui.normal():raise Pending('물약 사용 전 기존 상점 종료 확인 필요')
