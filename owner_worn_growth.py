@@ -16,7 +16,8 @@ from owner_gear_intent_store_candidate import IntentStore
 from owner_gear_settings_candidate import Store
 from owner_gear_step_guard_candidate import Guard
 from owner_growth_reading import breakthrough_allowed,goal_state
-from owner_growth_words import (BLESSING_COUNT,BLESSING_LEVEL,BLESSING_NEXT,BLESSING_PILL,BLESSING_TITLE,counts,enough,hit_of,level_pair,lit,only_word,pill_price)
+from owner_growth_words import (BLESSING_COUNT,BLESSING_LEVEL,BLESSING_NEXT,BLESSING_PILL,BLESSING_TITLE,counts,enough,level_pair,lit,only_word,pill_price)
+from owner_hd import real_hit
 from owner_short_notice import shown as coins_short
 
 LOG=logging.getLogger('project_gui.DKB')
@@ -24,7 +25,7 @@ SIDE_TABS=(0,100,170,240)      # real pixels of 강화 돌파 각성
 GROWTH_BUTTON=(570,560,120,46) # real pixels of the details window's 성장
 LIST_COUNT=(1066,78,105,24);SECOND_TILE=(1150,146)  # the growth list: how many it shows, and the tile after the selected one
 RESULT_CLOSE=(400,640,560,100);RESULT_SECONDS=20
-BACK=(22,19,(10,8,34,30))      # the growth screen's back arrow
+BACK=(35,30)                   # real place of the growth screen's back arrow
 VISIT_SECONDS=300;ITEM_SECONDS=90;RESULT_READS=8;ROUNDS=8;LEVEL_STEP=3
 FRESH_SECONDS=8
 ENHANCE,BREAK,AWAKEN='enhance','breakthrough','awaken'
@@ -33,6 +34,11 @@ LABEL={ENHANCE:'강화',BREAK:'돌파',AWAKEN:'각성'}
 
 class CoinsShort(Exception):
     """The game said there are no coins for this. The turn ends; nothing was spent."""
+
+
+def real_place(row):
+    """A click on the word just read, exactly where it was read."""
+    return real_hit(row['rx'],row['ry'])
 
 
 def title_words(root,frame):
@@ -53,7 +59,7 @@ def read_panel(root,frame):
     cost=pill_price(pill)
     active=bool(word and lit(frame.hi,word) and type(cost) is int and cost>0 and pair[1]==pair[0]+1 and material)
     return {'level':pair[0],'next':pair[1],'word':text.clean(word['text']) if word else None,'cost':cost,'enough':have,'active':active,
-            'opening':opening,'hit':hit_of(word) if word else None}
+            'opening':opening,'hit':real_place(word) if word else None}
 
 
 def read_action(root,frame,word):
@@ -62,7 +68,7 @@ def read_action(root,frame,word):
     pill=text.read(root,frame,BLESSING_PILL,scale=3);row=only_word(pill,(word,),.8)
     if row is None:return None
     cost=pill_price(pill);have=enough(counts(text.read(root,frame,BLESSING_COUNT,scale=3)))
-    return {'word':word,'cost':cost,'enough':have,'active':bool(lit(frame.hi,row) and have is True and type(cost) is int and cost>0),'hit':hit_of(row)}
+    return {'word':word,'cost':cost,'enough':have,'active':bool(lit(frame.hi,row) and have is True and type(cost) is int and cost>0),'hit':real_place(row)}
 
 
 class Item:
@@ -112,11 +118,13 @@ class Route:
         from owner_progression import inventory_parts,open_inventory_by_key
         if inventory_parts(self.frame())[0] is True:return True
         open_inventory_by_key(self.service)
+        # A click on a tile just after the panel opens is lost.
+        self.context.wait(1.5)
         return inventory_parts(self.frame())[0] is True
     def leave_growth(self):
         for _ in range(3):
             if not self.in_growth():return True
-            self.service.click_hit(BACK);self.context.wait(1.2)
+            self.service.click_hit(real_hit(*BACK));self.context.wait(1.2)
         return not self.in_growth()
     def into_growth(self,item):
         """From the open details window, by its own button. The window is scrolled, and a blessing's button hides until it scrolls back."""
@@ -129,7 +137,7 @@ class Route:
             self.context.wait(.2)
         else:
             LOG.info('착용 %s 성장 버튼 못 찾음',item.slot);return False
-        self.service.click_hit(hit_of(row))
+        self.service.click_hit(real_place(row))
         for _ in range(15):
             self.context.wait(.3)
             if self.in_growth():
@@ -164,6 +172,8 @@ class Route:
         """Open the details and read. With enter, go on to the growth screen if this item is short of something."""
         if not self.open_bag():
             LOG.info('착용 %s 건너뜀 · 인벤토리 안 열림',item.slot);return None
+        # The window just closed fades out, and a click into the fade is lost.
+        worn.settle_after_popup(self.service,self.context)
         entered=[]
         def decide(values,grade,title):
             item.values=values;item.grade=grade;item.title=title
@@ -177,7 +187,7 @@ class Route:
     def side_tab(self,kind):
         row=only_word(text.read(None,self.frame(),SIDE_TABS,scale=2),(LABEL[kind],),.7)
         if row is None:return False
-        self.service.click_hit(hit_of(row));self.context.wait(1.5);return True
+        self.service.click_hit(real_place(row));self.context.wait(1.5);return True
     def press_enhance(self,item,cap=None):
         """강화 until the goal, this turn's cap, or something stops it."""
         observer=EnhanceObserver(self.service,self.context,self.identity,item)
@@ -258,7 +268,7 @@ class Route:
                 self.intents.complete('short_of_coins');raise CoinsShort()
             row=only_word(text.read(None,frame,RESULT_CLOSE,scale=2),('클릭하여닫기',),.7)
             if row:
-                self.service.click_hit(hit_of(row));self.context.wait(1);return
+                self.service.click_hit(real_place(row));self.context.wait(1);return
             # 각성 stays on its tab; 돌파 plays first, and the screen has no title while it does.
             if text.shows_title(frame,'성장') is True:
                 quiet+=1
@@ -270,9 +280,7 @@ class Route:
         shown=[int(text.clean(r['text'])) for r in rows if text.clean(r['text']).isdigit()]
         if len(shown)!=1 or shown[0]<2:
             LOG.info('착용 %s 각성 재료 없음 · 동일 장비 없음',item.slot);return False
-        from owner_hd import logical_of
-        x,y=logical_of(*SECOND_TILE,getattr(self.frame(),'layout',None))
-        self.service.click_hit((x,y,(x-6,y-6,x+6,y+6)));self.context.wait(1)
+        self.service.click_hit(real_hit(*SECOND_TILE));self.context.wait(1)
         return True
     # ---- the visit
     def work(self,item,cap=None):
@@ -295,10 +303,14 @@ class Route:
     def gear(self):
         from owner_equipment_boxes import SLOTS
         items=[Item(slot,False) for slot in SLOTS]
-        for item in items:
-            self.check()
-            if self.read(item,False) is None:item.values=None
+        # A tile that did not open gets one more turn after the others: pressing it twice in a row could take the item off.
+        for turn in range(2):
+            for item in items:
+                self.check()
+                if not item.values:self.read(item,False)
         known=[item for item in items if item.values and item.grade]
+        missed=[item.slot for item in items if not item.values]
+        if missed:LOG.info('착용 장비 현재값 못 읽음 · 이번 차례 제외 · %s',', '.join(missed))
         # Stones are per grade: the lowest goes first and stops a little past the next lowest, so they spread.
         for grade in {item.grade for item in known}:
             group=[item for item in known if item.grade==grade]
@@ -312,10 +324,14 @@ class Route:
             for item in group:
                 if self.need(item):self.visit(item)
     def blessings(self):
-        for slot in worn.BLESSING_SLOTS:
-            self.check()
-            if time.monotonic()>=self.deadline:return
-            self.visit(Item(slot,True))
+        items=[Item(slot,True) for slot in worn.BLESSING_SLOTS]
+        for turn in range(2):
+            for item in items:
+                self.check()
+                if time.monotonic()>=self.deadline:return
+                if not item.values:self.visit(item)
+        missed=[item.slot for item in items if not item.values]
+        if missed:LOG.info('착용 가호 현재값 못 읽음 · 이번 차례 제외 · %s',', '.join(missed))
 
 
 def run(adapter,context,inputs):
@@ -349,6 +365,6 @@ def run(adapter,context,inputs):
     finally:
         context.checkpoint();route.leave_growth()
         frame=service.capture()
-        if worn.popup(frame):service.click_hit((510,106,(503,99,518,113)));context.wait(.5);frame=service.capture()
+        if worn.popup(frame):service.click_hit(real_hit(*worn.REAL_CLOSE));context.wait(.5);frame=service.capture()
         if inventory_parts(frame)[0] is True:close_inventory(service)
     return True
