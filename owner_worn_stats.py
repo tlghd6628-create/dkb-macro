@@ -58,9 +58,9 @@ def popup(frame):
  if getattr(frame,'shape',None)!=(479,897,3):return False
  from owner_progression import inventory_parts
  from owner_energy_box_detail_candidate import close_mark
- from owner_equipment_tooltip_candidate import _score,badge
+ from owner_equipment_tooltip_candidate import _badge
  return bool(inventory_parts(frame)==(True,True) and close_mark(frame)
-             and _score(frame[116:135,420:445],badge())>=.96)
+             and _badge(frame,420,116,445,135)>=.96)
 
 def inspect_slot(service,context,inputs,profile,character,slot='무기'):
  """One short, guarded tooltip inspection during an existing inventory visit.

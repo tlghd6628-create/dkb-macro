@@ -198,11 +198,16 @@ class Port:
   # after closing I, so using the resource-action reader here rejects every
   # otherwise-proved normal field. Inventory/selection actions above retain
   # their original per-character checks. No input is authorized by this pair.
-  field=Port.pair(self,lambda a,b:True if inventory_parts(a)==inventory_parts(b)==(False,False)
-                  and field_hud(a) and field_hud(b)
-                  and (not strict_background or
-                       (self.same_inventory_background(a) and self.same_inventory_background(b))) else None)
-  if not field:raise RuntimeError('기운 상자 창 종료 후 일반 화면 확인 필요')
+  # The bag slides shut over about a second, and one look during it stopped the whole run (17:07).
+  end=time.monotonic()+3;field=None
+  while not field:
+   field=Port.pair(self,lambda a,b:True if inventory_parts(a)==inventory_parts(b)==(False,False)
+                   and field_hud(a) and field_hud(b)
+                   and (not strict_background or
+                        (self.same_inventory_background(a) and self.same_inventory_background(b))) else None)
+   if field:break
+   if time.monotonic()>=end:raise RuntimeError('기운 상자 창 종료 후 일반 화면 확인 필요')
+   self.context.wait(.25);self.context.checkpoint()
   self.opened=False;self.view='field'
 
 def factory(adapter,context,inputs):return Port(adapter,context,inputs)

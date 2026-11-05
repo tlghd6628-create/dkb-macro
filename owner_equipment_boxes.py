@@ -36,11 +36,32 @@ def badge():
     import numpy as np
     return [np.asarray(Image.open(path).convert('RGB')) for path in sorted((Path(__file__).parent/'assets').glob('equipped_badge_*.png'))]
 
+def real_corner_state(corner):
+    """The E badge is the only orange thing in a tile's corner. An empty tile's corner is dark and flat, so a False
+    here can open a box only on a tile that is really bare; anything between stays unknown."""
+    import numpy as np
+    part=np.asarray(corner).astype(np.int16)
+    orange=int(((part[:,:,0]-part[:,:,2]>90)&(part[:,:,0]>150)&(part[:,:,1]>70)).sum())
+    # Worn corners measure 63 to 74 orange pixels of 624, a bare one 0 and std 13 (11-05, 1366x768).
+    if orange>=part.shape[0]*part.shape[1]//16:return True
+    if orange<=2 and float(part.std(axis=(0,1)).max())<20 and float(part.mean())<100:return False
+    return None
+
+def inspect_real(real):
+    """The equipment panel keeps to the left edge at any width, whichever screen map the rest of the frame took."""
+    from owner_hd import real_box
+    answer={}
+    for part,(x,y,w,h) in SLOTS.items():
+        rx,ry,rw,rh=real_box((x+w-11,y-3,16,15),rule='left')
+        answer[part]=real_corner_state(real[ry:ry+rh,rx:rx+rw])
+    return answer
+
 def inspect(frame):
     """True=worn E mark, False=proved blank badge corner, None=uncertain."""
     from owner_progression import inventory_parts
     import cv2,numpy as np
     if inventory_parts(frame)!=(True,True):return dict.fromkeys(SLOTS)
+    if getattr(frame,'hi',None) is not None:return inspect_real(np.asarray(frame.hi))
     answer={};needles=badge()
     if not needles:return dict.fromkeys(SLOTS)
     for part,(x,y,w,h) in SLOTS.items():

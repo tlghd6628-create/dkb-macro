@@ -77,11 +77,38 @@ def hud_dimmed(frame):
  gain=hud_gain(frame,'settings-hud',(758,440,26,30))
  return gain is not None and gain<.7
 
+REAL_HUD={'home-real':(992,707),'settings-real':(1144,704)}
+
+@lru_cache(maxsize=2)
+def real_hud_ink(name):
+ import numpy as np
+ from PIL import Image
+ return np.asarray(Image.open(Path(__file__).parent/'assets/hud'/(name+'.png')).convert('RGB')).min(axis=2)>170
+
+def real_hud_glyph(real,name):
+ """The glyph's white ink at its real place, a few pixels either way, over something darker. On 31 saved screens
+ this was whole on the field and at most half anywhere else. The small frame scores .73 over a bright roof."""
+ import numpy as np
+ ink=real_hud_ink(name);x0,y0=REAL_HUD[name];h,w=ink.shape
+ for dy in range(-3,4):
+  for dx in range(-3,4):
+   part=real[y0+dy:y0+dy+h,x0+dx:x0+dx+w].min(axis=2)
+   if part.shape==ink.shape and float((part[ink]>140).mean())>=.95 and float(part[ink].mean())-float(part[~ink].mean())>=40:return True
+ return False
+
 def field_hud(frame):
  if getattr(frame,'shape',None)!=(479,897,3):return False
  # Fixed foreground glyphs are unchanged in towns. Their translucent
  # background contains scenery/other players and must not own identity.
- if not (hud_anchor(frame,'home-hud',(662,441,25,29)) and hud_anchor(frame,'settings-hud',(758,440,26,30))):return False
+ real=getattr(frame,'hi',None)
+ if real is not None:
+  import numpy as np
+  real=np.asarray(real)
+  if not all(real_hud_glyph(real,name) for name in REAL_HUD):return False
+  # The health bar sits lower here than the old size would put it, at y 680.
+  bar=real[668:692,590:780].astype('float32');r,g,b=bar[:,:,0],bar[:,:,1],bar[:,:,2]
+  return int(((g>90)&(g>r*1.20)&(g>b*1.15)).sum())>=40
+ elif not (hud_anchor(frame,'home-hud',(662,441,25,29)) and hud_anchor(frame,'settings-hud',(758,440,26,30))):return False
  hp=frame[411:423,394:502].astype('float32');r,g,b=hp[:,:,0],hp[:,:,1],hp[:,:,2]
  return int(((g>90)&(g>r*1.20)&(g>b*1.15)).sum())>=40
 def moving_field(frame):
