@@ -7,7 +7,7 @@ A sent box that shows no count drop stays pending, so it is never sent twice.
 from difflib import SequenceMatcher
 from functools import lru_cache
 from pathlib import Path
-import logging,re,time
+import hashlib,json,logging,os,re,tempfile,time
 import cv2,numpy as np
 from PIL import Image
 from owner_skill_goal import Pending
@@ -15,6 +15,7 @@ LOG=logging.getLogger('project_gui.DKB')
 ROWS=(395,155,145,155);CLOSE=(510,106);DECIDE=(448,357)
 MANUALS=('절명','연타','강타','척살','저격','주술','파멸','강인','기동','기만','헌신','제압')
 REAL_GRID=(1062,130,1320,768);REAL_CELL_SCORE=.75
+AMOUNT=(640,508,90,34);AMOUNT_MORE=(780,525);AMOUNT_ALL=(812,525)  # real pixels: the dialog's 3/10, its + and its last-step button
 
 
 @lru_cache(maxsize=4)
@@ -211,24 +212,99 @@ def manual_row(rows,style):
     return None
 
 
-def open_manuals(ui,ledger,style):
-    """All 강화 요령서 선택 첩 into the one chosen manual, in a single decide.
+class ManualJournal:
+    """Boxes opened per manual under one ratio, and a decide whose result is not read yet."""
+    def __init__(self,root,receipt_key):
+        key=hashlib.sha256(str(receipt_key).encode('utf8')).hexdigest()[:24]
+        self.path=Path(root)/'settings'/('owner-manual-box-'+key+'.json')
+    def read(self):
+        if not self.path.exists():return {'version':1,'ratio':None,'opened':{},'pending':None}
+        data=json.loads(self.path.read_text(encoding='utf8'))
+        if not isinstance(data,dict) or data.get('version')!=1 or not isinstance(data.get('opened'),dict):raise ValueError('요령서 상자 기록 형식 오류')
+        return data
+    def save(self,data):
+        self.path.parent.mkdir(parents=True,exist_ok=True)
+        fd,tmp=tempfile.mkstemp(prefix='.manual-box-',dir=self.path.parent)
+        try:
+            with os.fdopen(fd,'w',encoding='utf8') as out:json.dump(data,out,ensure_ascii=False,indent=2);out.flush();os.fsync(out.fileno())
+            os.replace(tmp,self.path)
+        finally:
+            if os.path.exists(tmp):os.unlink(tmp)
 
-    A repeat can only give more of the same manual, so no record guards it. The tile going away is the proof.
-    """
+
+def manual_plan(left,units,opened):
+    """How many of the boxes in hand go to each manual, so that all opened under this ratio come as close to it as they can."""
+    chosen=[name for name in MANUALS if units.get(name,0)>0]
+    if not chosen or left<1:return {}
+    weight=sum(units[name] for name in chosen);total=left+sum(opened.get(name,0) for name in chosen)
+    plan=dict.fromkeys(chosen,0)
+    for _ in range(left):
+        name=max(chosen,key=lambda n:(units[n]*total/weight-opened.get(n,0)-plan[n],-MANUALS.index(n)))
+        plan[name]+=1
+    return {name:amount for name,amount in plan.items() if amount}
+
+
+def shown_amount(frame):
+    """(chosen, boxes) from the dialog's 3/10, on the real screen."""
+    from owner_text import read
+    if getattr(frame,'hi',None) is None:return None
+    for row in read(None,frame,AMOUNT,scale=3):
+        found=re.fullmatch(r'(\d+)\s*/\s*(\d+)',row['text'].strip())
+        if found and row['score']>=.85:return int(found[1]),int(found[2])
+    return None
+
+
+def _press_real(ui,x,y,check):
+    from owner_hd import logical_of
+    at=logical_of(x,y,getattr(ui.frame(),'layout',None))
+    ui.click(at[0],at[1],check)
+
+
+def _set_amount(ui,amount,left,y):
+    def ready(frame):return on_dialog(frame) and row_selected(frame,y)
+    if amount==left:_press_real(ui,*AMOUNT_ALL,ready)
+    else:
+        for _ in range(amount-1):
+            _press_real(ui,*AMOUNT_MORE,ready);ui.context.wait(.25)
+    ui.wait(lambda frame:ready(frame) and shown_amount(frame)==(amount,left),seconds=3)
+
+
+def _settle_manual(journal,state,left):
+    pending=state['pending']
+    if left==pending['boxes_before']-pending['amount']:
+        state['opened'][pending['name']]=state['opened'].get(pending['name'],0)+pending['amount']
+    elif left!=pending['boxes_before']:raise Pending('이전 요령서 상자 수량 불일치')
+    state['pending']=None;journal.save(state)
+
+
+def open_manuals(ui,ledger,units):
+    """The 강화 요령서 선택 첩 by the chosen ratio, one decide per manual. The box count after each one is its proof."""
     from owner_energy_box_detail_candidate import generic_box_detail
-    if style not in MANUALS:return 'off'
-    try:
-        _open_bag(ui);cell=box_cell(ui.frame(),'manual-box')
-        if cell is None:return 'none'
-        ui.click(cell[0],cell[1],lambda f:box_cell(f,'manual-box')==cell)
-        _open_dialog(ui,ui.wait(generic_box_detail,seconds=4))
-        y=_pick(ui,lambda rows:manual_row(rows,style),style)
-        ui.click(528,327,lambda f:on_dialog(f) and row_selected(f,y));ui.context.wait(.5)
-        ui.click(DECIDE[0],DECIDE[1],lambda f:on_dialog(f) and row_selected(f,y))
-        LOG.info('요령서 상자 사용 · %s',style)
-        ui.wait(lambda f:not on_dialog(f),seconds=5);ui.context.wait(4)
-        frame=ui.frame()
-        if generic_box_detail(frame):return 'left'
-        return 'left' if box_cell(frame,'manual-box') else 'opened'
-    finally:_close_bag(ui)
+    chosen={name:value for name,value in (units or {}).items() if name in MANUALS and value>0}
+    if not chosen:return 'off'
+    journal=ManualJournal(ui.adapter.project.root,ledger.receipt_key);state=journal.read()
+    stamp=json.dumps(chosen,ensure_ascii=True,sort_keys=True)
+    # A new ratio starts its own count: what earlier ones opened is no debt.
+    if state.get('ratio')!=stamp and not state.get('pending'):
+        state.update(ratio=stamp,opened={});journal.save(state)
+    sent=False
+    for _ in range(len(chosen)+1):
+        try:
+            _open_bag(ui);cell=box_cell(ui.frame(),'manual-box')
+            if cell is None:
+                if state.get('pending'):_settle_manual(journal,state,0)
+                return 'opened' if sent else 'none'
+            ui.click(cell[0],cell[1],lambda f:box_cell(f,'manual-box')==cell)
+            frame=ui.wait(generic_box_detail,seconds=4);left=count(ui)
+            if state.get('pending'):_settle_manual(journal,state,left)
+            plan=manual_plan(left,chosen,state['opened'])
+            name=next(n for n in MANUALS if plan.get(n));amount=plan[name]
+            _open_dialog(ui,frame)
+            y=_pick(ui,lambda rows:manual_row(rows,name),name)
+            _set_amount(ui,amount,left,y)
+            state['pending']={'name':name,'amount':amount,'boxes_before':left,'at':time.time()};journal.save(state)
+            ui.click(DECIDE[0],DECIDE[1],lambda f:on_dialog(f) and row_selected(f,y))
+            LOG.info('요령서 상자 사용 · %s %d개 · 남은 상자 %d',name,amount,left-amount)
+            ui.wait(lambda f:not on_dialog(f),seconds=5);ui.context.wait(4);sent=True
+        finally:_close_bag(ui)
+    return 'left'

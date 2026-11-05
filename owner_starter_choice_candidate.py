@@ -142,6 +142,13 @@ def _enable_owned_icon_fallback(ui):
   return result
  ui.skill_rows=rows
 
+def manual_units(data):
+ """Each manual's share of the boxes. Nothing chosen opens nothing, and the old single-choice key does not count."""
+ from owner_energy_allocation_candidate import percent_units
+ shares=data.get('manual_percentages')
+ if shares is None:return {}
+ return percent_units(dict(dict.fromkeys(MANUALS,'0'),**shares) if isinstance(shares,dict) else shares,MANUALS)
+
 class Choices:
  def __init__(self,root,profile):
   if not isinstance(profile,str) or not profile.strip():raise ValueError('캐릭터 설정 확인 필요')
@@ -162,6 +169,7 @@ class Choices:
   skills=data.get('skills',SKILLS)
   if not isinstance(skills,(list,tuple)) or len(skills)>5 or any(x not in BOX_SKILLS for x in skills):raise ValueError('도술 조각은 5개까지 고를 수 있습니다')
   if data.get('manual') not in (None,)+MANUALS:raise ValueError('요령서 종류 확인 필요')
+  manual_units(data)
  def write(self,data,expected):
   self.validate(data);_,revision=self.snapshot()
   if revision!=expected:raise ValueError('다른 창에서 설정이 바뀌었습니다. 다시 열어 주세요')
@@ -244,17 +252,46 @@ def open_settings(parent,root,profile,*,embedded=False):
  if embedded:win.pack(fill='both',expand=True)
  else:win.title('선택 상자 설정');win.transient(parent)
  body=ttk.Frame(win,padding=12);body.pack(fill='both',expand=True)
- ttk.Label(body,text='기념 도술 조각 선택 상자').pack(anchor='w')
- skill_box=tk.Listbox(body,selectmode='multiple',height=8,exportselection=False)
+ left=ttk.Frame(body);left.pack(side='left',anchor='n',fill='x',expand=True)
+ right=ttk.Frame(body);right.pack(side='left',anchor='n',padx=(16,0))
+ ttk.Label(left,text='기념 도술 조각 선택 상자').pack(anchor='w')
+ skill_box=tk.Listbox(left,selectmode='multiple',height=8,exportselection=False)
  skill_box.pack(fill='x',pady=(4,10))
  for index,name in enumerate(BOX_SKILLS):
   skill_box.insert('end',name)
   if name in data.get('skills',SKILLS):skill_box.selection_set(index)
- ttk.Label(body,text='강화 요령서 선택 첩').pack(anchor='w')
- manual=tk.StringVar(win,value=data.get('manual') or '사용 안 함')
- ttk.Combobox(body,textvariable=manual,values=('사용 안 함',)+MANUALS,state='readonly',width=14).pack(anchor='w',pady=(4,10))
- ttk.Label(body,text='발현 재료 선택 상자').pack(anchor='w')
- grid=ttk.Frame(body);grid.pack(fill='x',pady=(4,8))
+ ttk.Label(left,text='강화 요령서 선택 첩').pack(anchor='w')
+ manual_grid=ttk.Frame(left);manual_grid.pack(fill='x',pady=(4,4))
+ saved_manual=whole_percent({name:(data.get('manual_percentages') or {}).get(name,'0') for name in MANUALS})
+ manuals={name:tk.StringVar(win,value=saved_manual[name]) for name in MANUALS}
+ manual_total=tk.StringVar(win)
+ def manual_changed(*args):
+  from decimal import Decimal
+  try:
+   value=sum(Decimal(v.get().strip()) for v in manuals.values())
+   manual_total.set('사용 안 함' if value==0 else '합계 '+format(value,'f')+'%')
+  except Exception:manual_total.set('합계 —')
+ for index,name in enumerate(MANUALS):
+  row,column=divmod(index,4)
+  ttk.Label(manual_grid,text=name).grid(row=row,column=column*2,padx=6,pady=2,sticky='w')
+  ttk.Entry(manual_grid,textvariable=manuals[name],width=6).grid(row=row,column=column*2+1,padx=(0,10),pady=2)
+  manuals[name].trace_add('write',manual_changed)
+ def manual_equal():
+  from decimal import Decimal,InvalidOperation
+  selected=[]
+  for name in MANUALS:
+   try:
+    if Decimal(manuals[name].get())>0:selected.append(name)
+   except InvalidOperation:pass
+  if not selected:return
+  base,left=divmod(100,len(selected))
+  for index,name in enumerate(selected):manuals[name].set(str(base+(1 if index<left else 0)))
+ manual_foot=ttk.Frame(left);manual_foot.pack(fill='x',pady=(0,10))
+ ttk.Label(manual_foot,textvariable=manual_total).pack(side='left')
+ ttk.Button(manual_foot,text='균등',command=manual_equal).pack(side='left',padx=10)
+ manual_changed()
+ ttk.Label(right,text='발현 재료 선택 상자').pack(anchor='w')
+ grid=ttk.Frame(right);grid.pack(fill='x',pady=(4,8))
  for column,label in enumerate(('기운','비율 (%)','')):ttk.Label(grid,text=label).grid(row=0,column=column,padx=6,sticky='w')
  initial=whole_percent(data.get('energy_percentages') if data['energy_mode']=='percent' else equal_display(data['energies']))
  choices={name:tk.StringVar(win,value=str(initial[name])) for name in ENERGIES};equal=[data['energy_mode'] in ('balanced','single')]
@@ -282,7 +319,7 @@ def open_settings(parent,root,profile,*,embedded=False):
   for name,value in whole_percent(equal_display(selected)).items():choices[name].set(value)
   equal[0]=True
  changed();equal[0]=data['energy_mode'] in ('balanced','single')
- footer=ttk.Frame(body);footer.pack(fill='x')
+ footer=ttk.Frame(right);footer.pack(fill='x')
  ttk.Label(footer,textvariable=total).pack(side='left')
  ttk.Button(footer,text='균등',command=make_equal).pack(side='left',padx=10)
  def save():
@@ -291,7 +328,10 @@ def open_settings(parent,root,profile,*,embedded=False):
    values={n:choices[n].get() for n in ENERGIES};units=percent_units(values)
    updated=dict(data,energy_mode='balanced' if equal[0] else 'percent',energies=[n for n in ENERGIES if units[n]>0],
                 energy_percentages={n:f'{units[n]//100}.{units[n]%100:02d}' for n in ENERGIES},
-                skills=[BOX_SKILLS[i] for i in skill_box.curselection()],manual=None if manual.get()=='사용 안 함' else manual.get())
+                skills=[BOX_SKILLS[i] for i in skill_box.curselection()])
+   shares=percent_units({n:manuals[n].get() for n in MANUALS},MANUALS)
+   updated.pop('manual',None)
+   updated['manual_percentages']={n:f'{shares[n]//100}.{shares[n]%100:02d}' for n in MANUALS} if any(shares.values()) else None
    store.write(updated,revision)
    data,revision=store.snapshot()
   except (OSError,ValueError) as exc:messagebox.showerror('상자 설정 확인',str(exc),parent=win);return
@@ -358,11 +398,11 @@ def open_chosen_manual(adapter,context,inputs):
  if getattr(adapter,'_owner_manual_checked',None) is context:return
  progress=state(adapter)
  if not progress.character or type(progress.level) is not int or progress.level<30:return
- style=Choices(adapter.project.root,configured_identity(adapter.project.root)).snapshot()[0].get('manual')
- if not style:return
- result=open_manuals(SkillUI(adapter,context,inputs),runtime_ledger(adapter,progress.character),style)
+ units={name:value for name,value in manual_units(Choices(adapter.project.root,configured_identity(adapter.project.root)).snapshot()[0]).items() if value}
+ if not units:return
+ result=open_manuals(SkillUI(adapter,context,inputs),runtime_ledger(adapter,progress.character),units)
  adapter._owner_manual_checked=context
- LOG.info('요령서 상자 · %s · %s',style,result)
+ LOG.info('요령서 상자 · %s · %s',','.join(units),result)
 
 def install(gui):
  """Wrap the already installed inventory path; never replace its behavior."""

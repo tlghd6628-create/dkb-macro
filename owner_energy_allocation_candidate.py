@@ -6,10 +6,10 @@ import hashlib,json
 
 NAMES=('생명','여명','몽환','홍염')
 
-def percent_units(values):
- if not isinstance(values,dict) or set(values)!=set(NAMES):raise ValueError('기운별 비율을 입력해 주세요')
+def percent_units(values,names=NAMES):
+ if not isinstance(values,dict) or set(values)!=set(names):raise ValueError('종류별 비율을 입력해 주세요')
  result={}
- for name in NAMES:
+ for name in names:
   value=values[name]
   if isinstance(value,bool):raise ValueError('비율은 숫자로 입력해 주세요')
   try:number=Decimal(str(value).strip())
