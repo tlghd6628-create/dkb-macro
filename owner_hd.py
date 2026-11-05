@@ -37,7 +37,7 @@ MARK_SCORE=.9
 TITLED_SCREENS=(('native:체크_전체매뉴_기운발현','m_energy'),('native:체크_영기수련','m_spirit'));TITLE_SLACK=6;TITLE_SCORE=.85
 STORE=Path(__file__).parent/'assets/hd'
 HIT_LIFE=5.0
-WORTH_READING=.5
+WORTH_READING=.6
 _index=None;_images={};_missing=set();_layouts=None;_words=None;_marks=None
 _current=None;_last_capture=None;_hits=collections.deque(maxlen=64);_pins=collections.deque(maxlen=16);_lock=threading.Lock()
 
@@ -520,7 +520,7 @@ def match_words(image,needle,source,real,key=None):
     if row is None or 'words' not in row or source is None or source[2]*source[3]>=LOGICAL[0]*LOGICAL[1]/2:return None
     # Reading takes about .2 s and this runs on every poll of every picture not on screen, which took one look at
     # the screen from 15 ms to 2 s. Measured on saved screens: the old picture over the scaled frame scores at least
-    # .796 where its words really are, and under .5 on 90% of the others. A window that moves at this size has pad.
+    # .796 where its words really are, and under .6 on 96% of the others. A window that moves at this size has pad.
     if not row.get('pad') and image.shape[0]>=array.shape[0] and image.shape[1]>=array.shape[1] and _PLAIN_MATCH[0] is not None:
         rough=_PLAIN_MATCH[0](np.asarray(image),array,5)
         if float(np.nan_to_num(rough,nan=-1).max())<WORTH_READING:
