@@ -11,7 +11,7 @@ if mode=='start':
     found=[]
     win32gui.EnumWindows(lambda h,_:found.append(h) if win32gui.IsWindowVisible(h) and '세부설정' in win32gui.GetWindowText(h) and win32gui.GetClassName(h)=='TkTopLevel' else None,None)
     for h in found:win32gui.PostMessage(h,win32con.WM_CLOSE,0,0);time.sleep(1.5)
-    offset=LOG.stat().st_size
+    offset=LOG.stat().st_size if LOG.exists() else 0  # a new day has no log until the program writes one
     user.keybd_event(0x70,0,0,0);time.sleep(.06);user.keybd_event(0x70,0,2,0);print('F1 sent',time.strftime('%H:%M:%S'))
 else:offset=int(STATE.read_text())
 ENDS=('자동 동작 종료','사용자 정지','상태: 정지')
