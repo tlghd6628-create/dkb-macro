@@ -131,11 +131,38 @@ class ShopSettingsStore:
                 os.unlink(tmp)
 
 
+TARGET_CHOICES=tuple(range(1,51))+('최대',)
+SCREEN_GUESS='게임 화면 판독'
+
+def target_text(row):
+    return '최대' if row['mode']=='max' else str(row['quantity'])
+
+def one_list(items):
+    """One row per item, in saved order. Which shop buys it depends on the membership at run time.
+
+    Potions have their own setting, and a misread name the shop screen once added is not an item.
+    """
+    rows={}
+    for row in items:
+        name=row['name']
+        if '물약' in name or (row.get('source')==SCREEN_GUESS and not row['enabled']):
+            continue
+        held=rows.get(name)
+        if held is None:
+            rows[name]=dict(row)
+        elif row['enabled'] and not held['enabled']:
+            rows[name].update(row)
+    return list(rows.values())
+
+def both_shops(rows):
+    return [dict(row,shop=shop) for shop in SHOP_NAMES for row in rows]
+
+
 class ShopSettings:
     def __init__(self, parent, root, character, *, embedded=False):
         self.store = ShopSettingsStore(root, character)
         document,self.open_revision = self.store.snapshot()
-        self.rows = document['items']
+        self.rows = one_list(document['items'])
         self.embedded=embedded
         self.window = ttk.Frame(parent) if embedded else tk.Toplevel(parent)
         if embedded:self.window.pack(fill='both',expand=True)
@@ -144,106 +171,141 @@ class ShopSettings:
         top = ttk.Frame(self.window, padding=10)
         top.pack(fill='both', expand=True)
         self.enabled=tk.BooleanVar(self.window,value=document.get('enabled',True))
-        ttk.Checkbutton(top,text='설정 상품 구매 사용',variable=self.enabled).pack(anchor='w',pady=(0,8))
+        self.enabled_row=ttk.Frame(top);self.enabled_row.pack(fill='x',pady=(0,8))
+        ttk.Checkbutton(self.enabled_row,text='설정 상품 구매 사용',variable=self.enabled).pack(side='left')
         reserve_bar = ttk.Frame(top)
         reserve_bar.pack(fill='x', pady=(0, 5))
         ttk.Label(reserve_bar, text='남길 엽전').pack(side='left')
-        self.reserve = tk.StringVar(value='' if document['coin_reserve'] is None else str(document['coin_reserve']))
+        # An empty field is saved as the default reserve the runtime applies.
+        self.reserve = tk.StringVar(value=str(DEFAULT_COIN_RESERVE if document['coin_reserve'] is None else document['coin_reserve']))
         ttk.Entry(reserve_bar, textvariable=self.reserve, width=14).pack(side='left', padx=5)
-        ttk.Label(reserve_bar, text='미설정 시 구매 보류').pack(side='left')
-        ttk.Label(top, text='기본 목록은 참고용입니다. 판매 여부·한도·화면이 확인되지 않으면 보류합니다.').pack(anchor='w',pady=(0,6))
-        self.tabs = ttk.Notebook(top)
-        self.tabs.pack(fill='both', expand=True)
-        self.trees = {}
-        for shop, label in SHOP_NAMES.items():
-            tab = ttk.Frame(self.tabs, padding=5)
-            self.tabs.add(tab, text=label)
-            tree = ttk.Treeview(tab, columns=('name', 'enabled', 'current', 'target','support'), show='headings', selectmode='browse')
-            for col, title, width in [('name', '품목', 220), ('enabled', '사용', 55),
-                                      ('current', '현재', 65), ('target', '목표', 65),('support','판독 상태',120)]:
-                tree.heading(col, text=title)
-                tree.column(col, width=width, stretch=col=='name')
-            bar = ttk.Scrollbar(tab, orient='vertical', command=tree.yview)
-            tree.configure(yscrollcommand=bar.set)
-            bar.pack(side='right', fill='y'); tree.pack(fill='both', expand=True)
-            tree.bind('<ButtonRelease-1>', lambda event, s=shop: self.toggle_enabled(event, s))
-            tree.bind('<Double-1>', lambda event, s=shop: self.edit_selected(s))
-            self.trees[shop] = tree
+        table = ttk.Frame(top)
+        table.pack(fill='both', expand=True)
+        tree = ttk.Treeview(table, columns=('order', 'name', 'enabled', 'target'), show='headings', selectmode='browse')
+        for col, title, width, stretch in (('order', '순위', 50, False), ('name', '품목', 300, True), ('enabled', '사용', 60, False), ('target', '목표', 90, False)):
+            tree.heading(col, text=title)
+            tree.column(col, width=width, stretch=stretch)
+        bar = ttk.Scrollbar(table, orient='vertical', command=tree.yview)
+        tree.configure(yscrollcommand=bar.set)
+        bar.pack(side='right', fill='y'); tree.pack(fill='both', expand=True)
+        tree.bind('<ButtonRelease-1>', self.cell_clicked)
+        tree.bind('<Double-1>', self.rename_clicked)
+        self.tree = tree
         buttons = ttk.Frame(top); buttons.pack(fill='x', pady=8)
         ttk.Button(buttons, text='품목 추가', command=self.add).pack(side='left')
-        ttk.Button(buttons, text='선택 수정', command=lambda: self.edit_selected(self.shop())).pack(side='left', padx=4)
-        ttk.Button(buttons, text='선택 삭제', command=self.delete).pack(side='left')
+        ttk.Button(buttons, text='선택 삭제', command=self.delete).pack(side='left', padx=4)
+        ttk.Button(buttons, text='▲ 위로', command=lambda: self.move(-1)).pack(side='left', padx=(12, 4))
+        ttk.Button(buttons, text='▼ 아래로', command=lambda: self.move(1)).pack(side='left')
         ttk.Button(buttons, text='저장 후 닫기', command=self.save).pack(side='right')
         self.refresh()
 
-    def toggle_enabled(self, event, shop):
-        tree = self.trees[shop]
-        if tree.identify_region(event.x, event.y) != 'cell' or tree.identify_column(event.x) != '#2':
-            return
+    def add_test(self,request):
+        result=tk.StringVar(self.enabled_row)
+        ttk.Button(self.enabled_row,text='TEST',width=6,command=lambda:request(result)).pack(side='left',padx=(8,12))
+        ttk.Label(self.enabled_row,textvariable=result).pack(side='left')
+
+    def cell_clicked(self, event):
+        tree = self.tree
         row_id = tree.identify_row(event.y)
-        if row_id:
+        if tree.identify_region(event.x, event.y) != 'cell' or not row_id:
+            return
+        column = tree.identify_column(event.x)
+        if column == '#3':
             row = self.rows[int(row_id)]
             row['enabled'] = not row['enabled']
             tree.set(row_id, 'enabled', '☑' if row['enabled'] else '☐')
+        elif column == '#4':
+            self.edit_target(row_id)
 
-    def shop(self):
-        return list(SHOP_NAMES)[self.tabs.index('current')]
+    def rename_clicked(self, event):
+        tree = self.tree
+        row_id = tree.identify_row(event.y)
+        if row_id and tree.identify_region(event.x, event.y) == 'cell' and tree.identify_column(event.x) == '#2':
+            self.edit(int(row_id))
+
+    def edit_target(self, row_id):
+        """The target cell edits in place: arrows, typing, Enter or clicking away."""
+        tree = self.tree
+        box = tree.bbox(row_id, 'target')
+        if not box:
+            return
+        row = self.rows[int(row_id)]
+        field = ttk.Spinbox(tree, values=TARGET_CHOICES, justify='center')
+        field.set(target_text(row))
+        field.place(x=box[0], y=box[1], width=box[2], height=box[3])
+        field.focus_set(); field.selection_range(0, 'end')
+        done = []
+        def finish(keep):
+            if done:
+                return
+            done.append(True); text = field.get(); field.destroy()
+            if keep:
+                self.set_target(int(row_id), text)
+        field.bind('<Return>', lambda _: finish(True))
+        field.bind('<FocusOut>', lambda _: finish(True))
+        field.bind('<Escape>', lambda _: finish(False))
+
+    def set_target(self, index, text):
+        """Anything that is not a whole number of at least 1 leaves the row as it was."""
+        text = text.strip(); row = self.rows[index]
+        if text == '최대':
+            row['mode'] = 'max'
+        elif text.isdigit() and int(text) >= 1:
+            row.update(mode='quantity', quantity=int(text))
+        self.tree.set(str(index), 'target', target_text(row))
+
+    def move(self, step):
+        """Higher rows buy first, which decides what the coins go to when they run short."""
+        selected = self.tree.selection()
+        if not selected:
+            return
+        index = int(selected[0]); other = index + step
+        if not 0 <= other < len(self.rows):
+            return
+        self.rows[index], self.rows[other] = self.rows[other], self.rows[index]
+        self.refresh()
+        self.tree.selection_set(str(other)); self.tree.see(str(other))
 
     def refresh(self):
-        from owner_shop_reader_candidate import OBSERVED_NAMES
-        for tree in self.trees.values():
-            tree.delete(*tree.get_children())
+        self.tree.delete(*self.tree.get_children())
         for index, row in enumerate(self.rows):
-            status=('구매창 미검증' if row['name']=='1단 체력 회복 물약' else
-                    ('후보·실전 미검증' if row['name'] in OBSERVED_NAMES else 'OCR·실전 미검증'))
-            self.trees[row['shop']].insert('', 'end', iid=str(index), values=(row['name'],
-                '☑' if row['enabled'] else '☐', '—', '최대' if row['mode'] == 'max' else row['quantity'],status))
+            self.tree.insert('', 'end', iid=str(index), values=(index + 1, row['name'],
+                '☑' if row['enabled'] else '☐', target_text(row)))
 
     def add(self):
-        self.edit(None, self.shop())
+        self.edit(None)
 
-    def edit_selected(self, shop):
-        selection = self.trees[shop].selection()
-        if selection:
-            self.edit(int(selection[0]), shop)
-
-    def edit(self, index, shop):
-        row = dict(self.rows[index]) if index is not None else dict(shop=shop, name='', enabled=False,
+    def edit(self, index):
+        row = dict(self.rows[index]) if index is not None else dict(shop='remote', name='', enabled=False,
             mode='quantity', quantity=1, verification='사용자 추가·게임 확인 필요', source='사용자 입력')
         dialog = tk.Toplevel(self.window); dialog.title('상점 품목 설정'); dialog.transient(self.window)
         body = ttk.Frame(dialog, padding=12); body.pack(fill='both', expand=True)
-        name = tk.StringVar(value=row['name']); enabled = tk.BooleanVar(value=row['enabled'])
-        mode = tk.StringVar(value=row['mode']); quantity = tk.StringVar(value=str(row['quantity']))
-        ttk.Label(body, text=SHOP_NAMES[shop]).grid(row=0, column=0, columnspan=2, sticky='w')
-        ttk.Label(body, text='품목 이름').grid(row=1, column=0, sticky='w')
-        ttk.Entry(body, textvariable=name, width=35).grid(row=1, column=1, sticky='ew', pady=4)
-        ttk.Checkbutton(body, text='구매 사용', variable=enabled).grid(row=2, column=1, sticky='w')
-        ttk.Radiobutton(body, text='수량', variable=mode, value='quantity').grid(row=3, column=0, sticky='w')
-        ttk.Entry(body, textvariable=quantity, width=10).grid(row=3, column=1, sticky='w')
-        ttk.Radiobutton(body, text='최대', variable=mode, value='max').grid(row=4, column=0, sticky='w')
+        name = tk.StringVar(value=row['name'])
+        ttk.Label(body, text='품목 이름').grid(row=0, column=0, sticky='w')
+        ttk.Entry(body, textvariable=name, width=35).grid(row=0, column=1, sticky='ew', pady=4)
         def apply():
             try:
-                changed = dict(row, name=name.get().strip(), enabled=enabled.get(), mode=mode.get(), quantity=int(quantity.get()))
+                changed = dict(row, name=name.get().strip())
                 if changed['name'] != row['name']:
                     changed.update(source='사용자 입력', verification='사용자 수정·게임 확인 필요')
                 candidate = list(self.rows)
                 if index is None: candidate.append(changed)
                 else: candidate[index] = changed
-                validate(candidate)
+                validate(both_shops(candidate))
             except ValueError as error:
                 messagebox.showerror('품목 확인', str(error), parent=dialog); return
             self.rows = candidate; self.refresh(); dialog.destroy()
-        ttk.Button(body, text='적용', command=apply).grid(row=6, column=1, sticky='e')
+        ttk.Button(body, text='적용', command=apply).grid(row=1, column=1, sticky='e')
 
     def delete(self):
-        selected = self.trees[self.shop()].selection()
+        selected = self.tree.selection()
         if selected:
             del self.rows[int(selected[0])]; self.refresh()
 
     def save(self):
         try:
             value = self.reserve.get().strip().replace(',', '')
-            self.store.write(self.rows, int(value) if value else None,expected_revision=self.open_revision,enabled=self.enabled.get())
+            self.store.write(both_shops(self.rows), int(value) if value else DEFAULT_COIN_RESERVE,expected_revision=self.open_revision,enabled=self.enabled.get())
         except (ValueError, OSError) as error:
             messagebox.showerror('상점 설정 저장 실패', str(error), parent=self.window); return
         self.open_revision=self.store.revision()

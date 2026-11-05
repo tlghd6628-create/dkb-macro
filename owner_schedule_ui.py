@@ -79,8 +79,6 @@ class SchedulePanel:
         ttk.Button(actions,text='게임에서 완료 확인',command=lambda:self.manual('manual')).pack(side='left')
         ttk.Button(actions,text='사용자 확인 취소',command=lambda:self.manual('unmark')).pack(side='left',padx=8)
         ttk.Button(actions,text='요일·시간 설정',command=self.time_settings).pack(side='left',padx=4)
-        ttk.Label(actions,text='완료 확인은 기록만 바꿉니다. 게임 조작·자동 실행 설정은 바뀌지 않습니다.').pack(side='left',padx=8)
-        ttk.Label(win,text='일일 기록은 05시, 주간 기록은 수요일 05시 기준입니다. 처리 종료만으로 보상 수령을 확정하지 않습니다.\n확인 시각은 실제 완료 시각과 다를 수 있습니다. 기존 PC 로그는 캐릭터 일치 미검증이며, 직접 플레이한 기록은 누락될 수 있습니다.',padding=(10,0,10,10),justify='left').pack(fill='x')
         self.last_render=None
         if self.last_snapshot:self.render(self.last_snapshot,force=True)
 

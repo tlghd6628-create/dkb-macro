@@ -334,9 +334,21 @@ def glyph_hit(name,frame,candidate_filter):
     made=(left+rw//2,upper+rh//2,(left,upper,left+rw,upper+rh))
     return made if candidate_filter is None or candidate_filter(frame,made) else None
 
+def summon_already_shown(detector,name,frame):
+    """With every effect skipped the results appear at once and 즉시확인 never does.
+
+    Native stops there and leaves the game on this screen (real run 11-05 01:32). A press
+    on the empty margin lets it go on to its own exit button. It spends nothing.
+    """
+    if name!='버튼_가호_즉시확인' or '버튼_가호_소환_나가기' not in detector.templates:return None
+    if not detector.find('버튼_가호_소환_나가기',frame,threshold=.9):return None
+    return (850,440,(845,435,855,445))
+
 def recover(detector,name,frame,region,threshold,candidate_filter):
     e=detector.entries.get(name);needle=detector.templates.get(name)
     if e is None or needle is None or e.get('type')!='template':return None
+    shown=summon_already_shown(detector,name,frame)
+    if shown:return shown
     if name in GLYPHS and getattr(frame,'shape',None)==(479,897,3):return glyph_hit(name,frame,candidate_filter)
     # A redrawn image replaces the original, so the original's mask has no say in it.
     if name not in REDRAWN and name in detector.masks:return None

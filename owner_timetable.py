@@ -54,6 +54,7 @@ RECHECK_JOBS=frozenset(('daily_dungeon','weekly_dungeon'))
 # The rest of the jobs that same dispatcher only runs in auto_mode.
 AUTO_MODE_JOBS=DUNGEON_JOBS|frozenset(('daily_missions','weekly_missions','clan_request','treasure','tower','raid'))
 NO_TIME_LEFT=('비경 이용 시간 0초','비경 잔여시간 소진 확인')
+TREASURE_REGION='auto_challenge.treasure_hunt.region'
 EXCLUDED_USER_SETTINGS=frozenset(('mail','events'))
 CATALOG_JOB={'events':'events','mail':'mail','daily_quest':'daily_missions','weekly_quest':'weekly_missions','daily_dungeon':'daily_dungeon',
  'weekly_dungeon':'weekly_dungeon','raid':'raid','tower':'tower','yosin':'clan_request','defense':'clan_request',
@@ -93,7 +94,14 @@ def read_required_if_present(path,default):
     return value
 def save(path,data):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
-    tmp=path.with_suffix('.tmp');tmp.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8');os.replace(tmp,path)
+    import threading,time as clock
+    tmp=path.with_name('%s.%d.tmp'%(path.stem,threading.get_ident()));tmp.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+    # Windows refuses the swap while anything has the file open for a moment, and that ended a run (11-05).
+    for attempt in range(8):
+        try:os.replace(tmp,path);return
+        except PermissionError:
+            if attempt==7:raise
+            clock.sleep(.1*(attempt+1))
 def day_at(at):return (at-timedelta(hours=5)).date()
 def period(job,at):
     if job.once:return 'all'
@@ -502,11 +510,19 @@ class Planner:
                 self._rebuild_after_running=True
                 continue
             if job.once and old and old.get('status') not in ('calendar_hold','pending'):
-                old['period']='all';old['config']=stamp
-                # A partial first survey is not a complete account-wide clear.
-                # It stays held for evidence/eligibility review, not daily rerun.
-                if old.get('status')=='failed':old['status']='held'
-                continue
+                # A held survey belongs to the region it was started for. Saving a
+                # different region is a new, explicit request: it is planned again
+                # once. Same region stays held; this is still not a daily rerun.
+                region=self.values.get(TREASURE_REGION)
+                if old.get('status')=='held' and old.get('region') and region and old['region']!=region:
+                    LOG.info('보물찾기 지방 변경 · %s → %s · 보류 기록 해제 · 1회 재계획',old['region'],region)
+                    old.clear()
+                else:
+                    old['period']='all';old['config']=stamp
+                    # A partial first survey is not a complete account-wide clear.
+                    # It stays held for evidence/eligibility review, not daily rerun.
+                    if old.get('status')=='failed':old['status']='held'
+                    continue
             if old.get('period')==key and old.get('status')=='processed':
                 old['config']=stamp;continue
             if old.get('period')==key and old.get('config')==stamp and old.get('status')=='failed':
@@ -552,7 +568,10 @@ class Planner:
     def due(self,at=None):
         at=at or now()
         shop_enabled=shop_selection_enabled(self.root);shop_changed=self.values.get('owner_shop.enabled')!=shop_enabled
-        if shop_changed:self.values['owner_shop.enabled']=shop_enabled
+        if shop_changed:
+            self.values['owner_shop.enabled']=shop_enabled
+            # Otherwise the shop appointment disappears from the timetable with no log line.
+            LOG.info('잡화상점 구매 시간표 %s · 설정 상품 구매 사용 체크와 선택 품목 기준','사용' if shop_enabled else '해제')
         if shop_changed or config(self.root)!=self.cfg or boss_signature(self.root,self.values)!=self._boss_stamp or any(enabled(j,self.values) and (self.state.get(j.key,{}).get('period')!=period(j,at) or (j.once and self.state.get(j.key,{}).get('status')=='calendar_hold' and self.state[j.key].get('calendar_day')!=day_at(at).isoformat())) for j in JOBS):self.build(at)
         if not self.cfg.get('enabled',True):return []
         self.repeat_growth(at)
@@ -598,7 +617,9 @@ class Planner:
         return None
 
     def begin(self,key,at=None):
-        item=self.state[key];item['attempts']+=1;item['started_at']=(at or now()).isoformat();item['status']='running';self.commit()
+        item=self.state[key];item['attempts']+=1;item['started_at']=(at or now()).isoformat();item['status']='running'
+        if BY_KEY[key].once:item['region']=self.values.get(TREASURE_REGION)
+        self.commit()
     def finish(self,key,ok,at=None,*,unverified=False,count_failure=True):
         at=at or now();item=self.state[key];item.update(status='processed' if ok else ('held' if BY_KEY[key].once else 'failed'),ended_at=at.isoformat())
         for field in ('incomplete_retry','retry_mode','retry_reason'):item.pop(field,None)
@@ -881,6 +902,18 @@ def appointment(root,catalog_key,when,values=None):
     spread=jitter_range(cfg,BY_KEY[key])
     return (prefix+value.strftime('%m/%d %H:%M:%S') if value>when else '지연 · 현재 작업 종료 후')+(' · 랜덤 ±%d초'%spread if spread else '')
 
+def timed_invoke(adapter,job,context,inputs):
+    # A story scene blocks every menu a job would open, so each job after it failed too.
+    from owner_mission_controller import finish_scene
+    finish_scene(adapter,context,inputs)
+    try:return invoke(adapter,job,context,inputs)
+    finally:
+        # A job that gave up inside its menu (clan, 09:31) made every later job fail too.
+        from owner_start_menu import normalize
+        from project_adapter.town_services import TownServices
+        try:normalize(TownServices(adapter,context,inputs,['버튼_나가기']))
+        except RuntimeError as exc:LOG.info('일정 후 메뉴 정리 보류 · %s',exc)
+
 def invoke(adapter,job,context,inputs):
     if job.key in ('shop','shop_weekly_verify'):
         from owner_shop_runtime_candidate import dispatch_configured
@@ -1051,7 +1084,7 @@ def catch_up_overdue(adapter,context,inputs):
         if not ancillary_field_ready(adapter,context,inputs):return ran
         LOG.info('시작 일정 우선 처리 · %s · 예약 시간이 지나 먼저 실행',job.label)
         old_values=adapter.values;adapter.values=dict(plan.values)
-        try:scheduled_call(lambda:invoke(adapter,job,context,inputs),job.label,(),{},adapter,timed_dispatch=True,run_context=context,run_inputs=inputs)
+        try:scheduled_call(lambda:timed_invoke(adapter,job,context,inputs),job.label,(),{},adapter,timed_dispatch=True,run_context=context,run_inputs=inputs)
         except (ResumeWork,ChoreYield):return ran
         except Exception as exc:
             context.checkpoint()

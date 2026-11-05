@@ -147,7 +147,7 @@ def loosen(adapter,context,inputs):
         def remember(was):
             if saved is None:_write(root,{'fixed':was['fixed'],'range':was['range']})
         apply(_ui(adapter,context,inputs),False,'high',before_change=remember)
-        LOG.info('보스 전 자동 전투 설정 · 이동 고정 끔 · 수행 범위 최대')
+        LOG.info('이동 전투 설정 · 이동 고정 끔 · 수행 범위 최대')
         return True
     except (RangeError,RuntimeError,ValueError,OSError) as exc:
         LOG.warning('보스 전 자동 전투 설정 실패 · 기존 설정으로 진행 · %s',str(exc)[:120]);return False

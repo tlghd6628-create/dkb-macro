@@ -212,6 +212,8 @@ def install(gui):
                 finally:LOCAL.feature=previous
             setattr(Adapter,name,scoped)
     LOG.addFilter(HeldEnd())
+    from owner_sleep_auto import install as install_sleep_auto
+    install_sleep_auto(gui)
     from project_adapter.stall_recovery import StallRecovery
     if not getattr(StallRecovery._recover,'_owner_wakes',False):
         StallRecovery._recover=wake_before_recovery(StallRecovery._recover)

@@ -38,8 +38,37 @@ def _run(adapter,context,inputs):
  except Hold as exc:
   # The top-level inventory anchors also exist behind tooltips: never use
   # those anchors alone to dismiss an uncertain popup or resume automation.
-  raise RuntimeError('장비 화면 확인 중단 · '+str(exc)) from exc
- if status=='pending_confirmation':raise RuntimeError('장비 착용 결과 미확인 · 확인 후 재시도')
+  # Only a scan that sent no equip input and left no tooltip may skip this visit and let the quest go on.
+  from owner_energy_box_detail_candidate import close_mark
+  from owner_equipment_tooltip_candidate import comparison_shell
+  def bare(frame):return inventory(frame) and not close_mark(frame) and not comparison_shell(frame)
+  if '입력 결과' in str(exc):raise RuntimeError('장비 화면 확인 중단 · '+str(exc)) from exc
+  # Auto-move can change zones during the visit, which closes the panel on its own. The loading
+  # screen is neither field nor panel, so give it a moment before deciding anything is wrong.
+  end=time.monotonic()+8
+  while True:
+   if pair(field):
+    LOG.info('장비 확인 이번 방문 건너뜀 · %s · 창이 이미 닫힘 · 퀘스트 계속',exc)
+    return 'scan_held_skip'
+   if pair(bare):break
+   if time.monotonic()>=end:raise RuntimeError('장비 화면 확인 중단 · '+str(exc)) from exc
+   context.wait(.5)
+  LOG.info('장비 확인 이번 방문 건너뜀 · %s · 입력 없음 · 퀘스트 계속',exc)
+  close_inventory(service)
+  if not pair(field):raise RuntimeError('장비 처리 뒤 원래 화면 복귀 미확인')
+  return 'scan_held_skip'
+ if status=='pending_confirmation':
+  # The pending record blocks any new equip input, so continuing cannot equip twice. The next visit
+  # confirms it. Three misses in a row are a real fault and stop the run as before.
+  misses=getattr(adapter,'_owner_equip_confirm_misses',0)+1;adapter._owner_equip_confirm_misses=misses
+  if misses>=3:raise RuntimeError('장비 착용 결과 미확인 · 확인 후 재시도')
+  from owner_worn_stats import popup
+  a=service.capture()
+  if popup(a):service.click_hit((510,106,(503,99,518,113)));context.wait(.3)
+  LOG.info('장비 착용 결과 다음 방문에 재확인 · %d/3',misses)
+  close_inventory(service)
+  return status
+ adapter._owner_equip_confirm_misses=0
  if not pair(inventory):raise RuntimeError('장비 처리 뒤 인벤토리 확인 필요')
  close_inventory(service)
  if not pair(field):raise RuntimeError('장비 처리 뒤 원래 화면 복귀 미확인')

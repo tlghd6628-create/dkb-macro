@@ -28,14 +28,19 @@ def open_inventory_by_key(service):
     # Normalize a proved partial inventory, never arbitrary dialogs.
     if left and not right:service.click_hit((184,17,(178,10,191,24)));service.context.wait(.2)
     if right and not left:service.click_hit((883,54,(877,48,890,61)));service.context.wait(.2)
-    service.check();service.key(0x49)
-    end=time.monotonic()+3
-    while time.monotonic()<end:
+    # 01:28 real run: one key press in combat did nothing. Press again only while neither
+    # panel shows: the key toggles, so a slow panel must not be closed by a second press.
+    for attempt in range(2):
         service.check()
-        if inventory_parts(service.capture())==(True,True):
-            LOG.info('정보창 열림 · 좌우 패널 확인',extra={'gui_message':'정보창 열림 · 좌우 패널 확인'})
-            return True
-        service.context.wait(.1)
+        if attempt and any(inventory_parts(service.capture())):break
+        service.key(0x49)
+        end=time.monotonic()+3
+        while time.monotonic()<end:
+            service.check()
+            if inventory_parts(service.capture())==(True,True):
+                LOG.info('정보창 열림 · 좌우 패널 확인',extra={'gui_message':'정보창 열림 · 좌우 패널 확인'})
+                return True
+            service.context.wait(.1)
     raise RuntimeError('인벤토리 단축키 입력 후 좌우 패널을 확인하지 못했습니다.')
 
 
@@ -61,6 +66,33 @@ def parse_level(number_pages,header_pages):
     return next(iter(digits)) if len(digits)==1 and digits==labels else None
 
 
+def read_level(number,korean,frame):
+    """A one-digit level leaves the name's first glyph in the two-digit box, so '1' reads as '18'."""
+    header=korean.predict(resized(frame,(32,7,76,20)))
+    wide=number.predict(resized(frame,(53,9,12,15)))
+    level=parse_level(wide,header)
+    if level is not None:return level
+    # Level 17 read .95 as a number and .85 in the header, both right and both under their gates.
+    # Two independent readers agreeing on one value is proof enough, and two frames must still agree.
+    numbers={int(t.strip()) for t,s in texts(wide) if s>=.90 and re.fullmatch(r'\d{1,2}',t.strip()) and 1<=int(t.strip())<=50}
+    named={int(m[1]) for t,s in texts(header) if s>=.80 for m in [re.search(r'레벨\s*(\d{1,2})(?!\d)',t)] if m and 1<=int(m[1])<=50}
+    if len(numbers)==1 and numbers==named:return next(iter(numbers))
+    # The header confuses 3 and 8: level 30 read 80 at .91 beside a number read 30 at .999.
+    # It still proves how many digits there are, so a strong number with that many digits stands.
+    strong={int(t.strip()) for t,s in texts(wide) if s>=.985 and re.fullmatch(r'\d{2}',t.strip()) and 10<=int(t.strip())<=50}
+    if len(strong)==1 and any(s>=.88 and re.search(r'레벨\s*\d{2}(?!\d)',t) for t,s in texts(header)):return next(iter(strong))
+    # A strong two-digit reading contradicts the header: keep holding, never narrow past it.
+    if any(s>=.985 and re.fullmatch(r'\d{2}',t.strip()) for t,s in texts(wide)):return None
+    labels={int(m[1]) for t,s in texts(header) if s>=.88 for m in [re.search(r'레벨\s*(\d{1,2})(?!\d)',t)] if m}
+    if len(labels)!=1 or next(iter(labels))>=10:return None
+    # The header only proves there is one digit: it read a real 3 as 8 at .97.
+    # The caller still requires two frames to agree.
+    for box in ((52,9,9,15),(53,9,8,15)):
+        digits={int(t.strip()) for t,s in texts(number.predict(resized(frame,box))) if s>=.985 and re.fullmatch(r'[1-9]',t.strip())}
+        if len(digits)==1:return next(iter(digits))
+    return None
+
+
 def parse_power(pages,minimum=.98):
     values=set()
     for text,score in texts(pages):
@@ -83,6 +115,12 @@ def power_image(frame):
 
 
 def read_inventory_power(engine,frame):
+    # The fixed box can catch the tail of the x icon: 27,992 read as 427,992, a confident wrong value.
+    # A crop starting after the icon cannot, so it is read first.
+    box=power_digits_box(frame)
+    if box is not None:
+        value=parse_power(engine.predict(resized(frame,box)))
+        if value is not None:return value
     original=engine.predict(resized(frame,(40,47,42,17)))
     value=parse_power(original)
     if value is not None:return value
@@ -101,7 +139,34 @@ def read_inventory_power(engine,frame):
         alternate=engine.predict(cv2.resize(patch,None,fx=3,fy=3,interpolation=cv2.INTER_CUBIC))
         a,b=parse_power(original,.90),parse_power(alternate,.92)
         if a is not None and a==b:return a
-    return parse_power(engine.predict(power_image(frame)))
+    value=parse_power(engine.predict(power_image(frame)))
+    return value if value is not None else read_short_power(engine,frame)
+
+
+def power_digits_box(frame):
+    """Crop after the orange x icon: a short value leaves its tail in the fixed box."""
+    import numpy as np
+    part=frame[47:64,35:85]
+    r,g,b=(part[:,:,i].astype('float32') for i in range(3))
+    columns=((r>130)&(g>65)&(r>g*1.12)&(g>b*1.5)).any(axis=0)
+    ink=np.flatnonzero(columns)
+    if not len(ink):return None
+    gaps=np.flatnonzero(np.diff(ink)>1)
+    if not len(gaps):return None
+    start=35+int(ink[gaps[0]+1])-1
+    return (start,47,85-start,17)
+
+
+def read_short_power(engine,frame):
+    """Four- and five-digit power at a low level. Two resamplings must agree exactly."""
+    import cv2
+    box=power_digits_box(frame) if inventory_parts(frame)==(True,True) else None
+    if box is None:return None
+    x,y,w,h=box
+    patch=cv2.copyMakeBorder(frame[y:y+h,x:x+w],8,8,8,8,cv2.BORDER_CONSTANT,value=(40,40,40))
+    a=parse_power(engine.predict(cv2.resize(patch,None,fx=4,fy=4,interpolation=cv2.INTER_CUBIC)),.92)
+    b=parse_power(engine.predict(cv2.resize(patch,None,fx=3,fy=3,interpolation=cv2.INTER_LINEAR)),.92)
+    return a if a is not None and a==b else None
 
 
 class Progress(QuestMemory):
@@ -191,7 +256,7 @@ def observe_inventory(service,*,force=False):
         try:
             values=[]
             for frame in frames:
-                values.append((parse_level(number.predict(resized(frame,(53,9,12,15))),korean.predict(resized(frame,(32,7,76,20)))),read_inventory_power(number,frame)))
+                values.append((read_level(number,korean,frame),read_inventory_power(number,frame)))
             reply.append(values)
         except Exception as exc:reply.append(exc)
         finally:done.set()
@@ -213,8 +278,8 @@ def observe_inventory(service,*,force=False):
     if not np.array_equal(np.min(patch,axis=2)>150,np.min(frames[0][9:25,x:x+33],axis=2)>150):
         LOG.info('육성 캐릭터 판독 보류 · 두 화면 이름 영역 불일치');return False
     character=hashlib.sha256((np.min(patch,axis=2)>150).tobytes()).hexdigest()[:24]
-    from owner_character_binding import observe as bind_character
-    character=bind_character(service.adapter,character,level)
+    from owner_character_binding import observe as bind_character,name_head
+    character=bind_character(service.adapter,character,level,name_head(frames[-1]))
     progress.accept(level,power,character)
     from owner_equipment_boxes import agree
     from owner_startup_receipts import Preparation

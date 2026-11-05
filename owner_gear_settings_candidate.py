@@ -317,7 +317,7 @@ class GearSettings:
         line=ttk.Frame(parent);line.grid(row=0,sticky='w',pady=(0,8),**dict({'column':0,'columnspan':6},**layout))
         check=ttk.Checkbutton(line,text='기능 사용',variable=value);check.pack(side='left')
         if not self.switches.editable[section]:check.configure(state='disabled')
-        result=tk.StringVar(self.window,value='TEST는 실제로 실행 · 재료 사용')
+        result=tk.StringVar(self.window,value='')
         test=ttk.Button(line,text='TEST',width=6,command=lambda:self.test_request(section,result))
         test.pack(side='left',padx=(10,8))
         ttk.Label(line,textvariable=result).pack(side='left')

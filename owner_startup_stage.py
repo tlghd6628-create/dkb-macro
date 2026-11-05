@@ -19,6 +19,32 @@ def parse_timer(pages):
 
 SLEEP='체크_절전모드중'
 
+def known_dialog(slots,first,second):
+    # The top-right skip button stays visible behind the confirm dialog, so confirm is checked first.
+    return next((key for key in ('skip_confirm','skip_confirm2','skip') if slots.match(key,first).get('hit') and slots.match(key,second).get('hit')),None)
+
+def press_dialog(adapter,context,inputs,service,slots,key,frame):
+    """The one place that answers a scene's skip controls, at the start and before reading power."""
+    from project_adapter.main_quest import BoundedMainQuestRunner,dependencies
+    _,deps=dependencies(adapter,context,inputs)
+    runner=BoundedMainQuestRunner(slots,**deps);hit=slots.match(key,service.capture())
+    if not hit.get('hit'):return False
+    LOG.info('시작 화면 · 알려진 대화 넘기기 처리 · %s',key)
+    if key=='skip':runner.handle_skip(slots.by_key[key],hit,frame)
+    elif key=='skip_confirm2':runner.handle_skip_confirm2(slots.by_key[key],hit,frame)
+    else:runner.input_one(key,hit,frame)
+    return True
+
+def guide_visible(adapter,first,second):
+    from tutorial_highlight import load_config,detect_tutorial_highlight
+    config=load_config(adapter.project.root/'profiles'/adapter.project.code)
+    return detect_tutorial_highlight(first,config).tutorial_detected and detect_tutorial_highlight(second,config).tutorial_detected
+
+def guide_handler(adapter,context,inputs,service):
+    from tutorial_highlight import load_config,TutorialHandler
+    config=load_config(adapter.project.root/'profiles'/adapter.project.code)
+    return TutorialHandler(config,capture=service.capture,inputs=inputs,context=context,execution_gate=service.check,user_log=LOG.info,logger=LOG)
+
 def scene(detector,frame):
     if getattr(frame,'shape',None)!=(479,897,3):return 'unknown'
     from owner_special_contexts import classify
@@ -44,10 +70,13 @@ def scene(detector,frame):
         return 'unknown' if detector.find(DUNGEON,frame,threshold=.5) or detector.find(EXIT,frame,threshold=.5) else 'field'
     from project_adapter.secret_exploration import AUTO_NAMES
     if detector.find(MENU,frame,threshold=.95) and any(detector.find(n,frame,threshold=.95) for n in AUTO_NAMES):return outside()
-    from owner_movement import field_hud
+    from owner_movement import field_hud,hud_anchor
     if field_hud(frame):return outside()
     from owner_progression import inventory_parts
     if any(inventory_parts(frame)):return 'inventory'
+    # A notification dot breaks the menu match and a bright backdrop breaks the settings icon, both in
+    # town. With no panel open, the Home icon and AUTO still prove the bare field.
+    if hud_anchor(frame,'home-hud',(662,441,25,29)) and any(detector.find(n,frame,threshold=.95) for n in AUTO_NAMES):return outside()
     return 'unknown'
 
 def timer_pair(service):
@@ -231,15 +260,15 @@ def install(gui):
                     finally:LOCAL.monitoring=True
                     continue
                 if initial==second=='unknown':
-                    from tutorial_highlight import load_config,detect_tutorial_highlight,TutorialHandler
-                    tutorial_config=load_config(adapter.project.root/'profiles'/adapter.project.code)
-                    first_guide=detect_tutorial_highlight(first,tutorial_config)
-                    second_guide=detect_tutorial_highlight(second_frame,tutorial_config)
-                    if first_guide.tutorial_detected and second_guide.tutorial_detected:
+                    # A guide can open a known full-screen menu after the start check already ran.
+                    from owner_start_menu import kind as menu_kind,normalize as leave_menu
+                    if menu_kind(first) and menu_kind(first)==menu_kind(second_frame):
+                        leave_menu(TownServices(adapter,context,inputs,['버튼_나가기']))
+                        continue
+                    if guide_visible(adapter,first,second_frame):
                         if tutorial_deadline is None:tutorial_deadline=time.monotonic()+60
                         if time.monotonic()>tutorial_deadline:raise RuntimeError('시작 튜토리얼 처리가 60초를 넘어 진단 확인이 필요합니다.')
-                        if tutorial_handler is None:
-                            tutorial_handler=TutorialHandler(tutorial_config,capture=service.capture,inputs=inputs,context=context,execution_gate=service.check,user_log=LOG.info,logger=LOG)
+                        if tutorial_handler is None:tutorial_handler=guide_handler(adapter,context,inputs,service)
                         LOG.info('시작 화면 · 연속 튜토리얼 안내 확인 · 기존 강조 영역 처리기로 정상화')
                         result=tutorial_handler.handle_tutorial_if_present()
                         if result in ('FAILED','DETECTED_BUT_UNSAFE'):raise RuntimeError('시작 튜토리얼 입력을 확인하지 못했습니다: '+result)
@@ -266,20 +295,19 @@ def install(gui):
                     confirm_choice(SkillUI(adapter,context,inputs))
                     continue
                 if initial==second=='unknown':
-                    from project_adapter.main_quest import StateROIs,BoundedMainQuestRunner,dependencies
+                    from project_adapter.main_quest import StateROIs
                     slots=StateROIs(adapter.project.root/'profiles/DKB',mode=adapter.mode)
-                    dialog_key=next((key for key in ('skip','skip_confirm','skip_confirm2') if slots.match(key,first).get('hit') and slots.match(key,second_frame).get('hit')),None)
+                    dialog_key=known_dialog(slots,first,second_frame)
                     if dialog_key:
                         attempts_key=(gui._owner_stage_epoch,'start-dialog-'+dialog_key)
+                        total_key=(gui._owner_stage_epoch,'start-dialog-total')
                         stage_attempts[attempts_key]=stage_attempts.get(attempts_key,0)+1
-                        if stage_attempts[attempts_key]>6:raise RuntimeError('시작 대화 넘기기 확인이 6회 반복되어 진단 확인이 필요합니다.')
-                        _,deps=dependencies(adapter,context,inputs)
-                        runner=BoundedMainQuestRunner(slots,**deps);hit=slots.match(dialog_key,service.capture())
-                        if not hit.get('hit'):continue
-                        LOG.info('시작 화면 · 알려진 대화 넘기기 처리 · %s',dialog_key)
-                        if dialog_key=='skip':runner.handle_skip(slots.by_key[dialog_key],hit,second_frame)
-                        elif dialog_key=='skip_confirm2':runner.handle_skip_confirm2(slots.by_key[dialog_key],hit,second_frame)
-                        else:runner.input_one(dialog_key,hit,second_frame)
+                        stage_attempts[total_key]=stage_attempts.get(total_key,0)+1
+                        if stage_attempts[attempts_key]>6 or stage_attempts[total_key]>60:raise RuntimeError('시작 대화 넘기기 확인이 6회 반복되어 진단 확인이 필요합니다.')
+                        # Moving between skip and confirm is progress: a level-1 opening has many scenes in a row.
+                        for other in ('skip','skip_confirm','skip_confirm2'):
+                            if other!=dialog_key:stage_attempts.pop((gui._owner_stage_epoch,'start-dialog-'+other),None)
+                        press_dialog(adapter,context,inputs,service,slots,dialog_key,second_frame)
                         continue
                 if LOCAL.owner[3]!=gui._owner_stage_epoch:
                     # Resume arrived during read-only preflight. Discard both
@@ -320,7 +348,8 @@ def install(gui):
                         zoom_out(adapter,context,inputs)
                     if kind=='field':
                         from owner_boss_range import pending,restore
-                        if pending(adapter.project.root):restore(adapter,context,inputs)
+                        # A quest mode keeps it open: quests walk to their monsters.
+                        if adapter.mode=='auto_mode' and pending(adapter.project.root):restore(adapter,context,inputs)
                     if kind in ('field','dungeon'):
                         from owner_timetable import catch_up_overdue
                         catch_up_overdue(adapter,context,inputs)

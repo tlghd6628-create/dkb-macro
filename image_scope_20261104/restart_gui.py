@@ -27,7 +27,7 @@ else:
     while time.time()<end and not tk('DKB · 도깨비'):time.sleep(.5)
     time.sleep(6);h=tk('DKB · 도깨비')[0]
     user.keybd_event(0x12,0,0,0);user.keybd_event(0x12,0,2,0);win32gui.SetForegroundWindow(h);time.sleep(.3)
-    l,t,_,_=win32gui.GetWindowRect(h);user.SetCursorPos(l+440,t+340);time.sleep(.1);user.mouse_event(2,0,0,0,0);time.sleep(.06);user.mouse_event(4,0,0,0,0);time.sleep(1.5)
+    l,t,_,_=win32gui.GetWindowRect(h);user.SetCursorPos(l+445,t+384);time.sleep(.1);user.mouse_event(2,0,0,0,0);time.sleep(.06);user.mouse_event(4,0,0,0,0);time.sleep(1.5)
     end=time.time()+130
     while time.time()<end:
         with LOG.open('rb') as f:f.seek(size);t=f.read().decode('utf-8','replace')

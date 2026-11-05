@@ -8,8 +8,13 @@ import inspect,logging,re,threading
 
 LOG=logging.getLogger('project_gui.DKB')
 DISPATCH,DIRECT,RAID='dispatch','direct','raid'
-GROWTH,STYLE,ALBUM='growth','style','album'
+GROWTH,STYLE,ALBUM,BLESSING,PRESET='growth','style','album','blessing','preset'
+TREASURE='treasure'
+SHOP='shop';SHOP_KEY='owner_shop.enabled'
 TARGETS={
+ SHOP_KEY:('잡화상점 구매',SHOP),
+ 'auto_schedule.boss_raid.skill_preset.enabled':('레이드 단일 덱 구성',PRESET),
+ 'auto_rewards.blessing.enabled':('가호 보상·장착',BLESSING),
  'auto_growth.equipment.enabled':('장비 성장',GROWTH),
  'auto_growth.blessing.enabled':('가호 성장',GROWTH),
  'auto_growth.energy.enabled':('기운 발현',GROWTH),
@@ -28,11 +33,11 @@ TARGETS={
  'auto_challenge.secret_folktale_5h.enabled':('전래동화 비경 5시간',DISPATCH),
  'auto_challenge.secret_folktale.enabled':('전래동화 비경 24시간',DISPATCH),
  'auto_growth.spirit_training.enabled':('영기수련',DISPATCH),
+ 'auto_challenge.treasure_hunt.enabled':('보물찾기',TREASURE),
 }
-HINTS={'비경·보스':'TEST는 실제로 실행합니다. 입장 시간·횟수를 씁니다. 레이드는 지정 단계에 실제로 1회 입장합니다. 보물찾기는 TEST 없음.',
-       '수련':'TEST는 실제로 실행합니다.'}
+TREASURE_REGION='auto_challenge.treasure_hunt.region'
 # Log text that says the native run ended without doing its work.
-NOT_DONE=re.compile('건너뜀|보류|미완료|진입 불가|티켓 없음|생략|실패|미감지|미확인')
+NOT_DONE=re.compile('건너뜀|보류|미완료|진입 불가|티켓 없음|생략|실패|미감지|미확인|준비 중')
 
 def visible(message,*args):
     text=message%args if args else message
@@ -130,6 +135,31 @@ def dispatch(adapter,context,inputs,key):
         if had:adapter.get_due_schedules=old
         else:del adapter.get_due_schedules
 
+def treasure(adapter,context,inputs,key):
+    """The saved region through the same dispatcher as the timetable job.
+
+    The native entry handles 타바로지방 only (its ENABLED_REGIONS); the other two
+    return 준비 중 before any input, which the result line then shows. The
+    owner gate reads the character's power from the last five minutes, so the
+    power is read first; otherwise only the town route (타바로1) is allowed.
+    """
+    region=adapter.values.get(TREASURE_REGION)
+    if region not in ('타바로지방','가모리지방','수아리지방'):raise RuntimeError('보물찾기 지방 선택 필요')
+    from owner_quest_preflight import read_power
+    read_power(adapter,context,inputs)
+    visible('보물찾기 TEST · 지방=%s · 시간표 기록 없음',region)
+    return dispatch(adapter,context,inputs,key)
+
+def shop(adapter,context,inputs):
+    """The timetable's own dispatcher, so this buys what the checked rows say."""
+    from owner_shop_runtime_candidate import dispatch_configured
+    result=dispatch_configured(adapter,context,inputs)
+    status=result.get('status')
+    if status in ('processed','partial'):
+        held=' · 미완료 '+', '.join(result['held_items']) if result.get('held_items') else ''
+        return '구매 %d회%s'%(result.get('confirmed',0),held)
+    return '보류 · '+str(result.get('reason') or status)
+
 def direct(adapter,context,inputs,key):
     """These two run by the clock in normal play, not from the dispatcher."""
     if key=='auto_schedule.field_boss.enabled':return adapter.run_field_boss_entry(context,inputs)
@@ -144,6 +174,19 @@ def growth(adapter,context,inputs,key):
         from owner_quest_preflight import read_power
         read_power(adapter,context,inputs)
         return adapter.run_album_rewards(context,inputs)
+    if kind==PRESET:
+        from owner_quest_preflight import read_power
+        from owner_single_preset import configure
+        read_power(adapter,context,inputs)
+        return configure(adapter,context,inputs)
+    if kind==BLESSING:
+        # The priority equip runs inside the reward job, so this is the one way to see it.
+        from owner_quest_preflight import read_power
+        read_power(adapter,context,inputs)
+        result=adapter.run_blessing_rewards(context,inputs)
+        state=getattr(adapter,'_owner_blessing_policy_outcome',None)
+        visible('가호 장착 결과 · %s',state)
+        return result
     if kind==STYLE:
         # The native dispatcher does not reach style growth on this switch alone.
         from owner_skill_growth_candidate import dispatch_after_native
@@ -175,7 +218,9 @@ def execute(adapter,context,inputs,key):
     previous=getattr(LOCAL,'native_job',None);LOCAL.native_job=key
     try:
         if kind==RAID:return raid_real(adapter,context,inputs)
-        if kind in (GROWTH,STYLE,ALBUM):return growth(adapter,context,inputs,key)
+        if kind==TREASURE:return treasure(adapter,context,inputs,key)
+        if kind==SHOP:return shop(adapter,context,inputs)
+        if kind in (GROWTH,STYLE,ALBUM,BLESSING,PRESET):return growth(adapter,context,inputs,key)
         return dispatch(adapter,context,inputs,key) if kind==DISPATCH else direct(adapter,context,inputs,key)
     except ResumeWork:return None  # a boss return to the selected work; a TEST just ends here
     finally:LOCAL.native_job=previous;adapter.values=before

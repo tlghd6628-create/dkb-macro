@@ -2,12 +2,16 @@
 
 Nothing here reads or writes a setting. Saved IDs, editors and the save order
 stay in their own modules; labels below change what is shown, never the schema.
+
+Two surfaces: the page (``Dkb.*`` styles, light grey) and the card
+(``DkbCard.*`` styles, white). A widget placed inside a card frame marked
+``_dkb_card`` gets the card family from ``restyle``; everything else the page one.
 """
 import tkinter as tk
 from tkinter import ttk
 
-SIDEBAR='#F4F5F7';SURFACE='#FFFFFF';BORDER='#E4E6EB';TEXT='#1B1F27';MUTED='#6B7280'
-ACCENT='#4F46E5';ACCENT_HOVER='#4338CA';ACCENT_SOFT='#EEF0FF';HOVER='#F4F5F7';DISABLED='#A3A8B2'
+SIDEBAR='#EEF0F4';PAGE='#F7F8FA';SURFACE='#FFFFFF';BORDER='#DCE0E6';TEXT='#1B1F27';MUTED='#6B7280'
+ACCENT='#4F46E5';ACCENT_HOVER='#4338CA';ACCENT_SOFT='#EEF0FF';HOVER='#F1F2F5';DISABLED='#A3A8B2'
 FONT='Malgun Gothic'
 
 NAV_GROUPS=(('기본',('기본 설정','보상·정리','사냥터','상점','아이템 사용','문파')),
@@ -65,61 +69,82 @@ def sections(name,items):
 
 def prepare(root):
  style=ttk.Style(root)
- for name,background,foreground in (('Dkb.TFrame',SURFACE,TEXT),('Dkb.TLabel',SURFACE,TEXT),('Dkb.TLabelframe',SURFACE,TEXT),('Dkb.TLabelframe.Label',SURFACE,MUTED),
-                                    ('Dkb.TCheckbutton',SURFACE,TEXT),('Dkb.TRadiobutton',SURFACE,TEXT),('Dkb.TSeparator',BORDER,BORDER),
-                                    ('DkbSide.TFrame',SIDEBAR,TEXT),('DkbHint.TLabel',SURFACE,MUTED),('DkbNotice.TLabel',SURFACE,ACCENT)):
-  style.configure(name,background=background,foreground=foreground,font=(FONT,10))
- style.configure('DkbYes.TLabel',background=SURFACE,foreground='#16A34A',font=(FONT,10,'bold'))
- style.configure('DkbNo.TLabel',background=SURFACE,foreground='#E11D48',font=(FONT,10,'bold'))
- style.configure('DkbSection.TLabel',background=SURFACE,foreground=TEXT,font=(FONT,11,'bold'))
- style.configure('DkbTitle.TLabel',background=SURFACE,foreground=TEXT,font=(FONT,17,'bold'))
+ for prefix,background in (('Dkb',PAGE),('DkbCard',SURFACE)):
+  for kind in ('TFrame','TLabel','TLabelframe','TCheckbutton','TRadiobutton'):
+   style.configure(prefix+'.'+kind,background=background,foreground=TEXT,font=(FONT,10))
+  style.configure(prefix+'.TLabelframe',bordercolor=BORDER)
+  style.configure(prefix+'.TLabelframe.Label',background=background,foreground=MUTED,font=(FONT,10))
+  for kind in ('TCheckbutton','TRadiobutton'):
+   style.configure(prefix+'.'+kind,padding=(0,3))
+   style.map(prefix+'.'+kind,background=[('active',background),('disabled',background)],foreground=[('disabled',DISABLED),('!disabled',TEXT)])
+  style.configure(prefix+'Hint.TLabel',background=background,foreground=MUTED,font=(FONT,9))
+  style.configure(prefix+'Muted.TLabel',background=background,foreground=MUTED,font=(FONT,9))
+  style.configure(prefix+'Notice.TLabel',background=background,foreground=ACCENT,font=(FONT,10))
+  style.configure(prefix+'Yes.TLabel',background=background,foreground='#16A34A',font=(FONT,10,'bold'))
+  style.configure(prefix+'No.TLabel',background=background,foreground='#E11D48',font=(FONT,10,'bold'))
+  style.configure(prefix+'Section.TLabel',background=background,foreground=TEXT,font=(FONT,11,'bold'))
+ style.configure('Dkb.TSeparator',background=BORDER,bordercolor=BORDER,lightcolor=BORDER,darkcolor=BORDER)
+ style.configure('DkbSide.TFrame',background=SIDEBAR)
  style.configure('DkbBrand.TLabel',background=SIDEBAR,foreground=TEXT,font=(FONT,12,'bold'))
- style.configure('Dkb.TLabelframe',bordercolor=BORDER)
- style.configure('Dkb.TSeparator',bordercolor=BORDER,lightcolor=BORDER,darkcolor=BORDER)
- for name in ('Dkb.TCheckbutton','Dkb.TRadiobutton'):
-  style.configure(name,padding=(0,3))
-  style.map(name,background=[('active',SURFACE),('disabled',SURFACE)],foreground=[('disabled',DISABLED),('!disabled',TEXT)])
+ style.configure('DkbTitle.TLabel',background=PAGE,foreground=TEXT,font=(FONT,18,'bold'))
  for name in ('Dkb.TEntry','Dkb.TCombobox','Dkb.TSpinbox'):
   style.configure(name,fieldbackground=SURFACE,background=SURFACE,foreground=TEXT,bordercolor=BORDER,lightcolor=SURFACE,darkcolor=SURFACE,arrowcolor=MUTED,padding=4,font=(FONT,10))
-  style.map(name,fieldbackground=[('readonly',SURFACE),('disabled',SIDEBAR)],background=[('active',SURFACE),('readonly',SURFACE),('disabled',SIDEBAR)],
+  style.map(name,fieldbackground=[('readonly',SURFACE),('disabled',PAGE)],background=[('active',SURFACE),('readonly',SURFACE),('disabled',PAGE)],
             foreground=[('disabled',DISABLED)],bordercolor=[('focus',ACCENT)],lightcolor=[('focus',ACCENT)],darkcolor=[('focus',ACCENT)],
             selectbackground=[('readonly',SURFACE)],selectforeground=[('readonly',TEXT)])
  style.configure('Dkb.TButton',background=SURFACE,foreground=TEXT,bordercolor=BORDER,lightcolor=SURFACE,darkcolor=SURFACE,relief='solid',borderwidth=1,padding=(14,6),font=(FONT,10))
- style.map('Dkb.TButton',background=[('disabled',SIDEBAR),('pressed',ACCENT_SOFT),('active',HOVER)],lightcolor=[('pressed',ACCENT_SOFT),('active',HOVER)],darkcolor=[('pressed',ACCENT_SOFT),('active',HOVER)],foreground=[('disabled',DISABLED)])
- style.configure('DkbPrimary.TButton',background=ACCENT,foreground='#FFFFFF',bordercolor=ACCENT,lightcolor=ACCENT,darkcolor=ACCENT,relief='solid',borderwidth=1,padding=(26,8),font=(FONT,10,'bold'))
+ style.map('Dkb.TButton',background=[('disabled',PAGE),('pressed',ACCENT_SOFT),('active',HOVER)],lightcolor=[('pressed',ACCENT_SOFT),('active',HOVER)],darkcolor=[('pressed',ACCENT_SOFT),('active',HOVER)],foreground=[('disabled',DISABLED)])
+ # The per-feature TEST button: small, accent outline, so it reads as a secondary action.
+ style.configure('DkbTest.TButton',background=SURFACE,foreground=ACCENT,bordercolor='#C7CCFF',lightcolor=SURFACE,darkcolor=SURFACE,relief='solid',borderwidth=1,padding=(10,3),font=(FONT,9,'bold'))
+ style.map('DkbTest.TButton',background=[('disabled',SURFACE),('pressed','#E0E3FF'),('active',ACCENT_SOFT)],lightcolor=[('pressed','#E0E3FF'),('active',ACCENT_SOFT)],darkcolor=[('pressed','#E0E3FF'),('active',ACCENT_SOFT)],
+           foreground=[('disabled',DISABLED)],bordercolor=[('disabled',BORDER)])
+ style.configure('DkbPrimary.TButton',background=ACCENT,foreground='#FFFFFF',bordercolor=ACCENT,lightcolor=ACCENT,darkcolor=ACCENT,relief='solid',borderwidth=1,padding=(28,8),font=(FONT,10,'bold'))
  style.map('DkbPrimary.TButton',background=[('pressed',ACCENT_HOVER),('active',ACCENT_HOVER)],lightcolor=[('pressed',ACCENT_HOVER),('active',ACCENT_HOVER)],darkcolor=[('pressed',ACCENT_HOVER),('active',ACCENT_HOVER)],bordercolor=[('active',ACCENT_HOVER)],foreground=[('!disabled','#FFFFFF')])
- style.configure('DkbNav.Treeview',background=SIDEBAR,fieldbackground=SIDEBAR,foreground=TEXT,borderwidth=0,relief='flat',rowheight=31,font=(FONT,10))
+ style.configure('DkbNav.Treeview',background=SIDEBAR,fieldbackground=SIDEBAR,foreground=TEXT,borderwidth=0,relief='flat',rowheight=30,font=(FONT,10))
  style.map('DkbNav.Treeview',background=[('selected',ACCENT_SOFT)],foreground=[('selected',ACCENT)])
  style.layout('DkbNav.Treeview',[('Treeview.treearea',{'sticky':'nswe'})])
  style.configure('Dkb.Treeview',background=SURFACE,fieldbackground=SURFACE,foreground=TEXT,bordercolor=BORDER,lightcolor=SURFACE,darkcolor=SURFACE,rowheight=27,font=(FONT,10))
  style.map('Dkb.Treeview',background=[('selected',ACCENT_SOFT)],foreground=[('selected',ACCENT)])
- style.configure('Dkb.Treeview.Heading',background=SIDEBAR,foreground=MUTED,bordercolor=BORDER,lightcolor=SIDEBAR,darkcolor=SIDEBAR,relief='flat',padding=(6,6),font=(FONT,9,'bold'))
+ style.configure('Dkb.Treeview.Heading',background=PAGE,foreground=MUTED,bordercolor=BORDER,lightcolor=PAGE,darkcolor=PAGE,relief='flat',padding=(6,6),font=(FONT,9,'bold'))
  style.map('Dkb.Treeview.Heading',background=[('active',BORDER)],lightcolor=[('active',BORDER)],darkcolor=[('active',BORDER)])
  for name in ('Dkb.Vertical.TScrollbar','Dkb.Horizontal.TScrollbar'):
-  style.configure(name,background='#CDD1D8',troughcolor=SURFACE,bordercolor=SURFACE,lightcolor='#CDD1D8',darkcolor='#CDD1D8',arrowcolor=MUTED,relief='flat')
+  style.configure(name,background='#CDD1D8',troughcolor=PAGE,bordercolor=PAGE,lightcolor='#CDD1D8',darkcolor='#CDD1D8',arrowcolor=MUTED,relief='flat')
   style.map(name,background=[('active','#A9AEB8')],lightcolor=[('active','#A9AEB8')],darkcolor=[('active','#A9AEB8')])
  # The page tabs stay hidden; only the visible inner tabs below are drawn.
- style.configure('OwnerDirect.TNotebook',background=SURFACE,bordercolor=SURFACE,lightcolor=SURFACE,darkcolor=SURFACE,borderwidth=0,tabmargins=0)
+ style.configure('OwnerDirect.TNotebook',background=PAGE,bordercolor=PAGE,lightcolor=PAGE,darkcolor=PAGE,borderwidth=0,tabmargins=0)
  style.layout('OwnerDirect.TNotebook.Tab',[])
- style.configure('Dkb.TNotebook',background=SURFACE,bordercolor=BORDER,lightcolor=SURFACE,darkcolor=SURFACE,tabmargins=(0,0,0,0))
- style.configure('Dkb.TNotebook.Tab',background=SURFACE,foreground=MUTED,bordercolor=BORDER,lightcolor=SURFACE,darkcolor=SURFACE,padding=(16,7),font=(FONT,10))
+ style.configure('Dkb.TNotebook',background=PAGE,bordercolor=BORDER,lightcolor=PAGE,darkcolor=PAGE,tabmargins=(0,0,0,0))
+ style.configure('Dkb.TNotebook.Tab',background=PAGE,foreground=MUTED,bordercolor=BORDER,lightcolor=PAGE,darkcolor=PAGE,padding=(16,7),font=(FONT,10))
  style.map('Dkb.TNotebook.Tab',background=[('selected',SURFACE),('active',HOVER)],foreground=[('selected',ACCENT)],lightcolor=[('selected',SURFACE)],bordercolor=[('selected',BORDER)])
  return style
 
 CLASSES={'TFrame':'Dkb.TFrame','TLabel':'Dkb.TLabel','TCheckbutton':'Dkb.TCheckbutton','TRadiobutton':'Dkb.TRadiobutton','TButton':'Dkb.TButton',
          'TEntry':'Dkb.TEntry','TCombobox':'Dkb.TCombobox','TSpinbox':'Dkb.TSpinbox','Treeview':'Dkb.Treeview','TNotebook':'Dkb.TNotebook',
          'TLabelframe':'Dkb.TLabelframe','TSeparator':'Dkb.TSeparator'}
+# Page style -> the same style on a white card.
+CARD_STYLES={'Dkb.TFrame':'DkbCard.TFrame','Dkb.TLabel':'DkbCard.TLabel','Dkb.TCheckbutton':'DkbCard.TCheckbutton','Dkb.TRadiobutton':'DkbCard.TRadiobutton',
+             'Dkb.TLabelframe':'DkbCard.TLabelframe','DkbHint.TLabel':'DkbCardHint.TLabel','DkbMuted.TLabel':'DkbCardMuted.TLabel','DkbNotice.TLabel':'DkbCardNotice.TLabel',
+             'DkbYes.TLabel':'DkbCardYes.TLabel','DkbNo.TLabel':'DkbCardNo.TLabel','DkbSection.TLabel':'DkbCardSection.TLabel'}
+
+def in_card(widget):
+ while widget is not None:
+  if getattr(widget,'_dkb_card',False):return True
+  widget=getattr(widget,'master',None)
+ return False
 
 def restyle(widget):
  """Give the existing widgets the console's own styles. The main window repaints
  the shared default styles with its run-state colour, so these must not use them."""
- kind=widget.winfo_class()
+ kind=widget.winfo_class();card=in_card(widget)
  name=CLASSES.get(kind)
  if kind=='TScrollbar':name='Dkb.Horizontal.TScrollbar' if str(widget.cget('orient'))=='horizontal' else 'Dkb.Vertical.TScrollbar'
+ if kind=='TButton' and str(widget.cget('text'))=='TEST':name='DkbTest.TButton'
  if name:
   current=str(widget.cget('style'))
-  if not current.startswith(('Dkb','OwnerDirect')):widget.configure(style=name)
- elif kind in ('Canvas','Frame','Toplevel') and not getattr(widget,'_dkb_line',False):widget.configure(background=SURFACE)
+  if card and current in CARD_STYLES:widget.configure(style=CARD_STYLES[current])
+  elif not current.startswith(('Dkb','OwnerDirect')):widget.configure(style=CARD_STYLES.get(name,name) if card else name)
+ elif kind in ('Canvas','Frame','Toplevel') and not getattr(widget,'_dkb_line',False) and not getattr(widget,'_dkb_card',False):
+  widget.configure(background=SURFACE if card else PAGE)
  for child in widget.winfo_children():restyle(child)
 
 def hide_inner_saves(widget):
@@ -161,7 +186,7 @@ def follow(window):
 
 def scroll_area(parent):
  """Canvas in the page colour with a scrollbar only while the content overflows."""
- canvas=tk.Canvas(parent,highlightthickness=0,borderwidth=0,background=SURFACE)
+ canvas=tk.Canvas(parent,highlightthickness=0,borderwidth=0,background=PAGE)
  scroll=ttk.Scrollbar(parent,orient='vertical',command=canvas.yview)
  canvas.configure(yscrollcommand=scroll.set);canvas.pack(side='left',fill='both',expand=True)
  body=ttk.Frame(canvas);window=canvas.create_window(0,0,window=body,anchor='nw')
@@ -189,9 +214,15 @@ def hairline(parent,**size):
  line=tk.Frame(parent,background=BORDER,highlightthickness=0,borderwidth=0,**size);line._dkb_line=True
  return line
 
+def card(parent,**pack):
+ """A white, hairline-bordered surface on the page. Children get DkbCard styles."""
+ frame=tk.Frame(parent,background=SURFACE,highlightthickness=1,highlightbackground=BORDER,highlightcolor=BORDER,borderwidth=0)
+ frame._dkb_card=True
+ if pack:frame.pack(**pack)
+ return frame
+
 def section_box(holder,title):
- box=ttk.Frame(holder,style='Dkb.TFrame');box.pack(fill='x',pady=(0,20))
- if title:
-  ttk.Label(box,text=title,style='DkbSection.TLabel').pack(anchor='w')
-  hairline(box,height=1).pack(fill='x',pady=(5,9))
+ outer=card(holder,fill='x',pady=(0,14))
+ box=ttk.Frame(outer,style='DkbCard.TFrame');box.pack(fill='both',expand=True,padx=14,pady=(10,12))
+ if title:ttk.Label(box,text=title,style='DkbCardSection.TLabel').pack(anchor='w',pady=(0,8))
  return box

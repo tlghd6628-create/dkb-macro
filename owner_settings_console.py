@@ -46,8 +46,6 @@ class NativeFields:
   frame=ttk.Frame(parent);frame.pack(fill='x' if compact else 'both',expand=not compact)
   canvas=None;body=frame
   if not compact:canvas,body=scroll_area(frame)
-  from owner_challenge_test import HINTS
-  if name=='보상·정리':ttk.Label(body,text='TEST는 해당 항목을 실제로 실행합니다.',style='DkbHint.TLabel').pack(anchor='w',pady=(0,10))
   group_visible={f['id']:self.model.visible(t) and self.model.visible(g) for t in self.model.schema['tabs'] for g in t['groups'] for f in g['fields']}
   items=[item for item in fields(self.model.schema) if category(item['id'])==name and group_visible[item['id']] and item.get('visible',True) is not False]
   # A long page reads better in two columns; short ones keep one wide column.
@@ -55,13 +53,8 @@ class NativeFields:
   columns=[body]
   if wide:
    columns=[ttk.Frame(body),ttk.Frame(body)]
-   columns[0].grid(row=1,column=0,sticky='new',padx=(0,28));columns[1].grid(row=1,column=1,sticky='new')
+   columns[0].grid(row=1,column=0,sticky='new',padx=(0,16));columns[1].grid(row=1,column=1,sticky='new')
    body.columnconfigure(0,weight=1,uniform='page');body.columnconfigure(1,weight=1,uniform='page')
-  hint=HINTS.get(name)
-  if hint:
-   label=ttk.Label(body,text=hint,style='DkbHint.TLabel')
-   if wide:label.grid(row=0,column=0,columnspan=2,sticky='w',pady=(0,10))
-   else:label.pack(anchor='w',pady=(0,10))
   filled=[0,0]
   if name=='기본 설정':self._membership(section_box(columns[0],'멤버십'))
   for title,rows in sections(name,items):
@@ -99,6 +92,7 @@ class NativeFields:
    key=item['id']
    value=self.model.values[key];var=(tk.BooleanVar(box,value=value) if item['type']=='checkbox' else tk.StringVar(box,value=value))
    self.vars[key]=var
+   if key in UNAVAILABLE:continue  # the saved value stays; a row that cannot run is not shown
    following=rows[index+1]['type'] if index+1<len(rows) else 'checkbox'
    if key in TARGETS or key in CHALLENGES:
     line=ttk.Frame(box);line.pack(fill='x',pady=3)
@@ -129,8 +123,8 @@ class NativeFields:
     row=ttk.Frame(box);row.pack(fill='x',pady=3)
     # A value that follows a switch sits under it; a plain value stays aligned.
     under=any(earlier['type']=='checkbox' for earlier in rows[:index])
-    ttk.Label(row,text=display_label(item),width=26).pack(side='left',padx=(24 if under else 0,8))
-    if item['type'] in ('combo','radio'):widget=ttk.Combobox(row,textvariable=var,values=item['choices'],state='readonly',width=18)
+    ttk.Label(row,text=display_label(item),width=22).pack(side='left',padx=(24 if under else 0,8))
+    if item['type'] in ('combo','radio'):widget=ttk.Combobox(row,textvariable=var,values=item['choices'],state='readonly',width=16)
     else:widget=ttk.Spinbox(row,textvariable=var,from_=item.get('min',0),to=item.get('max',999999),width=9)
     widget.pack(side='left')
    self.controls.append((item,widget))
@@ -182,20 +176,21 @@ class SettingsConsole:
   self.editors=[]
   from owner_hunt_rules_candidate import configured_identity
   identity=configured_identity(gui.project.root)
-  from owner_settings_theme import prepare,restyle,follow,hide_inner_saves,tidy,hairline,NAV_GROUPS,SURFACE,MUTED,FONT
-  prepare(gui.root);self.window.configure(background=SURFACE)
+  from owner_settings_theme import prepare,restyle,follow,hide_inner_saves,tidy,hairline,NAV_GROUPS,PAGE,MUTED,FONT
+  prepare(gui.root);self.window.configure(background=PAGE)
   layout=ttk.Frame(self.window,style='Dkb.TFrame');layout.pack(fill='both',expand=True)
   side=ttk.Frame(layout,style='DkbSide.TFrame');side.pack(side='left',fill='y')
-  ttk.Label(side,text='세부설정',style='DkbBrand.TLabel').pack(anchor='w',padx=18,pady=(18,10))
-  nav=ttk.Treeview(side,show='tree',selectmode='browse',height=20,style='DkbNav.Treeview');nav.column('#0',width=170,stretch=False);nav.pack(fill='y',expand=True,padx=(8,8),pady=(0,10))
+  ttk.Label(side,text='세부설정',style='DkbBrand.TLabel').pack(anchor='w',padx=20,pady=(20,12))
+  nav=ttk.Treeview(side,show='tree',selectmode='browse',height=20,style='DkbNav.Treeview');nav.column('#0',width=176,stretch=False);nav.pack(fill='y',expand=True,padx=(10,10),pady=(0,10))
   nav.tag_configure('group',foreground=MUTED,font=(FONT,9,'bold'))
   hairline(layout,width=1).pack(side='left',fill='y')
   main=ttk.Frame(layout,style='Dkb.TFrame');main.pack(side='left',fill='both',expand=True)
   heading=tk.StringVar(self.window)
-  ttk.Label(main,textvariable=heading,style='DkbTitle.TLabel').pack(anchor='w',padx=26,pady=(18,12))
-  footer=ttk.Frame(main,style='Dkb.TFrame');footer.pack(side='bottom',fill='x')
+  ttk.Label(main,textvariable=heading,style='DkbTitle.TLabel').pack(anchor='w',padx=28,pady=(20,14))
+  # The footer is a white bar with one save button; the notice sits beside it.
+  footer=ttk.Frame(main,style='DkbCard.TFrame');footer.pack(side='bottom',fill='x')
   hairline(footer,height=1).pack(fill='x')
-  tabs=ttk.Notebook(main,style='OwnerDirect.TNotebook');tabs.pack(fill='both',expand=True,padx=26,pady=(0,10))
+  tabs=ttk.Notebook(main,style='OwnerDirect.TNotebook');tabs.pack(fill='both',expand=True,padx=24,pady=(0,12))
   links={}
   def link(label,outer,inner=None,page=None):links[label]=(outer,inner,page)
   for label in ('기본 설정','보상·정리','문파','성장','사냥터','상점','아이템 사용','스케줄','진단'):
@@ -231,7 +226,9 @@ class SettingsConsole:
     hunt.list.pack_configure(fill='x',expand=False)
    elif label=='상점':
     from owner_shop_settings_candidate import open_settings
-    self.editors.append(open_settings(frame,gui.project.root,identity,embedded=True))
+    shop=open_settings(frame,gui.project.root,identity,embedded=True);self.editors.append(shop)
+    from owner_challenge_test import SHOP_KEY
+    shop.add_test(lambda result:self.test_action(SHOP_KEY,result))
    elif label=='아이템 사용':
     self.native.build(frame,label,compact=True)
     from owner_starter_choice_candidate import open_settings
@@ -248,8 +245,8 @@ class SettingsConsole:
   # A page added elsewhere must stay reachable even without a menu group here.
   if links:place('기타',list(links))
   self.notice=tk.StringVar(self.window)
-  actions=ttk.Frame(footer,style='Dkb.TFrame');actions.pack(fill='x',padx=26,pady=12)
-  ttk.Label(actions,textvariable=self.notice,style='DkbNotice.TLabel').pack(side='left')
+  actions=ttk.Frame(footer,style='DkbCard.TFrame');actions.pack(fill='x',padx=28,pady=12)
+  ttk.Label(actions,textvariable=self.notice,style='DkbCardNotice.TLabel').pack(side='left')
   save=ttk.Button(actions,text='저장',command=self.save,style='DkbPrimary.TButton');save.pack(side='right')
   hide_inner_saves(tabs);tidy(tabs);restyle(tabs);follow(self.window)
   def select(event=None):
@@ -283,8 +280,11 @@ class SettingsConsole:
   if self.save():self.window.destroy();self.callbacks[key]()
  def test_action(self,key,result):
   from owner_reward_action_test import PATHS
-  from owner_challenge_test import TARGETS as CHALLENGES,start
+  from owner_challenge_test import TARGETS as CHALLENGES,start,SHOP_KEY
   if key in UNAVAILABLE:result.set(UNAVAILABLE[key]);return
+  if key==SHOP_KEY:
+   if not self.save():result.set(self.notice.get());return
+   start(self.gui,key,result);return
   if key in CHALLENGES:
    if not self.native.model.supported(self.native.model.items[key]):result.set('실행 연결 없음');return
    if not self.save():result.set(self.notice.get());return
