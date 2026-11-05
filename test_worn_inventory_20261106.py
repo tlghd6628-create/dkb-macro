@@ -1,0 +1,156 @@
+"""Worn items and blessings read from the bag's fixed tiles at 1366x768. Words from real reads and fake input; never a game test."""
+from pathlib import Path
+from types import SimpleNamespace as NS
+from unittest.mock import patch
+import os,sys,tempfile,unittest
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+import bootstrap
+import numpy as np
+import owner_worn_stats as w
+import owner_growth_current as current
+
+
+def word(text,y):return dict(text=text,score=.9,rx=620,ry=y,bounds=(600,y-9,640,y+9))
+REAL=np.zeros((768,1366,3),np.uint8)
+
+
+class Table(unittest.TestCase):
+ def table(self,rows):
+  with patch('owner_text.read_area',return_value=rows):return w.real_table(REAL)
+ def test_an_item_has_four_rows(self):
+  hits=self.table([word('강화',415),word('개방',443),word('돌파',471),word('각성',499)])
+  self.assertEqual(list(hits),['enhance','opening','breakthrough','awaken'])
+ def test_a_blessing_has_three(self):
+  hits=self.table([word('강화',483),word('개방',511),word('각성',539)])
+  self.assertEqual(list(hits),['enhance','opening','awaken'])
+ def test_a_word_read_badly_keeps_its_row_by_spacing(self):
+  hits=self.table([word('강화',415),word('개방',443),word('들파',471),word('각성',499)])
+  self.assertEqual(hits['breakthrough'][1],471-13)
+ def test_without_both_ends_there_is_no_table(self):
+  self.assertIsNone(self.table([word('강화',415),word('개방',443)]))
+  self.assertIsNone(self.table([word('개방',443),word('각성',499)]))
+ def test_rows_at_another_spacing_are_no_table(self):
+  self.assertIsNone(self.table([word('강화',415),word('각성',433)]))
+ def test_the_lower_rows_of_a_blessing_are_inside_the_area(self):
+  x,y,width,height=w.REAL_ROWS
+  self.assertGreater(y+height,560)
+
+
+class Open(unittest.TestCase):
+ def test_the_info_tab_says_open(self):
+  with patch('owner_text.read_area',return_value=[word('정보',314)]):self.assertTrue(w.real_popup(REAL))
+  with patch('owner_text.read_area',return_value=[word('장비',314)]):self.assertFalse(w.real_popup(REAL))
+ def test_a_real_frame_never_reaches_the_e_picture(self):
+  frame=np.zeros((479,897,3),np.uint8).view(type('F',(np.ndarray,),{}));frame.hi=REAL
+  with patch('owner_text.read_area',return_value=[word('정보',314)]),patch('owner_equipment_tooltip_candidate._badge',side_effect=AssertionError('E read')):
+   self.assertTrue(w.popup(frame))
+
+
+class Heading(unittest.TestCase):
+ def test_title_and_grade(self):
+  with patch('owner_text.read_area',side_effect=[[word('토끼 가호 장식2(귀속)',170)],[word('일반',217),word('세트가호',240)]]):
+   self.assertEqual(w.real_heading(REAL),('토끼가호장식2(귀속)','일반'))
+ def test_two_grades_are_none(self):
+  with patch('owner_text.read_area',side_effect=[[word('x',170)],[word('일반',217),word('희귀',240)]]):
+   self.assertIsNone(w.real_heading(REAL)[1])
+ def test_kind_comes_from_the_title(self):
+  self.assertEqual(w.blessing_kind('도깨비가호장식](귀속)'),'도깨비')
+  self.assertEqual(w.blessing_kind('토까가호장식4(귀속)'),'토끼')
+  self.assertEqual(w.blessing_kind('나비갓호장식3'),'나비')
+  self.assertIsNone(w.blessing_kind('호랑이가호장식1'))
+
+
+class Settled(unittest.TestCase):
+ def run_reads(self,reads):
+  values=iter(reads)
+  service=NS(capture=lambda:NS(hi=REAL),check=lambda:None);context=NS(checkpoint=lambda:None,wait=lambda s:None)
+  with patch.object(w,'real_table',return_value={'enhance':0,'awaken':0}),patch.object(w,'real_read',side_effect=lambda r,h:next(values,None)):
+   return w.settled_read(service,context)
+ def test_two_looks_in_a_row_must_agree(self):
+  self.assertEqual(self.run_reads([{'enhance':50,'awaken':7},{'enhance':50,'awaken':1},{'enhance':50,'awaken':1}]),{'enhance':50,'awaken':1})
+ def test_never_agreeing_is_nothing(self):
+  self.assertIsNone(self.run_reads([{'enhance':50,'awaken':n} for n in range(9)]))
+ def test_a_missing_row_never_answers(self):
+  self.assertIsNone(self.run_reads([{'enhance':50}]*9))
+
+
+class Inspect(unittest.TestCase):
+ """Each tile is clicked once, then the details close. A second click on a tile would take the item off."""
+ def setUp(self):
+  self.dir=tempfile.TemporaryDirectory();self.addCleanup(self.dir.cleanup)
+  self.root=Path(self.dir.name);self.clicks=[];self.open=False;self.opens=True
+  def click_hit(hit):
+   self.clicks.append(hit[:2]);self.open=self.opens and hit[:2]!=(510,106)
+  self.service=NS(adapter=NS(project=NS(root=self.root)),check=lambda:None,capture=lambda:NS(hi=REAL),click_hit=click_hit)
+  self.context=NS(checkpoint=lambda:None,wait=lambda s:None)
+  from contextlib import contextmanager
+  @contextmanager
+  def transaction():yield
+  self.inputs=NS(transaction=transaction,_guard_target=lambda:None,move=lambda x,y:None)
+ def run_slot(self,slot,*,left=True,values=None,heading=('토끼가호장식2(귀속)','일반')):
+  values={'enhance':20,'opening':2,'awaken':0} if values is None else values
+  with patch.object(w,'popup',side_effect=lambda f:self.open),patch('owner_progression.inventory_parts',return_value=(left,False)),\
+       patch.object(w,'settled_read',return_value=values),patch.object(w,'real_heading',return_value=heading),\
+       patch('owner_mission_ui.MissionUI.wheel'),patch('owner_skill_ui.SkillUI',lambda *a:NS()):
+   return w.inspect_real(self.service,self.context,self.inputs,'profile','c',slot)
+ def test_a_blessing_is_saved_by_its_place(self):
+  self.assertIs(self.run_slot('가호2'),True)
+  self.assertEqual(current.blessing_rows(self.root,'profile')[1],('2번','토끼','일반','20','2','0'))
+  self.assertEqual(self.clicks[0],(63,307));self.assertEqual(self.clicks[-1],(510,106));self.assertEqual(len(self.clicks),2)
+ def test_an_item_is_saved_by_its_slot(self):
+  self.assertIs(self.run_slot('무기',values={'enhance':50,'opening':5,'breakthrough':3,'awaken':1},heading=('바람물결은선','희귀')),True)
+  self.assertEqual(current.equipped_rows(self.root,'profile')[0],('무기','희귀','50','5','3','1'))
+ def test_the_same_tile_is_not_read_again_soon(self):
+  self.run_slot('가호2');self.clicks.clear()
+  self.assertIs(self.run_slot('가호2'),False);self.assertEqual(self.clicks,[])
+ def test_a_closed_bag_clicks_nothing(self):
+  self.assertIs(self.run_slot('가호2',left=False),False);self.assertEqual(self.clicks,[])
+ def test_a_tile_that_opens_nothing_is_skipped_once(self):
+  self.opens=False
+  self.assertIs(self.run_slot('가호2'),False);self.assertEqual(len(self.clicks),1)
+ def test_unread_numbers_save_nothing_and_still_close(self):
+  self.service.adapter._owner_worn_stats_cache={}
+  with patch.object(w,'settled_read',return_value=None):pass
+  self.assertIs(self.run_slot('가호2',values={}),False)
+  self.assertEqual(current.blessing_rows(self.root,'profile')[1][1],'미확인');self.assertEqual(self.clicks[-1],(510,106))
+ def test_an_unknown_kind_saves_nothing(self):
+  self.assertIs(self.run_slot('가호1',heading=('호랑이가호장식1','희귀')),False)
+  self.assertEqual(current.blessing_rows(self.root,'profile')[0][1],'미확인')
+
+
+class Rows(unittest.TestCase):
+ def setUp(self):
+  self.dir=tempfile.TemporaryDirectory();self.addCleanup(self.dir.cleanup);self.root=Path(self.dir.name)
+ def test_empty_rows_say_unread(self):
+  self.assertEqual(current.blessing_rows(self.root,'p')[4],('5번','미확인','미확인','미확인','미확인','미확인'))
+ def test_growth_keeps_the_kind_of_the_same_item(self):
+  current.observe_blessing(self.root,'p','3번','도깨비','희귀',{'enhance':23,'opening':2,'awaken':0})
+  current.observe_value(self.root,'p','blessings','3번',{'enhance':24},verified=True,item_identity='blessing-words:도깨비3')
+  self.assertEqual(current.blessing_rows(self.root,'p')[2],('3번','도깨비','희귀','24','2','0'))
+ def test_stale_slots_name_blessings_until_read(self):
+  self.assertIn('가호1',w.stale_slots(self.root,'p'))
+  current.observe_blessing(self.root,'p','1번','도깨비','희귀',{'enhance':39,'opening':3,'awaken':0})
+  self.assertNotIn('가호1',w.stale_slots(self.root,'p'))
+ def test_saved_values_come_back(self):
+  current.observe_blessing(self.root,'p','1번','도깨비','희귀',{'enhance':39,'opening':3,'awaken':0})
+  current._LOADED.clear();current._VALUES.clear()
+  self.assertEqual(current.blessing_rows(self.root,'p')[0],('1번','도깨비','희귀','39','3','0'))
+
+
+class TestButton(unittest.TestCase):
+ def test_it_reads_everything_and_names_what_it_missed(self):
+  import owner_challenge_test as t
+  adapter=NS(_owner_worn_stats_cache={'old':1})
+  with patch('owner_quest_preflight.read_power'),patch('owner_worn_stats.inspect_equipped',return_value=list(w.ALL_SLOTS[:15])) as read:
+   self.assertEqual(t.worn(adapter,None,None),'15칸 확인 · 미확인 가호5')
+  self.assertEqual(adapter._owner_worn_stats_cache,{});self.assertIsNone(read.call_args.kwargs.get('only'))
+ def test_all_read_is_plain(self):
+  import owner_challenge_test as t
+  with patch('owner_quest_preflight.read_power'),patch('owner_worn_stats.inspect_equipped',return_value=list(w.ALL_SLOTS)):
+   self.assertEqual(t.worn(NS(),None,None),'16칸 확인')
+ def test_all_slots_are_the_real_ones(self):
+  from owner_equipment_boxes import SLOTS
+  self.assertEqual(set(w.ALL_SLOTS),set(SLOTS)|set(w.BLESSING_SLOTS))
+
+
+if __name__=='__main__':unittest.main()

@@ -49,7 +49,8 @@ def _load(root):
    else:
     if row.get('section') not in _SECTIONS or not _valid_scope(row.get('key')):continue
     _VALUES[(key,row['character'],row['section'],row['key'])]={'values':dict(values),'at_epoch':at,'field_at':field_at,
-        'item_identity':row.get('item_identity') if _valid_scope(row.get('item_identity')) else None}
+        'item_identity':row.get('item_identity') if _valid_scope(row.get('item_identity')) else None,
+        **{k:row[k] for k in ('kind','grade') if isinstance(row.get(k),str)}}
  return key
 
 def _persist(root):
@@ -58,7 +59,7 @@ def _persist(root):
   if r!=key:continue
   for item,row in items.items():document['equipment'].append({'character':character,'item':item,'slot':row.get('slot'),'grade':row['grade'],'values':row['values'],'at_epoch':row['at_epoch'],'field_at':row.get('field_at',{}),'item_icon':row.get('item_icon')})
  for (r,character,section,k),row in _VALUES.items():
-  if r==key:document['values'].append({'character':character,'section':section,'key':k,'values':row['values'],'at_epoch':row['at_epoch'],'field_at':row.get('field_at',{}),'item_identity':row.get('item_identity')})
+  if r==key:document['values'].append({'character':character,'section':section,'key':k,'values':row['values'],'at_epoch':row['at_epoch'],'field_at':row.get('field_at',{}),'item_identity':row.get('item_identity'),**{name:row[name] for name in ('kind','grade') if name in row}})
  path=_path(root);path.parent.mkdir(parents=True,exist_ok=True);fd,tmp=tempfile.mkstemp(prefix='.growth-current-',dir=path.parent)
  try:
   with os.fdopen(fd,'w',encoding='utf8') as stream:json.dump(document,stream,ensure_ascii=False);stream.flush();os.fsync(stream.fileno())
@@ -83,8 +84,31 @@ def observe_value(root,character,section,key,values,*,verified=False,item_identi
   merged=dict(prior.get('values',{})) if keep else {};merged.update(values)
   at=time.time();field_at=dict(prior.get('field_at',{})) if keep else {};field_at.update({name:at for name in values})
   _VALUES[ident]={'values':merged,'at':time.monotonic(),'at_epoch':at,'field_at':field_at,
-                 'item_identity':item_identity if item_identity is not None else prior.get('item_identity')};_save_display(root)
+                 'item_identity':item_identity if item_identity is not None else prior.get('item_identity'),
+                 **({k:prior[k] for k in ('kind','grade') if k in prior} if keep else {})};_save_display(root)
  return True
+
+def observe_blessing(root,character,key,kind,grade,values):
+ """A worn blessing's details: the whole reading replaces what its slot held."""
+ if not _valid_scope(character) or key not in ('1번','2번','3번','4번','5번') or not isinstance(kind,str) or not kind or not isinstance(grade,str) or not grade:return False
+ if not values or any(field not in ('enhance','opening','awaken') or type(value) is not int or value<0 for field,value in values.items()):return False
+ with _LOCK:
+  at=time.time();ident=(_load(root),character,'blessings',key);old=_VALUES.get(ident,{})
+  # The growth observer's own record for this slot names the item with its slot digit; keep to that name.
+  identity='blessing-words:'+kind+key[0]
+  merged=dict(old.get('values',{})) if old.get('item_identity')==identity else {};merged.update(values)
+  field_at=dict(old.get('field_at',{})) if old.get('item_identity')==identity else {};field_at.update({name:at for name in values})
+  _VALUES[ident]={'values':merged,'at':time.monotonic(),'at_epoch':at,'field_at':field_at,'item_identity':identity,'kind':kind,'grade':grade};_save_display(root)
+ return True
+
+def blessing_rows(root,character):
+ """Per-slot last verified display values, the same way equipped_rows gives the items."""
+ result=[]
+ with _LOCK:scope=_load(root);rows={key:_VALUES.get((scope,character,'blessings',key),{}) for key in ('1번','2번','3번','4번','5번')}
+ for key,row in rows.items():
+  values=row.get('values',{})
+  result.append((key,row.get('kind','미확인'),row.get('grade','미확인'),*(str(values[k]) if k in values else '미확인' for k in ('enhance','opening','awaken'))))
+ return result
 
 def current_value(root,character,section,key,field,*,now=None):
  now=time.monotonic() if now is None else now

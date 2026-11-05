@@ -11,7 +11,9 @@ DISPATCH,DIRECT,RAID='dispatch','direct','raid'
 GROWTH,STYLE,ALBUM,BLESSING,PRESET='growth','style','album','blessing','preset'
 TREASURE='treasure'
 SHOP='shop';SHOP_KEY='owner_shop.enabled'
+WORN='worn';WORN_KEY='owner_worn.status'
 TARGETS={
+ WORN_KEY:('착용 현재값 확인',WORN),
  SHOP_KEY:('잡화상점 구매',SHOP),
  'auto_schedule.boss_raid.skill_preset.enabled':('레이드 단일 덱 구성',PRESET),
  'auto_rewards.blessing.enabled':('가호 보상·장착',BLESSING),
@@ -160,6 +162,16 @@ def shop(adapter,context,inputs):
         return '구매 %d회%s'%(result.get('confirmed',0),held)
     return '보류 · '+str(result.get('reason') or status)
 
+def worn(adapter,context,inputs):
+    """Reads every worn item and blessing from the bag. Nothing is spent."""
+    from owner_quest_preflight import read_power
+    from owner_worn_stats import inspect_equipped,ALL_SLOTS,WORN_TEST_SECONDS
+    read_power(adapter,context,inputs)
+    adapter._owner_worn_resume=None;adapter._owner_worn_stats_cache={}
+    read=inspect_equipped(adapter,context,inputs,max_seconds=WORN_TEST_SECONDS) or []
+    missed=[slot for slot in ALL_SLOTS if slot not in read]
+    return '%d칸 확인'%len(read)+(' · 미확인 '+', '.join(missed) if missed else '')
+
 def direct(adapter,context,inputs,key):
     """These two run by the clock in normal play, not from the dispatcher."""
     if key=='auto_schedule.field_boss.enabled':return adapter.run_field_boss_entry(context,inputs)
@@ -222,6 +234,7 @@ def execute(adapter,context,inputs,key):
         if kind==RAID:return raid_real(adapter,context,inputs)
         if kind==TREASURE:return treasure(adapter,context,inputs,key)
         if kind==SHOP:return shop(adapter,context,inputs)
+        if kind==WORN:return worn(adapter,context,inputs)
         if kind in (GROWTH,STYLE,ALBUM,BLESSING,PRESET):return growth(adapter,context,inputs,key)
         return dispatch(adapter,context,inputs,key) if kind==DISPATCH else direct(adapter,context,inputs,key)
     except ResumeWork:return None  # a boss return to the selected work; a TEST just ends here

@@ -203,7 +203,7 @@ class GearSettings:
                 ttk.Label(box,textvariable=current).grid(row=index,column=current_column)
                 self.current_cells.append((grade,key,current))
                 ttk.Entry(box,textvariable=v[key],width=6).grid(row=index,column=target_column,padx=4)
-        ttk.Label(box,text='착용 장비 · 최근 확인값').grid(row=6,column=0,columnspan=8,sticky='w',pady=(9,3))
+        self.worn_heading(box,'착용 장비 · 최근 확인값',row=6,columnspan=8)
         equipped=ttk.Treeview(box,columns=('slot','grade','enhance','opening','breakthrough','awaken'),show='headings',height=5)
         for key,text in zip(equipped['columns'],('부위','등급','강화','개방','돌파','각성')):
             equipped.heading(key,text=text);equipped.column(key,width=78,anchor='center',stretch=True)
@@ -267,6 +267,12 @@ class GearSettings:
             self.blessing_rank.append(v)
             ttk.Label(ranks,text=str(index+1)).grid(row=0,column=index,padx=3)
             ttk.Combobox(ranks,textvariable=v,values=('',)+PATTERNS,state='readonly',width=7).grid(row=1,column=index,padx=3)
+        self.worn_heading(blessings,'착용 가호 · 최근 확인값',row=13,columnspan=6)
+        worn_blessings=ttk.Treeview(blessings,columns=('slot','kind','grade','enhance','opening','awaken'),show='headings',height=5)
+        for key,text in zip(worn_blessings['columns'],('칸','종류','등급','강화','개방','각성')):
+            worn_blessings.heading(key,text=text);worn_blessings.column(key,width=78,anchor='center',stretch=True)
+        worn_blessings.grid(row=14,column=0,columnspan=6,sticky='nsew')
+        self._blessing_display=None
         energies=ttk.Frame(tabs,padding=8);tabs.add(energies,text='기운')
         self.feature_switch(energies,'energies')
         for col,label in enumerate(('기운','사용','현재','목표 단계')):
@@ -299,6 +305,12 @@ class GearSettings:
                 equipped.delete(*equipped.get_children())
                 for row in display:equipped.insert('', 'end',values=row)
                 self._equipped_display=display
+            from owner_growth_current import blessing_rows
+            shown=blessing_rows(root,character)
+            if shown!=self._blessing_display:
+                worn_blessings.delete(*worn_blessings.get_children())
+                for row in shown:worn_blessings.insert('', 'end',values=row)
+                self._blessing_display=shown
             for grade,field,var in self.current_cells:var.set(current(root,character,grade,field))
             from owner_growth_current import current_value
             for section,name,field,var in self.current_values:var.set(current_value(root,character,section,name,field))
@@ -324,6 +336,17 @@ class GearSettings:
 
     def test_request(self,section,result):
         """Set by the settings console; alone in a separate window it has no worker to run on."""
+        result.set('세부설정 창에서 실행해 주세요')
+
+    def worn_heading(self,parent,title,*,row,columnspan):
+        line=ttk.Frame(parent);line.grid(row=row,column=0,columnspan=columnspan,sticky='w',pady=(9,3))
+        ttk.Label(line,text=title).pack(side='left')
+        result=tk.StringVar(self.window,value='')
+        ttk.Button(line,text='TEST',width=6,command=lambda:self.worn_test(result)).pack(side='left',padx=(10,8))
+        ttk.Label(line,textvariable=result).pack(side='left')
+
+    def worn_test(self,result):
+        """Set by the settings console, like test_request."""
         result.set('세부설정 창에서 실행해 주세요')
 
     def save(self):

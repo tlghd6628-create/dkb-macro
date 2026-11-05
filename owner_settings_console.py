@@ -211,6 +211,8 @@ class SettingsConsole:
     editor=open_settings(frame,gui.project.root,identity,gui=gui,embedded=True);self.editors.append(editor)
     from owner_settings_layout import GROWTH_SWITCHES
     editor.test_request=lambda section,result:self.test_action(GROWTH_SWITCHES[section],result)
+    from owner_challenge_test import WORN_KEY
+    editor.worn_test=lambda result:self.test_action(WORN_KEY,result)
     editor.tabs.configure(style='OwnerDirect.TNotebook')
     for page in editor.tabs.tabs():
      name=editor.tabs.tab(page,'text');link(name,frame,editor.tabs,page)
@@ -280,9 +282,9 @@ class SettingsConsole:
   if self.save():self.window.destroy();self.callbacks[key]()
  def test_action(self,key,result):
   from owner_reward_action_test import PATHS
-  from owner_challenge_test import TARGETS as CHALLENGES,start,SHOP_KEY
+  from owner_challenge_test import TARGETS as CHALLENGES,start,SHOP_KEY,WORN_KEY
   if key in UNAVAILABLE:result.set(UNAVAILABLE[key]);return
-  if key==SHOP_KEY:
+  if key in (SHOP_KEY,WORN_KEY):
    if not self.save():result.set(self.notice.get());return
    start(self.gui,key,result);return
   if key in CHALLENGES:
