@@ -652,16 +652,20 @@ class SkillUI:
         raise Pending('서사 필수 도술 확인 완료 · 임무 완료 표시 재확인')
     def skill_rows(self):
         # A flicked list keeps gliding, and the two reads disagree until it stops. Nothing is pressed here.
+        # Only skill names have to agree: stray text over the moving art held this whole list before.
+        known={clean(name):name for name in self.public['all_skill_names']}
         for attempt in range(8):
-            try:rows=self.rows((729,79,80,365));break
-            except Pending as exc:
-                if attempt==7 or '두 화면' not in str(exc):raise
-                self.context.wait(.5)
-        known=self.public['all_skill_names'];found=[]
-        for r in rows:
-            names=[name for name in known if clean(r['text'])==clean(name)]
-            if r['score']>=.88 and len(names)==1:found.append(dict(r,name=names[0],id=known[names[0]]['id']))
-        return found
+            self.rows_batch([((729,79,80,365),'korean',.88,'original',None,lambda a,b:True)])
+            first,second=self._owner_last_rows_raw[2][0]
+            def named(rows):return [dict(r,name=known[clean(r['text'])]) for r in rows if clean(r['text']) in known]
+            a,b=named(first),named(second)
+            def has(row,others,floor):return any(o['name']==row['name'] and o['score']>=floor and abs(o['y']-row['y'])<=3 and abs(o['x']-row['x'])<=5 for o in others)
+            floor=.88-PAIR_SLACK
+            if all(has(r,b,floor) for r in a if r['score']>=.88) and all(has(r,a,floor) for r in b if r['score']>=.88):break
+            if attempt==7:raise Pending('도술 두 화면 판독 불일치')
+            self.context.wait(.5)
+        ids=self.public['all_skill_names']
+        return [dict(r,id=ids[r['name']]['id']) for r in b if r['score']>=.88]
     def all_filter(self,owned_only):
         # The top All category scrolls with the style bar; locate its text.
         try:self.click_word('전체',(850,30,45,450),skill_screen,minimum=.90)

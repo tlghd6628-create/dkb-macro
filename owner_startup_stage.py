@@ -347,6 +347,8 @@ def install(gui):
                         from owner_camera import zoom_out
                         zoom_out(adapter,context,inputs)
                     if kind=='field':
+                        from owner_single_preset import resume as preset_return
+                        preset_return(adapter,context,inputs)
                         from owner_boss_range import pending,restore
                         # A quest mode keeps it open: quests walk to their monsters.
                         if adapter.mode=='auto_mode' and pending(adapter.project.root):restore(adapter,context,inputs)
