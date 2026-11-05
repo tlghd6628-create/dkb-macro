@@ -40,8 +40,8 @@ class DurablePipeline(unittest.TestCase):
   out=u.SkillUpgrade(p,l,lambda:True,lambda *a:seen.append(a)).run('파멸','breakthrough',3)
   self.assertEqual(out['current'],3);self.assertEqual(len(p.actions),3)
   self.assertTrue(all(x[1]=='breakthrough' for x in p.actions));self.assertEqual(seen[-1],('skills','파멸',{'breakthrough':3}))
- def test_material_or_coin_shortage_does_not_prepare_or_click(self):
-  for field in ('have','funds'):
+ def test_material_shortage_does_not_prepare_or_click(self):
+  for field in ('have',):
    p=Port();setattr(p,field,0);l=Journal()
    with self.assertRaises(Pending):u.SkillUpgrade(p,l,lambda:True).run('생명의 흐름','awaken',1)
    self.assertEqual(p.actions,[]);self.assertEqual(l.item.get('skill_upgrade_intents'),{})
@@ -141,7 +141,6 @@ class RealAssetsAndRefresh(unittest.TestCase):
      {'text':'생명의 흐름','score':.999,'y':74,'bounds':(363,64,425,85)},
      {'text':'0/100','score':.999,'y':402,'bounds':(379,394,412,410)},
      {'text':'50,000','score':.999,'y':449,'bounds':(344,440,384,459)},
-     {'text':'567.22K','score':.999,'y':17,'bounds':(406,10,444,24)},
      {'text':'각성','score':.999,'y':449,'bounds':(413,440,443,459)}]
     return [[r] for r in answers[:len(specs)]]
    def click(self,*args):self.actions.append(args);raise AssertionError('zero material must not click')

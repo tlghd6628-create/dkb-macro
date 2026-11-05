@@ -173,12 +173,6 @@ class ShopSettings:
         self.enabled=tk.BooleanVar(self.window,value=document.get('enabled',True))
         self.enabled_row=ttk.Frame(top);self.enabled_row.pack(fill='x',pady=(0,8))
         ttk.Checkbutton(self.enabled_row,text='설정 상품 구매 사용',variable=self.enabled).pack(side='left')
-        reserve_bar = ttk.Frame(top)
-        reserve_bar.pack(fill='x', pady=(0, 5))
-        ttk.Label(reserve_bar, text='남길 엽전').pack(side='left')
-        # An empty field is saved as the default reserve the runtime applies.
-        self.reserve = tk.StringVar(value=str(DEFAULT_COIN_RESERVE if document['coin_reserve'] is None else document['coin_reserve']))
-        ttk.Entry(reserve_bar, textvariable=self.reserve, width=14).pack(side='left', padx=5)
         table = ttk.Frame(top)
         table.pack(fill='both', expand=True)
         tree = ttk.Treeview(table, columns=('order', 'name', 'enabled', 'target'), show='headings', selectmode='browse')
@@ -304,8 +298,7 @@ class ShopSettings:
 
     def save(self):
         try:
-            value = self.reserve.get().strip().replace(',', '')
-            self.store.write(both_shops(self.rows), int(value) if value else DEFAULT_COIN_RESERVE,expected_revision=self.open_revision,enabled=self.enabled.get())
+            self.store.write(both_shops(self.rows), DEFAULT_COIN_RESERVE,expected_revision=self.open_revision,enabled=self.enabled.get())
         except (ValueError, OSError) as error:
             messagebox.showerror('상점 설정 저장 실패', str(error), parent=self.window); return
         self.open_revision=self.store.revision()

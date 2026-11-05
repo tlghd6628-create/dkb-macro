@@ -427,11 +427,6 @@ def match_real(image,needle,method,ordinary,scorer=None):
     if real is None or method!=5:return None  # 5 is TM_CCOEFF_NORMED
     if source is None and image.shape[:2]!=(LOGICAL[1],LOGICAL[0]):return None
     entry=word_table().get(key_of(needle),{})
-    if entry.get('spends'):
-        from owner_coin_reserve import can_spend
-        if not can_spend(image,entry.get('name','')):
-            array=np.asarray(needle)
-            return np.full((max(1,image.shape[0]-array.shape[0]+1),max(1,image.shape[1]-array.shape[1]+1)),-1.,np.float32)
     state=entry.get('state')
     if state and source is not None:return match_state(image,needle,source,real,state)
     found=cut_for(needle)

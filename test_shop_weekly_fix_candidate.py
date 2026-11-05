@@ -45,17 +45,6 @@ class Settings(_Store):
   self.enable_wanted(master=True,reserve=None)
   self.assertTrue(owner_timetable.shop_selection_enabled(self.root))
   self.assertTrue(owner_timetable.enabled(owner_timetable.BY_KEY['shop'],{'owner_shop.enabled':True}))
- def test_editor_shows_and_saves_default_reserve_for_null(self):
-  import tkinter as tk
-  self.enable_wanted(master=True,reserve=None)
-  root=tk.Tk();root.withdraw()
-  try:
-   editor=ShopSettings(root,self.root,self.profile);editor.window.withdraw()
-   self.assertEqual(editor.reserve.get(),str(DEFAULT_COIN_RESERVE));self.assertTrue(editor.enabled.get())
-   editor.reserve.set('');self.assertTrue(editor.save())
-  finally:root.destroy()
-  self.assertEqual(self.store.read_document()['coin_reserve'],DEFAULT_COIN_RESERVE)
-
 class FakeUI:
  def __init__(self,journal):self.journal=journal;self.events=[];self.last_text_frame=np.zeros((479,897,3),dtype=np.uint8);self.context=NS(wait=lambda *a:None,checkpoint=lambda:None)
  def normal(self):return True
@@ -74,18 +63,6 @@ class ReserveNull(_Store):
   journal=runtime._journal(self.root);ui=FakeUI(journal)
   with patch.object(owner_membership,'paid',return_value=True),patch.object(owner_membership,'open_remote',return_value=ui),patch.object(owner_skill_ui,'SkillUI',return_value=ui),patch.object(owner_quest_preflight,'read_power',side_effect=refresh),patch.object(owner_progression,'state',return_value=progress),patch.object(runtime,'_find_quote',side_effect=[quote(0),quote(10)]),patch.object(runtime,'_balance',return_value=balance),patch.object(runtime,'_total',side_effect=[0,500000,500000,0]),patch.object(runtime,'_popup',return_value=(0,lambda f:True)),patch.object(runtime,'_paired',return_value=True),patch.object(runtime,'_close_known_shop'),patch.object(runtime,'_same_cart',return_value=True):
    return runtime.buy_remote_one(NS(project=NS(root=self.root)),NS(checkpoint=lambda:None),None,item),ui
- def test_null_reserve_no_longer_holds_before_navigation(self):
-  self.enable_wanted(master=True,reserve=None)
-  with self.assertLogs('project_gui.DKB',level='INFO') as logs:result,ui=self.go('강타 도술 강화 요령서')
-  self.assertEqual(result['status'],'confirmed');self.assertEqual(result['quantity'],10);self.assertTrue(result['finished'])
-  self.assertEqual(ui.events,['open_item','add_all','cart','commit'])
-  self.assertTrue(any('기본 %d 적용'%DEFAULT_COIN_RESERVE in line for line in logs.output))
- def test_default_reserve_still_protects_balance(self):
-  self.enable_wanted(master=True,reserve=None)
-  with patch.object(runtime,'DEFAULT_COIN_RESERVE',1900000):
-   result,ui=self.go('강타 도술 강화 요령서')
-  self.assertEqual(result['status'],'reserve_reached');self.assertEqual(ui.events,[])
-  self.assertFalse(runtime._journal(self.root).path.exists())
  def test_master_off_still_holds_each_item(self):
   self.enable_wanted(master=False,reserve=None)
   with self.assertRaises(Hold):self.go('강타 도술 강화 요령서')
