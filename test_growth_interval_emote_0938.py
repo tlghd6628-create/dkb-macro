@@ -48,6 +48,11 @@ class IntervalTests(unittest.TestCase):
   self.p.state['mail']={'status':'pending','at':(start+timedelta(minutes=20)).isoformat()}
   with patch.object(t,'busy_windows',return_value=[(start,start+timedelta(minutes=20))]):self.p.repeat_growth(self.at)
   self.assertGreaterEqual(t.parse_at(self.p.state['gear']['at']),start+timedelta(minutes=23))
+ def test_signal_brought_visit_without_an_end_is_left_due(self):
+  """pc2 홍짱군 11-07 05:12: a red dot set growth_recheck on a visit that never ended; F1 stopped on KeyError."""
+  at=self.at.isoformat();self.p.state['gear']={'period':t.period(t.BY_KEY['gear'],self.at),'at':at,'status':'pending','attempts':0,'growth_recheck':True}
+  with patch.object(t,'busy_windows',return_value=[]):self.assertFalse(self.p.repeat_growth(self.at))
+  self.assertEqual(self.p.state['gear']['at'],at)
  def test_verified_target_completion_does_not_rearm(self):
   self.p.state['gear'].pop('result_unverified');self.assertFalse(self.p.repeat_growth(self.at))
 

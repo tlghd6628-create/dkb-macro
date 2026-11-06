@@ -454,6 +454,9 @@ class Planner:
         legacy=item.get('status')=='processed' and item.get('result_unverified') is True
         continuing=item.get('status')=='pending' and item.get('growth_recheck') is True
         if not (legacy or continuing):return False
+        # A red dot or a death brings the visit to now with growth_recheck set, also when it never ran: no ended_at,
+        # and every F1 stopped on KeyError (pc2 홍짱군, 11-07 05:12). It is already due; nothing to space out.
+        if not item.get('ended_at'):return False
         from owner_gear_settings_candidate import Store
         from owner_hunt_rules_candidate import configured_identity
         try:store=Store(self.root,configured_identity(self.root))
