@@ -38,7 +38,10 @@ class boundary:
 
 
 GROWING_LEVEL=40
-SIGNAL_JOBS=frozenset(('gear','growth','gear_equip','blessing_equip','inventory'))
+# The spec-up set, in the order a person does it: open boxes, wear the better ones, summon and wear blessings, then
+# grow gear, energy and the album (user 11-07: blessing summon helps too; one set, no hand-picking per feature).
+SPEC_JOBS=('inventory','gear_equip','blessing_summon','blessing','blessing_equip','gear','growth','album')
+SIGNAL_JOBS=frozenset(SPEC_JOBS)
 SIGNAL_SECONDS=1800
 
 
@@ -110,10 +113,10 @@ def after_death(adapter):
         from owner_timetable import planner,EQUIP_JOBS,BY_KEY,enabled
         from owner_timetable import now as kst_now
         plan=planner(adapter);now=kst_now();moved=[]
-        for key in ('inventory','gear_equip','blessing_equip','gear'):  # boxes first: what they hold is then worn and grown
+        for key in SPEC_JOBS:  # boxes first: what they hold is then worn and grown
             job=BY_KEY.get(key);item=plan.state.get(key)
             if job is None or item is None or not enabled(job,plan.values):continue
-            flag='equip_recheck' if key in EQUIP_JOBS else ('growth_recheck' if key=='gear' else 'death_recheck')
+            flag='equip_recheck' if key in EQUIP_JOBS else ('growth_recheck' if key=='gear' else 'signal_recheck')
             import time
             item.update(status='pending',at=now.isoformat(),attempts=0,signal_at=time.time(),**{flag:True})
             moved.append(job.label)

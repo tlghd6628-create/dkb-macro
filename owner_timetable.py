@@ -1156,7 +1156,7 @@ def catch_up_overdue(adapter,context,inputs):
         finally:adapter.values=old_values
         context.checkpoint()
 
-PREP_KEYS=('inventory','gear_equip','blessing_equip','gear')
+from owner_job_timing import SPEC_JOBS as PREP_KEYS
 PREP_SECONDS=600
 
 

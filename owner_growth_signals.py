@@ -16,7 +16,7 @@ LOG=logging.getLogger('project_gui.DKB')
 DOT_Y=14;DOT_HALF=6;DOT_PIXELS=8
 DOTS={'guide':1019,'event':1073,'mail':1237,'bag':1292}   # real x of each icon's dot (pc1 11-06: 1073, 1128, 1292, 1346)
 LABELS={'guide':'길라잡이','event':'이벤트','mail':'우편','bag':'가방'}
-BAG_JOBS=('inventory','gear_equip','blessing_equip','gear')
+from owner_job_timing import SPEC_JOBS as BAG_JOBS
 REWARD_KEYS={'guide':'auto_rewards.guide.enabled','event':'auto_rewards.event.enabled','mail':'auto_rewards.mail.enabled'}
 LOOK_EVERY=60;MUTE=1800
 QUEST_GROWTH_SECONDS=900   # a quest's end brings growth forward at most every 15 minutes (user 11-06)
