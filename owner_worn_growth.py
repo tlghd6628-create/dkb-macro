@@ -561,31 +561,72 @@ def run(adapter,context,inputs):
         route.to_field()
     # A pass that pressed nothing (goals met, no materials) or ran out of coins rests IDLE_MINUTES (pc1 15:03 and 15:11:
     # all 14 parts read twice in eight minutes with nothing to do).
-    adapter._owner_worn_idle=(time.monotonic()+IDLE_MINUTES*60,revision) if (coins or not getattr(route,'pressed',False)) else None
+    store=Rests(adapter)
+    store.data['idle']=[time.time()+IDLE_MINUTES*60,revision] if (coins or not getattr(route,'pressed',False)) else None
+    store.save()
     return True
 
 
-IDLE_MINUTES=20
+IDLE_MINUTES=180
 TABLE_SECONDS=1800
+AWAKEN_HOURS=24
+# Rests are kept on disk per character and end on a change, not on the clock alone (user 11-06: growth must take far
+# less time). A pass that changed nothing took 5-6 minutes every 20 minutes and after every restart (pc1 17:58,
+# 18:22, 18:44): each part's details were read again and each 각성 was tried again for '동일 장비 없음'.
+# wake() ends them: a death, a swap, the bag's red dot, a new character. A 각성 rest ends only when the bag's gear
+# changes (wake_awaken from the higher-grade check).
+
+
+class Rests:
+    def __init__(self,adapter):
+        import json
+        self.adapter=adapter;self.path=getattr(adapter,'_owner_worn_rest_path',None)
+        cached=getattr(adapter,'_owner_worn_rests',None)
+        if cached is not None:self.data=cached;return
+        self.data={'idle':None,'short':{}}
+        try:adapter._owner_worn_rests=self.data
+        except AttributeError:pass
+        try:
+            from owner_hunt_rules_candidate import configured_identity
+            import hashlib
+            ident=hashlib.sha256(str(configured_identity(adapter.project.root)).encode('utf-8')).hexdigest()[:24]
+            self.path=Path(adapter.project.root)/'settings'/('owner-worn-rest-'+ident+'.json');adapter._owner_worn_rest_path=self.path
+            loaded=json.loads(self.path.read_text(encoding='utf-8'))
+            if isinstance(loaded,dict):self.data.update(loaded)
+        except (OSError,ValueError,TypeError,AttributeError):pass
+        if not isinstance(self.data.get('short'),dict):self.data['short']={}
+    def save(self):
+        import json
+        if self.path is None:return
+        try:self.path.write_text(json.dumps(self.data,ensure_ascii=False),encoding='utf-8')
+        except OSError:pass
 
 
 def rest(adapter,slot,kind):
-    """A step that could not run for want of materials or coins is not tried again for IDLE_MINUTES."""
-    rests=getattr(adapter,'_owner_worn_short',None)
-    if rests is None:rests=adapter._owner_worn_short={}
-    rests[(slot,kind)]=time.monotonic()+IDLE_MINUTES*60
+    """A step that could not run for want of materials or coins waits for a change: IDLE_MINUTES at most, a 각성 with
+    no spare of the same item until the bag's gear changes (AWAKEN_HOURS at most)."""
+    store=Rests(adapter)
+    store.data['short'][slot+'|'+kind]=time.time()+(AWAKEN_HOURS*3600 if kind==AWAKEN else IDLE_MINUTES*60)
+    store.save()
 
 
 def resting(adapter,slot,kind):
-    return time.monotonic()<(getattr(adapter,'_owner_worn_short',None) or {}).get((slot,kind),0)
+    return time.time()<Rests(adapter).data['short'].get(slot+'|'+kind,0)
 
 
 def idle_skip(adapter,revision):
     """Within the rest after an idle pass, with the same saved goals. A swap or a death clears the rest."""
-    rest=getattr(adapter,'_owner_worn_idle',None)
-    return bool(rest and time.monotonic()<rest[0] and rest[1]==revision)
+    idle=Rests(adapter).data.get('idle')
+    return bool(idle and time.time()<idle[0] and idle[1]==revision)
 
 
 def wake(adapter):
-    """Something may have changed (a new item, a death, new materials): the next pass reads again."""
-    adapter._owner_worn_idle=None;adapter._owner_worn_short={}
+    """Something may have changed (a new item, a death, new materials): the next pass reads again. A 각성 rest stays
+    unless the bag's gear changed."""
+    store=Rests(adapter);store.data['idle']=None
+    store.data['short']={k:v for k,v in store.data['short'].items() if k.endswith('|'+AWAKEN)}
+    store.save()
+
+
+def wake_awaken(adapter):
+    store=Rests(adapter);store.data['idle']=None;store.data['short']={};store.save()

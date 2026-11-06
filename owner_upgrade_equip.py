@@ -355,6 +355,11 @@ def gear_grid(adapter,service,context,choice,swaps,inputs=None):
     fingerprint=tuple(signature(real,(x,y)) for y in BAG_Y for x in BAG_X if real[y-24:y+24,x-24:x+24].std()>=TILE_SPREAD)
     if seen_before(adapter,'gear',(fingerprint,tuple(sorted(choice.items())))):
         LOG.info('장비 높은 등급 장착 · 가방 장비 지난 확인과 같음 · 칸 열지 않음');return swaps
+    last=(getattr(adapter,'_owner_equip_unchanged',None) or {}).get('gear')
+    if last is not None:
+        # The bag's gear changed: a spare for 각성 may be there now.
+        from owner_worn_growth import wake_awaken
+        wake_awaken(adapter)
     floor=worn_floor(adapter)
     higher=[p for p in candidates(real) if worth_opening(real,p,floor,empty_hint(real,floor))]
     LOG.info('장비 높은 등급 장착 · 후보 칸 %d개 · 착용 최저 %s · 열 칸 %d개',len(candidates(real)),floor or '미확인',len(higher))

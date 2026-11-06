@@ -38,4 +38,16 @@ class Look(unittest.TestCase):
         self.assertEqual(g.bring_reward(NS(values={g.REWARD_KEYS['mail']:False}),'mail'),[])
 
 
+
+class QuestEnd(unittest.TestCase):
+    def test_every_fifteen_minutes_and_at_once_on_a_level_up(self):
+        adapter=NS();calls=[];levels=[10,10,10,11]
+        with patch.object(g,'bring_bag',side_effect=lambda a:calls.append(1) or ['성장']),patch('owner_progression.state',side_effect=lambda a:NS(level=levels.pop(0))),             patch.object(g.time,'monotonic',side_effect=[1000,1100,1000+g.QUEST_GROWTH_SECONDS,2000]):
+            self.assertEqual(g.quest_end(adapter),['성장'])
+            self.assertEqual(g.quest_end(adapter),[])
+            self.assertEqual(g.quest_end(adapter),['성장'])
+            self.assertEqual(g.quest_end(adapter),['성장'])
+        self.assertEqual(len(calls),3)
+
+
 if __name__=='__main__':unittest.main()

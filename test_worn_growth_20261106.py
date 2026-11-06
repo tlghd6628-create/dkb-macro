@@ -423,10 +423,10 @@ class Idle(unittest.TestCase):
     """A pass that pressed nothing rests; the same goals keep the rest, a swap or a death ends it."""
     def test_rest_and_wake(self):
         adapter=NS();self.assertFalse(g.idle_skip(adapter,'r1'))
-        adapter._owner_worn_idle=(time.monotonic()+60,'r1')
+        g.Rests(adapter).data['idle']=[time.time()+60,'r1']
         self.assertTrue(g.idle_skip(adapter,'r1'));self.assertFalse(g.idle_skip(adapter,'r2'))
         g.wake(adapter);self.assertFalse(g.idle_skip(adapter,'r1'))
-        adapter._owner_worn_idle=(time.monotonic()-1,'r1');self.assertFalse(g.idle_skip(adapter,'r1'))
+        g.Rests(adapter).data['idle']=[time.time()-1,'r1'];self.assertFalse(g.idle_skip(adapter,'r1'))
 
 
 
@@ -446,7 +446,17 @@ class Table(unittest.TestCase):
         g.rest(r.adapter,'반지',g.AWAKEN)
         with patch('owner_growth_current.recent_reading',return_value=('희귀',{'enhance':50,'breakthrough':3,'awaken':0})),patch.object(g,'breakthrough_allowed',return_value=True):
             self.assertTrue(r.from_table(item))
-        g.wake(r.adapter);self.assertFalse(g.resting(r.adapter,'반지',g.AWAKEN))
+        # A 각성 with no spare waits for the bag's gear to change, not for any wake (user 11-06: growth must be fast).
+        g.wake(r.adapter);self.assertTrue(g.resting(r.adapter,'반지',g.AWAKEN))
+        g.wake_awaken(r.adapter);self.assertFalse(g.resting(r.adapter,'반지',g.AWAKEN))
+    def test_rests_survive_a_restart(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root)/'settings').mkdir()
+            with patch('owner_hunt_rules_candidate.configured_identity',return_value='홍짱군'):
+                g.rest(NS(project=NS(root=root)),'반지',g.ENHANCE)
+                self.assertTrue(g.resting(NS(project=NS(root=root)),'반지',g.ENHANCE))
 
 
 if __name__=='__main__':unittest.main()

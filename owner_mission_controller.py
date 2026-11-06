@@ -574,6 +574,8 @@ def run(adapter,context,inputs):
     with quest_boundary():
      from owner_hunt_memory import signals
      signals(adapter,context,inputs)
+     from owner_growth_signals import quest_end
+     quest_end(adapter)
      arrow_check(adapter,context,inputs)
      safe_jobs(adapter,context,inputs,boundary=False)
    except ResumeWork:

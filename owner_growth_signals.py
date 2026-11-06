@@ -19,6 +19,7 @@ LABELS={'guide':'길라잡이','event':'이벤트','mail':'우편','bag':'가방
 BAG_JOBS=('inventory','gear_equip','blessing_equip','gear')
 REWARD_KEYS={'guide':'auto_rewards.guide.enabled','event':'auto_rewards.event.enabled','mail':'auto_rewards.mail.enabled'}
 LOOK_EVERY=60;MUTE=1800
+QUEST_GROWTH_SECONDS=900   # a quest's end brings growth forward at most every 15 minutes (user 11-06)
 
 
 def dots(real):
@@ -79,4 +80,26 @@ def look(adapter,frame):
         if done:
             moved+=done
             LOG.info('빨간 점 · %s · %s 앞당김',LABELS[name],' · '.join(done))
+    return moved
+
+
+def quest_end(adapter):
+    """A quest just ended: its reward may have brought materials. Growth and equip move up, at most every
+    QUEST_GROWTH_SECONDS; a level-up moves them at once."""
+    now=time.monotonic();reason=None
+    try:
+        from owner_progression import state
+        level=state(adapter).level
+    except Exception:level=None
+    last=getattr(adapter,'_owner_signal_level',None)
+    if type(level) is int:
+        adapter._owner_signal_level=level
+        if type(last) is int and level>last:reason='레벨 %d→%d'%(last,level)
+    if reason is None and now-getattr(adapter,'_owner_quest_growth_at',-1e9)>=QUEST_GROWTH_SECONDS:reason='퀘스트 완료'
+    if reason is None:return []
+    adapter._owner_quest_growth_at=now
+    try:moved=bring_bag(adapter)
+    except Exception as exc:
+        LOG.info('퀘스트 완료 성장 앞당김 보류 · %s',str(exc)[:80]);return []
+    if moved:LOG.info('%s · %s 앞당김',reason,' · '.join(moved))
     return moved
