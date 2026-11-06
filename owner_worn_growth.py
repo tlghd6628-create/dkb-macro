@@ -32,7 +32,7 @@ ACTION_PILL=(470,700,325,42)   # real pixels of the 돌파 or 각성 button and 
 VISIT_SECONDS=300;ITEM_SECONDS=VISIT_SECONDS;  # one stay per item: leaving every 90 s to reread its details was the in-and-out (user 11-06)
 RESULT_READS=8;ROUNDS=8;LEVEL_STEP=3
 FRESH_SECONDS=8
-ENHANCE,BREAK,AWAKEN='enhance','breakthrough','awaken'
+ENHANCE,BREAK,AWAKEN='enhance','breakthrough','awaken';READ='read'
 LABEL={ENHANCE:'강화',BREAK:'돌파',AWAKEN:'각성'}
 
 
@@ -424,15 +424,20 @@ class Route:
             if not pressed or (kind==ENHANCE and cap is not None):return
     def gear(self):
         from owner_equipment_boxes import SLOTS
-        items=[Item(slot,False) for slot in SLOTS]
-        # A tile that did not open gets one more turn after the others: pressing it twice in a row could take the item off.
+        # A part that could not be read rests (an empty slot at level 3 was tried twice a pass, 9 parts x 10 s, pc1
+        # 22:47-22:50). A tile that did not open gets one more turn only when few did: pressing it twice in a row
+        # could take the item off.
+        items=[Item(slot,False) for slot in SLOTS if not resting(self.adapter,slot,READ)]
         for turn in range(2):
-            for item in items:
+            pending=[item for item in items if not item.values]
+            if turn and len(pending)>3:break
+            for item in pending:
                 self.check()
-                if not item.values and not self.from_table(item):self.read(item)
+                if not self.from_table(item):self.read(item)
         known=[item for item in items if item.values and item.grade]
         missed=[item.slot for item in items if not item.values]
-        if missed:LOG.info('착용 장비 현재값 못 읽음 · 이번 차례 제외 · %s',', '.join(missed))
+        for slot in missed:rest(self.adapter,slot,READ)
+        if missed:LOG.info('착용 장비 현재값 못 읽음 · %d분 쉼 · %s',IDLE_MINUTES,', '.join(missed))
         # Stones are per grade: the lowest goes first and stops a little past the next lowest, so they spread.
         for grade in {item.grade for item in known}:
             group=[item for item in known if item.grade==grade]
@@ -452,14 +457,20 @@ class Route:
                 if self.need(item):self.visit(item)
     def blessings(self):
         # On the blessing screen, slot by slot. One that did not open gets one more turn after the others.
-        items=[Item(slot,True) for slot in worn.BLESSING_SLOTS]
+        items=[Item(slot,True) for slot in worn.BLESSING_SLOTS if not resting(self.adapter,slot,READ)]
         for turn in range(2):
-            for item in items:
+            pending=[item for item in items if not item.values]
+            if turn and len(pending)>2:break
+            for item in pending:
                 self.check()
                 if time.monotonic()>=self.deadline:return
-                if not item.values and not self.from_table(item):self.read(item)
+                if not self.from_table(item) and not self.read(item) and item is items[0] and turn==0:
+                    # The blessing screen did not open at all (locked at level 3, pc1 22:51): no slot will.
+                    for other in items:rest(self.adapter,other.slot,READ)
+                    LOG.info('가호 화면 안 열림 · 가호 성장 %d분 쉼',IDLE_MINUTES);return
         missed=[item.slot for item in items if not item.values]
-        if missed:LOG.info('착용 가호 현재값 못 읽음 · 이번 차례 제외 · %s',', '.join(missed))
+        for slot in missed:rest(self.adapter,slot,READ)
+        if missed:LOG.info('착용 가호 현재값 못 읽음 · %d분 쉼 · %s',IDLE_MINUTES,', '.join(missed))
         for item in items:
             self.check()
             if time.monotonic()>=self.deadline:return
