@@ -170,6 +170,14 @@ def restart_idle_quest(ui,idle):
  LOG.info('임무 자리 정체 %d초 · 자동 진행 다시 누름 · %s',now-idle['at'],ui.adapter.mode)
  quest_range(ui.adapter,ui.context,ui.inputs)
  ui.open(ui.adapter.mode);ui.start_selected();idle.update(crop=None,at=now)
+ if getattr(ui.frame(),'hi',None) is not None:
+  # At 1366 the re-press alone left the character standing; the quest's title in the tracker walked it on (pc1 13:40,
+  # pc2 lv9). Pressed after the re-press, on the row of this mode's quest.
+  from owner_emote_real import tracker_title,click
+  head=tracker_title(ui.frame(),ui.adapter.mode)
+  if head:
+   click(ui,(round(head['rx']),round(head['ry'])),1.)
+   LOG.info('임무 자리 정체 · 추적창 제목 누름 · %s',head['word'])
  return True
 
 def quest_range(adapter,context,inputs):

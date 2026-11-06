@@ -200,6 +200,10 @@ def wheel(ui,guard):
 
 
 def run(ui,book,key):
+ if getattr(ui.frame(),'hi',None) is not None:
+  # At 1366 the quest's own words lead (owner_emote_real); the old path's 897 pictures never matched there.
+  from owner_emote_real import run as real_run
+  return real_run(ui,book,key)
  from owner_emote_dispatch import run as dispatch
  from owner_schedule_priority import LOCAL as priority
  previous=getattr(priority,'feature',None);priority.feature='감정표현'
