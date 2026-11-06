@@ -59,5 +59,21 @@ def install(gui):
  ordinary=BoundedMainQuestRunner.handle_skip
  @wraps(ordinary)
  def fast(runner,spec,match,frame):return skip(runner,spec,match,frame)
- BoundedMainQuestRunner.handle_skip=fast;gui._owner_dialogue=True
+ BoundedMainQuestRunner.handle_skip=fast
+ # The native step presses the skip question's 확인 itself, without passing through skip() above, so the tick was
+ # never made and every scene asked again (pc1 23:19, 짱군네). Ticked on the first press of each game day.
+ ordinary_input=BoundedMainQuestRunner.input_one
+ @wraps(ordinary_input)
+ def input_one(runner,name,*args,**kwargs):
+  if name in ('skip_confirm','skip_confirm2'):
+   try:
+    frame=runner.capture()
+    if getattr(frame,'hi',None) is not None:tick_today(runner,frame)
+   except Exception as exc:
+    from biol_base.session import Cancelled
+    if isinstance(exc,Cancelled):raise
+    LOG.info('오늘 하루 안 보기 체크 보류 · %s',str(exc)[:80])
+  return ordinary_input(runner,name,*args,**kwargs)
+ BoundedMainQuestRunner.input_one=input_one
+ gui._owner_dialogue=True
  LOG.info('대화 넘기기 준비 · 인식된 넘기기 화면에서 ESC · 짧은 입력·화면 재확인 · 최대 3회')

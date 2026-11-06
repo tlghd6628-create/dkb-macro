@@ -37,7 +37,8 @@ def dots(real):
 def bring_bag(adapter):
     from datetime import datetime
     from owner_timetable import planner,BY_KEY,EQUIP_JOBS,enabled
-    plan=planner(adapter);now=datetime.now().isoformat();moved=[]
+    from owner_timetable import now as kst_now
+    plan=planner(adapter);now=kst_now().isoformat();moved=[]
     for key in BAG_JOBS:
         job=BY_KEY.get(key);item=plan.state.get(key)
         if job is None or item is None or not enabled(job,plan.values):continue

@@ -88,7 +88,8 @@ def after_death(adapter):
     """Bring the equip and growth checks forward to now, once per death. Only jobs the user switched on."""
     try:
         from owner_timetable import planner,EQUIP_JOBS,BY_KEY,enabled
-        plan=planner(adapter);now=datetime.now();moved=[]
+        from owner_timetable import now as kst_now
+        plan=planner(adapter);now=kst_now();moved=[]
         for key in ('gear_equip','blessing_equip','gear'):
             job=BY_KEY.get(key);item=plan.state.get(key)
             if job is None or item is None or not enabled(job,plan.values):continue
@@ -138,7 +139,8 @@ def arrow_check(adapter,context,inputs):
             count=green_arrows(service.capture().hi)
         finally:worn.close_bag(service,context)
         if count<25:return False
-        item.update(status='pending',at=datetime.now().isoformat(),attempts=0,equip_recheck=True);plan.commit()
+        from owner_timetable import now as kst_now
+        item.update(status="pending",at=kst_now().isoformat(),attempts=0,equip_recheck=True);plan.commit()
         LOG.info('임무 경계 · 가방에 더 좋은 장비 표시 · 높은 등급 장착 앞당김');return True
     except Exception as exc:
         LOG.info('임무 경계 가방 확인 보류 · %s',exc);return False
