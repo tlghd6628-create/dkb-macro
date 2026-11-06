@@ -147,6 +147,16 @@ def plain_menu(service,frame):
    if float(score)>=.80 and text in PLAIN_MENUS:return text
  return None
 
+def summon_result(frame):
+ """The blessing summon result: 1회, 10회 and 나가기 in its button row. The 나가기 row, or None."""
+ if getattr(frame,'hi',None) is None:return None
+ from owner_text import clean,read
+ from owner_blessing_summon import BUTTONS
+ rows=read(None,frame,BUTTONS,scale=2,minimum=.6);words=[clean(r['text']) for r in rows]
+ out=[r for r in rows if clean(r['text'])=='나가기']
+ return out[0] if len(out)==1 and ('1회' in words or '10회' in words) else None
+
+
 def normalize(service):
  """No confirmations, claims, purchases, growth actions or unknown ESC."""
  for attempt in range(3):
@@ -175,6 +185,16 @@ def normalize(service):
     if worn_popup(service.capture()):
      service.click_hit((510,106,(503,99,518,113)));service.context.wait(.2)
      LOG.info('시작 위치 정리 · 착용 장비 상세창 닫기');continue
+  exit_row=summon_result(initial)
+  if exit_row:
+   service.context.wait(.12)
+   again=summon_result(service.capture())
+   if again:
+    # pc1 15:35: a stop on the summon result left it up, and the start waited 40 s and stopped. Its own 나가기.
+    service.context.checkpoint();service.check()
+    import owner_hd as hd
+    service.click_hit(hd.real_hit(round(again['rx']),round(again['ry'])));service.context.wait(1.2)
+    LOG.info('시작 위치 정리 · 가호 소환 결과 나가기');continue
   if menu_panel(initial):
    service.context.wait(.12)
    if menu_panel(service.capture()):

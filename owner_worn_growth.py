@@ -420,7 +420,7 @@ class Route:
                 raise
             finally:self.leave_growth()
             # Nothing done, nothing new to read: no materials go straight on to the next item.
-            if item.changed:self.read(item)
+            if item.changed:self.pressed=True;self.read(item)
             if not pressed or (kind==ENHANCE and cap is not None):return
     def gear(self):
         from owner_equipment_boxes import SLOTS
@@ -530,7 +530,10 @@ def run(adapter,context,inputs):
     document,revision=Store(root,identity).snapshot()
     if revision=='missing':return False
     adapter._owner_worn_growth_context=context
+    if idle_skip(adapter,revision):
+        LOG.info('착용 장비·가호 성장 · 지난 확인에서 할 일 없음 · %d분 안 다시 읽지 않음',IDLE_MINUTES);return True
     route=Route(adapter,context,inputs,service,identity,identity,state(adapter).character,document)
+    route.pressed=False;coins=False
     old=route.intents.pending()
     if old and old.get('phase')=='prepared':route.intents.abort_prepared('이전 입력 전 기록');old=None
     if old and not str(old['before'].slot).startswith('worn:'):
@@ -540,9 +543,26 @@ def run(adapter,context,inputs):
         if equipment:route.gear()
         if blessing:route.blessings()
     except CoinsShort:
-        LOG.info('성장 재화 부족 · 이번 차례 종료')
+        LOG.info('성장 재화 부족 · 이번 차례 종료');coins=True
     finally:
         context.checkpoint()
         if worn.popup(service.capture()):service.click_hit(real_hit(*worn.REAL_CLOSE));context.wait(.8)
         route.to_field()
+    # A pass that pressed nothing (goals met, no materials) or ran out of coins rests IDLE_MINUTES (pc1 15:03 and 15:11:
+    # all 14 parts read twice in eight minutes with nothing to do).
+    adapter._owner_worn_idle=(time.monotonic()+IDLE_MINUTES*60,revision) if (coins or not getattr(route,'pressed',False)) else None
     return True
+
+
+IDLE_MINUTES=20
+
+
+def idle_skip(adapter,revision):
+    """Within the rest after an idle pass, with the same saved goals. A swap or a death clears the rest."""
+    rest=getattr(adapter,'_owner_worn_idle',None)
+    return bool(rest and time.monotonic()<rest[0] and rest[1]==revision)
+
+
+def wake(adapter):
+    """Something may have changed (a new item, a death, new materials): the next pass reads again."""
+    adapter._owner_worn_idle=None

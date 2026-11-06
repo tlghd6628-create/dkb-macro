@@ -103,4 +103,17 @@ class Panel(unittest.TestCase):
         self.assertIsNone(words.lone_one_pair(NS(hi=real),[dict(text='3+',score=.99)]))
 
 
+
+class Named(unittest.TestCase):
+    """강타+14 read as 강타+74 (pc1 15:33): the digits after + are settled by their glyphs."""
+    def test_named_level(self):
+        import owner_digit_shape as d
+        import numpy as np
+        area=np.zeros((20,80,3),np.uint8)
+        area[2:6,40:46]=255;area[2:18,44:46]=255                     # a 1: full top bar, straight right stem
+        area[2:18,52:54]=255;area[9:11,48:56]=255;area[2:10,48:50]=255  # a 4-like glyph
+        self.assertEqual(d.settle('강타+74',area),'강타+14')
+        self.assertEqual(d.settle('강타+23',area),'강타+23')
+
+
 if __name__=='__main__':unittest.main()

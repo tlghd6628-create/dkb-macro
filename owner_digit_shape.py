@@ -48,8 +48,30 @@ def one_or_seven(mask):
 NUMERIC=re.compile(r'^[\d+\-−%/,.()>»→←\s]*\d[\d+\-−%/,.()>»→←\s]*$')
 
 
+NAMED=re.compile(r'^(.*\D\+)(\d{1,3})$')
+
+
+def settle_named(text,area):
+    """A name and its level, 강타+14: only the digits after the + are settled, by the rightmost tall glyphs (pc1 15:33,
+    강타+14 read as 강타+74 and the skill growth held)."""
+    m=NAMED.match(text)
+    if not m or not re.search('[17]',m.group(2)):return text
+    found=glyphs(area)
+    if not found:return text
+    digits=m.group(2);tallest=max(g[3] for g in found[-len(digits):])
+    tail=found[-len(digits):]
+    if any(g[3]<tallest*.75 for g in tail):return text
+    chars=list(digits)
+    for i,glyph in enumerate(tail):
+        if chars[i] in '17':
+            shape=one_or_seven(glyph[4])
+            if shape:chars[i]=shape
+    return m.group(1)+''.join(chars)
+
+
 def settle(text,area):
     """The engine's text with each 1 or 7 decided by its glyph, when the glyphs line up one to one with the digits."""
+    if isinstance(text,str) and not NUMERIC.match(text) and NAMED.match(text):return settle_named(text,area)
     if not isinstance(text,str) or not NUMERIC.match(text) or not re.search('[17]',text):return text
     found=glyphs(area)
     if not found:return text

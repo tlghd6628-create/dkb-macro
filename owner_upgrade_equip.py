@@ -411,6 +411,8 @@ def read_part(service):
 
 def mark_stale(adapter,slot):
     """The worn table's row for this part is old now; the growth read right after refreshes it."""
+    from owner_worn_growth import wake
+    wake(adapter)
     try:
         from owner_growth_current import invalidate_item
         from owner_hunt_rules_candidate import configured_identity

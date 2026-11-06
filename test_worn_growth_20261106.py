@@ -418,4 +418,15 @@ class Hold(unittest.TestCase):
         self.assertEqual(events[1:],['down','up']);self.assertEqual(events[0][1:],g.real_hit(*g.HOLD_BUTTON)[:2])
 
 
+
+class Idle(unittest.TestCase):
+    """A pass that pressed nothing rests; the same goals keep the rest, a swap or a death ends it."""
+    def test_rest_and_wake(self):
+        adapter=NS();self.assertFalse(g.idle_skip(adapter,'r1'))
+        adapter._owner_worn_idle=(time.monotonic()+60,'r1')
+        self.assertTrue(g.idle_skip(adapter,'r1'));self.assertFalse(g.idle_skip(adapter,'r2'))
+        g.wake(adapter);self.assertFalse(g.idle_skip(adapter,'r1'))
+        adapter._owner_worn_idle=(time.monotonic()-1,'r1');self.assertFalse(g.idle_skip(adapter,'r1'))
+
+
 if __name__=='__main__':unittest.main()

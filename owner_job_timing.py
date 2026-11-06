@@ -55,6 +55,8 @@ def after_death(adapter):
             flag='equip_recheck' if key in EQUIP_JOBS else 'growth_recheck'
             item.update(status='pending',at=now.isoformat(),attempts=0,**{flag:True})
             moved.append(job.label)
+        from owner_worn_growth import wake
+        wake(adapter)
         if moved:
             plan.commit();LOG.info('사망 후 재도전 전 · %s 먼저 확인',' · '.join(moved))
         return moved
