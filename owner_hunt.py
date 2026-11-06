@@ -109,7 +109,8 @@ def install(gui):
     def hunt(adapter,context,inputs):
         progress=state(adapter)
         from owner_town_return import MissingFavorite,require_hunting_location
-        try:result=ordinary(adapter,context,inputs)
+        from owner_hunt_here import already_there
+        try:result=True if already_there(adapter,context,inputs) else ordinary(adapter,context,inputs)
         except MissingFavorite:
             LOG.info('지정 사냥터 미등록 · 둘러보기 추천 후보를 전투력 기준으로 확인합니다.')
             result=run(adapter,context,inputs)

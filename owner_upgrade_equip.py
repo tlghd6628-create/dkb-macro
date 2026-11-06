@@ -457,14 +457,15 @@ def blessings(adapter,service,context,choice,priorities=()):
             count=bound.tile_count(service.capture())
             if count>=len(bound.TILE_X)*len(bound.TILE_Y):
                 LOG.info('가호%d 높은 등급 장착 생략 · 목록이 한 화면을 넘을 수 있음',slot);break
-            found=[];made=False
+            found=[];made=False;worn_top=False
             real=np.asarray(service.capture().hi);worn_shade=blessing_shade(real,bound.places(count)[0]) if count else None
             for place in bound.places(count)[1:]:
                 # 등급순: once a tile is plainly below the worn one, so is every tile after it (pc1 11-06: a slot wearing
-                # 전설 opened all its 일반 spares).
+                # 전설 opened all its 일반 spares). A worn blessing of the first-ranked pattern loses to no tile of its
+                # own grade either (15:48: 나비 일반 worn, four 일반 spares opened).
                 shade=blessing_shade(real,place)
-                if worn_shade in ORDER and shade in ORDER and ORDER.index(shade)<ORDER.index(worn_shade):
-                    LOG.info('가호%d 나머지 칸 착용보다 낮은 등급 · 열지 않음',slot);break
+                if worn_shade in ORDER and shade in ORDER and (ORDER.index(shade)<ORDER.index(worn_shade) or (worn_top and shade==worn_shade)):
+                    LOG.info('가호%d 나머지 칸 착용보다 낫지 않음 · 열지 않음',slot);break
                 plus=tile_plus(service,place)
                 kind=open_compare(service,context,place)
                 if kind!='compare':
@@ -484,6 +485,7 @@ def blessings(adapter,service,context,choice,priorities=()):
                 left,right,title,_=compare(service,context,choice)
                 worn_title=bound_title(service,LEFT_TITLE)
                 left_kind,right_kind=worn.blessing_kind(worn_title or ''),worn.blessing_kind(title or '')
+                worn_top=bool(priorities) and left_kind==list(priorities)[0] and left==worn_shade
                 if not blessing_better(left,right,left_kind,right_kind,choice,priorities):
                     unread+=left is None or right is None
                     LOG.info('가호%d 장착 안 함 · 착용 %s %s · 예비 %s %s',slot,left_kind or '미확인',left or '미확인',right_kind or title or '미확인',right or '미확인')

@@ -68,6 +68,7 @@
 {"exact": true, "h": 11, "key": "81bc468fdc127a047f4f", "name": "버튼_물약상인_확인", "w": 20, "words": "확인", "x": 485, "y": 295}
 {"exact": true, "h": 12, "key": "881afa50ca2cea585399", "name": "버튼_임무_자동진행시작2", "w": 48, "words": "자동진행", "x": 801, "y": 446}
 {"exact": false, "h": 15, "key": "8a0f83eb13c856e639d0", "name": "체크_비경", "w": 59, "words": "비경탐험", "x": 57, "y": 12}
+{"exact": false, "h": 9, "key": "916ad78819cca0a8cd54", "name": "체크_비경_추가시간", "pad": 8, "w": 35, "words": "추가된시간", "x": 733, "y": 128}
 {"exact": false, "h": 11, "key": "91b4ce2b6e76dc0d4e0f", "name": "버튼_메인퀘_문파즉시가입", "w": 41, "words": "즉시가입", "x": 488, "y": 362}
 {"exact": true, "h": 14, "key": "95f65ae8a46c454d9f65", "name": "버튼_임무_자동진행시작1", "w": 37, "words": "자동진행", "x": 749, "y": 445}
 {"exact": true, "h": 15, "key": "968e6dd3d4a2bbdb8725", "name": "버튼_문파_전투", "w": 28, "words": "전투", "x": 608, "y": 43}
@@ -108,6 +109,7 @@
 {"exact": true, "h": 13, "key": "d55f8b2e668e8390a0b7", "name": "버튼_낙화_나가기", "w": 32, "words": "나가기", "x": 538, "y": 446}
 {"exact": false, "h": 10, "key": "d5d3b09e5ceaca96a118", "name": "체크_레이드_4단계", "w": 26, "words": "4단계", "x": 772, "y": 88}
 {"exact": false, "h": 11, "key": "d995c8f28275b7aaf53c", "name": "체크_낙화_입장구역선택", "w": 70, "words": "입장구역선택", "x": 414, "y": 139}
+{"exact": false, "h": 8, "key": "db590ff8edb979ec9b13", "name": "체크_비경_기본시간", "pad": 8, "w": 37, "words": "기본시간", "x": 732, "y": 106}
 {"exact": false, "h": 13, "key": "df0a1efea1793b2991d2", "name": "체크_영기수련", "w": 57, "words": "영기수련", "x": 59, "y": 13}
 {"exact": false, "h": 19, "key": "e0b0d372c4454ef31a86", "name": "체크_문파_참가완료", "w": 37, "words": "대기중", "x": 810, "y": 435}
 {"exact": true, "h": 15, "key": "e122c81e160d833c443a", "name": "버튼_임무_일일_수락", "w": 28, "words": "수락", "x": 706, "y": 443}
