@@ -81,6 +81,18 @@ class Count(unittest.TestCase):
         self.assertTrue(shape.is_plus(mask(PLUS)));self.assertFalse(shape.is_plus(mask(ZERO)))
 
 
+class Fill(unittest.TestCase):
+    def test_a_dropped_one_comes_back(self):
+        # pc2 11-06: the +11 ring read 강화 1.
+        self.assertEqual(shape.fill_ones('1',draw(ONE,ONE)),'11')
+        self.assertEqual(shape.fill_ones('10',draw(ONE,ZERO,ONE)),'101')
+        self.assertEqual(shape.fill_ones('1+',draw(ONE,ONE,PLUS)),'11+')
+    def test_anything_that_does_not_line_up_stays(self):
+        self.assertEqual(shape.fill_ones('11',draw(ONE,ONE)),'11')        # nothing dropped
+        self.assertEqual(shape.fill_ones('0',draw(ONE,ONE)),'0')          # the other digits do not fit
+        self.assertEqual(shape.fill_ones('17',draw(ONE,SEVEN)),'17')
+
+
 class Panel(unittest.TestCase):
     def test_one_to_two_reads_by_shape(self):
         from types import SimpleNamespace as NS

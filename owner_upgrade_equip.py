@@ -28,7 +28,11 @@ LEFT_GRADE=(445,200,110,45);RIGHT_GRADE=(695,200,110,45)  # worn on the left, th
 RIGHT_BUTTONS=(690,560,230,46);RIGHT_PART=(830,200,95,40)  # 귀걸이 at (884,219)
 POWER_ROW=(695,338,225,20)                                # 전투력 6,334 1,965▲ on the spare's window
 TOAST=(560,572,240,36)                                    # 전투력 +1955▲ after an equip
-TILE_SPREAD=20                                            # an empty place is flat; an item's tile varies by 40 or more
+TILE_SPREAD=20
+# The bag's sorted view (▼ON) puts 무기 · 방어구 · 장신구 headings between rows, so the fixed grid lands on headings and
+# gaps: pc2's TEST never reached its rare fan and three tiles 'did not open' (11-06). The view goes to OFF for the work
+# and back after.
+GROUPING=(1300,112,66,34);GROUPING_HIT=(1337,129)                                            # an empty place is flat; an item's tile varies by 40 or more
 
 
 def allowed(worn_grade,new_grade,choice):
@@ -165,6 +169,28 @@ def scan_gear(service,context,choice):
     return found,unread
 
 
+def grouping(service):
+    """True when the bag's sorted view is on, False when off, None when its word does not read."""
+    real=np.asarray(service.capture().hi);x,y,w,h=GROUPING
+    found=''.join(text.clean(row['text']).upper() for row in text.read_area(None,real[y:y+h,x:x+w],scale=3,minimum=.5))
+    if 'OFF' in found:return False
+    if 'ON' in found:return True
+    return None
+
+
+def plain_grid(service,context):
+    """Turn the sorted view off. True when it was on (so it goes back on after), False when already off, None unread."""
+    state=grouping(service)
+    if state is not True:return state if state is False else None
+    service.click_hit(hd.real_hit(*GROUPING_HIT));context.wait(1.2)
+    return True if grouping(service) is False else None
+
+
+def restore_grouping(service,context,changed):
+    if changed is True and grouping(service) is False:
+        service.click_hit(hd.real_hit(*GROUPING_HIT));context.wait(.8)
+
+
 def gear(adapter,service,context,choice):
     """Swap worn gear for the best spare of an allowed higher grade, part by part: the highest grade, then the most 전투력.
     Every candidate is read before any press, so a +0 spare never wins over a better one further down the bag."""
@@ -173,12 +199,22 @@ def gear(adapter,service,context,choice):
     if open_inventory_by_key(service) is False or inventory_parts(service.capture())[1] is not True:
         LOG.info('장비 높은 등급 장착 생략 · 가방 안 열림');return swaps
     service.click_hit(hd.real_hit(*BAG_FILTER));context.wait(1.2)
+    changed=plain_grid(service,context)
+    if changed is None:
+        LOG.info('장비 높은 등급 장착 생략 · 가방 정렬 보기 상태 미확인');return swaps
+    try:return gear_grid(adapter,service,context,choice,swaps)
+    finally:restore_grouping(service,context,changed)
+
+
+def gear_grid(adapter,service,context,choice,swaps):
+    unread=0
     real=np.asarray(service.capture().hi)
     if all(real[y-24:y+24,x-24:x+24].std()>=TILE_SPREAD for x in BAG_X for y in BAG_Y[-1:]):
         LOG.info('장비 높은 등급 장착 · 장비 목록이 한 화면을 넘을 수 있음 · 보이는 칸만 확인')
     fingerprint=tuple(signature(real,(x,y)) for y in BAG_Y for x in BAG_X if real[y-24:y+24,x-24:x+24].std()>=TILE_SPREAD)
     if seen_before(adapter,'gear',(fingerprint,tuple(sorted(choice.items())))):
         LOG.info('장비 높은 등급 장착 · 가방 장비 지난 확인과 같음 · 칸 열지 않음');return swaps
+    LOG.info('장비 높은 등급 장착 · 후보 칸 %d개',len(candidates(real)))
     done=set()
     for _ in range(len(worn.PART_WORDS)+2):
         found,missed=scan_gear(service,context,choice);unread+=missed

@@ -62,8 +62,10 @@ class GrowthSwitches:
  def _model(self):
   from owner_hunt_rules_candidate import configured_identity
   state=self.gui.session.snapshot()
-  if state.get('worker_alive') or state.get('status') in ('running','paused'):
-   raise ValueError('중지 후 성장 설정을 저장해 주세요.')
+  # The user's rule: settings may change while paused (F2), as the other pages already allow (pc2 11-06 was refused).
+  self.paused=state.get('status')=='paused'
+  if state.get('status')=='running' or (state.get('worker_alive') and not self.paused):
+   raise ValueError('일시정지(F2)나 중지 후 성장 설정을 저장해 주세요.')
   if configured_identity(self.gui.project.root)!=self.character:raise ValueError('캐릭터가 바뀌었습니다. 설정창을 다시 열어 주세요.')
   model=self.gui.load_settings_model()
   if model.load_error or self._read(model)!=self.initial:raise ValueError('다른 창에서 성장 사용 설정이 변경되었습니다. 다시 열어 주세요.')
@@ -80,6 +82,10 @@ class GrowthSwitches:
   for section,key in GROWTH_SWITCHES.items():values[key]=wanted[section]
   model.save(model.mode,values)
   if self._read(model)!=wanted:raise ValueError('성장 기능 사용 설정 저장 결과를 확인해 주세요.')
+  if getattr(self,'paused',False):
+   # A paused run picks the switches up when it resumes, like the native settings saved in a pause.
+   from owner_timetable import live_settings
+   live_settings({key:wanted[section] for section,key in GROWTH_SWITCHES.items()})
   self.initial=dict(wanted);self.gui.settings_model=model
   self.gui.refresh_summary()
  def save(self,wanted,write_goals):

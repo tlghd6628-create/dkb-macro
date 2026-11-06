@@ -91,6 +91,22 @@ def grade_colour(im,place):
     return '높음' if above_common(im,place) else '일반'
 
 
+def before_disassembly(adapter,context,inputs):
+    """The user's order (11-06): the existing higher-grade check and gear growth run first, as they are, so the items
+    they take (a spare worn now, a twin used to awaken) are gone before anything is ground."""
+    from owner_upgrade_equip import run as equip
+    from owner_worn_growth import growth_switches,run as grow
+    LOG.info('장비 분해 전 · 높은 등급 장착 확인 · %s',equip(adapter,context,inputs,'gear'))
+    if not growth_switches(adapter.project.root)['gear']:
+        LOG.info('장비 분해 전 · 장비 성장 기능 꺼짐 · 성장 생략');return
+    old=adapter.values
+    # A TEST or a timed job exposes only its own switch; the saved one decides here, gear only.
+    adapter.values=dict(old,**{'auto_growth.equipment.enabled':True,'auto_growth.blessing.enabled':False})
+    try:grow(adapter,context,inputs)
+    finally:adapter.values=old
+    LOG.info('장비 분해 전 · 장비 성장 차례 끝')
+
+
 def run(adapter,context,inputs,desired):
     """desired: (일반, 희귀, 영웅) booleans. An outcome dict like the original's."""
     from project_adapter.town_services import TownServices
@@ -100,8 +116,13 @@ def run(adapter,context,inputs,desired):
     service=TownServices(adapter,context,inputs,market_inventory.INVENTORY_USE_NAMES);service.context=context
     want={name:bool(on) for name,on in zip(ORDER,desired)}
     grades=[name for name,on in want.items() if on]
+    from owner_upgrade_equip import plain_grid,restore_grouping
+    grouped=None
     try:
         open_inventory_by_key(service);context.wait(1.5)
+        # The marked tiles are checked on the plain grid; the sorted view moves every row.
+        grouped=plain_grid(service,context)
+        if grouped is None:raise Hold('가방 정렬 보기 상태 미확인')
         service.click_hit(hd.real_hit(*OPEN_ICON));context.wait(1.8)
         if not is_open(service):return {'state':'not_attempted','reason':'분해 창 안 열림','verified':False}
         # Everything off, the box too: nothing may stay chosen from the last time.
@@ -147,6 +168,7 @@ def run(adapter,context,inputs,desired):
         if is_open(service):
             cancel=[row for row in words(service,ACTIONS) if row['word']=='취소']
             if cancel:service.click_hit(hd.real_hit(cancel[0]['rx'],cancel[0]['ry']));context.wait(1)
+        restore_grouping(service,context,grouped)
         worn.close_bag(service,context)
 
 

@@ -80,9 +80,16 @@ class Switches(unittest.TestCase):
   switches=GrowthSwitches(self.gui,self.scope);called=Mock()
   with patch('owner_hunt_rules_candidate.configured_identity',return_value='other'):
    with self.assertRaises(ValueError):switches.save(dict(switches.initial),called)
-  self.gui.session.snapshot=lambda:{'status':'paused','worker_alive':True}
+  self.gui.session.snapshot=lambda:{'status':'running','worker_alive':True}
   with self.assertRaises(ValueError):switches.save(dict(switches.initial),called)
   called.assert_not_called()
+ def test_a_pause_may_save(self):
+  # The user's rule: settings may change while paused (F2). pc2 11-06 was refused.
+  switches=GrowthSwitches(self.gui,self.scope);called=Mock()
+  self.gui.session.snapshot=lambda:{'status':'paused','worker_alive':True}
+  with patch('owner_hunt_rules_candidate.configured_identity',return_value=self.scope),patch('owner_timetable.live_settings') as live:
+   switches.save(dict(switches.initial),called)
+  called.assert_called_once()
  def test_other_window_master_change_is_not_overwritten(self):
   switches=GrowthSwitches(self.gui,self.scope);model=self.model()
   model.save(model.mode,dict(model.values,**{GROWTH_SWITCHES['skills']:True}))

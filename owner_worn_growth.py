@@ -130,7 +130,7 @@ class EnhanceObserver:
     """The guard's two looks at the 강화 tab of the item the bag opened."""
     def __init__(self,service,context,identity,item,clock=time.monotonic):
         self.service=service;self.context=context;self.identity=identity;self.item=item;self.clock=clock
-        self.sequence=0;self.panel=None;self.root=Path(service.adapter.project.root);self.last_diff=None
+        self.sequence=0;self.panel=None;self.root=Path(service.adapter.project.root);self.last_diff=None;self.looked_at=None
     def read_pair(self):
         looks=[];stamps=[]
         for _ in range(2):
@@ -144,7 +144,7 @@ class EnhanceObserver:
             # Which part flickered, for the log when the guard holds.
             self.last_diff={k:(looks[0].get(k),looks[1].get(k)) for k in same(looks[0]) if looks[0].get(k)!=looks[1].get(k)}
             return {'screen_proof':False}
-        self.panel=looks[1];obs=[]
+        self.panel=looks[1];obs=[];self.looked_at=stamps[:]
         for stamp,panel in zip(stamps,looks):
             self.sequence+=1
             obs.append(Observation(self.sequence,stamp,self.identity,'worn-slot:'+self.item.slot,self.item.record,self.item.key,panel['level'],None,None,panel['active'],None,None))
@@ -273,7 +273,10 @@ class Route:
             if status!='pending_confirmation':
                 panel=observer.panel or {}
                 if status=='hold_policy' and goal_state(goal,panel.get('level',-1))=='below':
-                    LOG.info('착용 %s 강화 불가 · 재료 부족 또는 버튼 꺼짐 · %s',item.slot,panel.get('word'))
+                    # What the guard saw, so a lit button with enough material that still held can be told apart (10 >> 11, 10:21).
+                    ages=[round(time.monotonic()-at,1) for at in (observer.looked_at or ())]
+                    LOG.info('착용 %s 강화 불가 · 재료 부족 또는 버튼 꺼짐 · %s · 판독 %s · 판독 후 %s초',item.slot,panel.get('word'),
+                             {k:v for k,v in panel.items() if k!='hit'},ages)
                 elif status not in ('hold_policy',):
                     seen=read_panel(self.root,self.frame())
                     LOG.info('착용 %s 강화 중단 · %s · 판독 %s · 흔들린 값 %s',item.slot,status,{k:v for k,v in (seen or {}).items() if k!='hit'},observer.last_diff)

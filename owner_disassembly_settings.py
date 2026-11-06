@@ -143,7 +143,8 @@ def install(native,aliases=()):
         except (AttributeError,TypeError):real_screen=False
         if real_screen:
             # At 1366x768 the original's grade pictures never match: the dialog is read by its own words and colours.
-            from owner_disassembly_real import run as real_run
+            from owner_disassembly_real import run as real_run,before_disassembly
+            before_disassembly(adapter,context,inputs)
             adapter._owner_disassembly_outcome=real_run(adapter,context,inputs,desired)
             state=adapter._owner_disassembly_outcome['state']
             if state=='confirmed':LOG.info('장비 분해 완료 · %s',', '.join(grades),extra={'gui_message':'장비 분해 완료 · '+', '.join(grades),'state_transition':True})

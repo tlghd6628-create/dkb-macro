@@ -89,3 +89,29 @@ def digit_count(area,gold=True):
     tallest=max(g[3] for g in found)
     tall=[g for g in found if g[3]>=tallest*.75 and not is_plus(g[4])]
     return len(tall) or None
+
+
+def fill_ones(text,area):
+    """The engine's number with the 1s it dropped put back, by the glyphs. 11 read 1 (+11 ring, pc2 11-06) and 101 can read
+    10: each glyph shaped 1 gives a 1, each 7 a 7, and the other glyphs take the engine's other digits in order. Only when
+    those counts agree exactly; anything else keeps the engine's text."""
+    if not isinstance(text,str):return text
+    digits=[c for c in text if c.isdigit()]
+    if not digits:return text
+    found=glyphs(area,gold=True)
+    if not found:return text
+    tallest=max(g[3] for g in found)
+    tall=[g for g in found if g[3]>=tallest*.75 and not is_plus(g[4])]
+    if len(tall)<=len(digits):return text
+    shapes=[one_or_seven(g[4]) for g in tall]
+    others=[c for c in digits if c not in '17']
+    if shapes.count(None)!=len(others):return text
+    if len([c for c in digits if c in '17'])>shapes.count('1')+shapes.count('7'):return text
+    rest=iter(others)
+    number=''.join(shape or next(rest) for shape in shapes)
+    # Only a bare number, signed or with the next step's +, is rebuilt; anything with other marks keeps its text.
+    core=text.strip()
+    head=core[:len(core)-len(core.lstrip('+-'))];body=core[len(head):]
+    tail='+' if body.endswith('+') else ''
+    if not body.rstrip('+').isdigit():return text
+    return head+number+tail

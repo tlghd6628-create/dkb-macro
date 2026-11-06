@@ -44,7 +44,7 @@ class NativeFields:
  def __init__(self,gui):
   self.gui=gui;self.model=gui.load_settings_model();self.baseline=dict(self.model.values);self.vars={};self.controls=[]
   if self.model.load_error:raise ValueError('설정 파일을 읽지 못했습니다.')
- def build(self,parent,name,*,compact=False):
+ def build(self,parent,name,*,compact=False,bare=False):
   from owner_settings_theme import scroll_area,bind_wheel,section_box,sections,display_label
   compact=compact or name=='사냥터'
   frame=ttk.Frame(parent);frame.pack(fill='x' if compact else 'both',expand=not compact)
@@ -64,7 +64,10 @@ class NativeFields:
   for title,rows in sections(name,items):
    slot=filled.index(min(filled)) if wide else 0
    filled[slot]+=len(rows)+2
-   box=section_box(columns[slot],title)
+   if bare:
+    # A line among the page's own lines, without the white card and its heading (가호 일괄 획득 on the 가호 page).
+    box=ttk.Frame(columns[slot]);box.pack(fill='x',anchor='w')
+   else:box=section_box(columns[slot],title)
    self._section(box,rows,1 if wide else 3,display_label)
    if title=='쿠폰':self._coupons(box)
   self.refresh_controls()
@@ -229,8 +232,8 @@ class SettingsConsole:
      name=editor.tabs.tab(page,'text');link(name,frame,editor.tabs,page)
      if name=='가호':
       # Reuse the native setting and save path. Growth remains an independent switch.
-      area=ttk.Frame(editor.tabs.nametowidget(page));area.grid(row=11,column=0,columnspan=8,sticky='ew',pady=(12,0))
-      self.native.build(area,'가호',compact=True)
+      area=ttk.Frame(editor.tabs.nametowidget(page));area.grid(row=11,column=0,columnspan=6,sticky='w',pady=(9,0))
+      self.native.build(area,'가호',compact=True,bare=True)
    elif label=='사냥터':
     self.native.build(frame,label)
     from owner_hunt_settings_candidate import HuntSettings

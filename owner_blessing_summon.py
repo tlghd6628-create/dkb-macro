@@ -17,6 +17,8 @@ SUMMON_TAB=(199,79)
 COUNT=(630,660,180,40)        # the tickets left: 34 at (719,674) on the tab, (719,682) on the result
 BUTTONS=(420,698,560,50)      # 1회 · 10회 · 나가기
 MAX_PRESSES=100
+SKIP_BOX=(33,727,14,14)       # 모든 연출 건너뛰기, bottom left of the result screen: ~73 light pixels ticked (pc1 05:3x)
+SKIP_LIGHT=25
 COSTS={'1회':1,'10회':10}
 
 
@@ -33,10 +35,13 @@ def tickets(service,context):
     looks=[]
     for _ in range(4):
         context.checkpoint();service.check()
-        real=np.asarray(service.capture().hi);x,y,w,h=COUNT
-        numbers=[clean for row in text.read_area(None,real[y:y+h,x:x+w],language='number',scale=3,minimum=.6)
-                 for clean in [text.clean(row['text']).replace(',','')] if re.fullmatch(r'\d{1,4}',clean)]
-        looks.append(int(numbers[0]) if len(numbers)==1 else None)
+        real=np.asarray(service.capture().hi);x,y,w,h=COUNT;value=None
+        # A lone 3 read nothing at scale 3 and 3 at 1.0 at scales 2 and 4 (pc1 11:04): the first size that reads one number.
+        for scale in (3,2,4):
+            numbers=[clean for row in text.read_area(None,real[y:y+h,x:x+w],language='number',scale=scale,minimum=.6)
+                     for clean in [text.clean(row['text']).replace(',','')] if re.fullmatch(r'\d{1,4}',clean)]
+            if len(numbers)==1:value=int(numbers[0]);break
+        looks.append(value)
         if len(looks)>=2 and looks[-1] is not None and looks[-1]==looks[-2]:return looks[-1]
         context.wait(.3)
     return None
@@ -48,21 +53,48 @@ def button(service,word):
     return rows[0] if len(rows)==1 else None
 
 
+def skip_ticked(service):
+    """True or False for the result screen's 모든 연출 건너뛰기 box, None when it is not there to read."""
+    if button(service,'나가기') is None:return None
+    real=np.asarray(service.capture().hi);x,y,w,h=SKIP_BOX
+    light=int((real[y:y+h,x:x+w].astype(int).min(2)>160).sum())
+    return True if light>=SKIP_LIGHT else False if light<=8 else None
+
+
+def keep_skipping(service,context):
+    """The user's rule (11-06): the box stays ticked whenever it shows."""
+    if skip_ticked(service) is False:
+        x,y,w,h=SKIP_BOX;service.click_hit(hd.real_hit(x+w//2,y+h//2));context.wait(.6)
+        LOG.info('가호 소환 · 모든 연출 건너뛰기 체크 %s','확인' if skip_ticked(service) else '미확인')
+
+
 def press(service,context,word,before):
-    """One press of 1회 or 10회. True when the count fell by exactly its cost."""
+    """One press of 1회 or 10회. True when the count fell by exactly its cost. A cutscene in between (혈을 꾸욱
+    눌러주세요, Skip ESC: pc2 11-06, its box unticked) is skipped with ESC until the result screen is back."""
     row=button(service,word)
     if row is None:
         LOG.info('가호 소환 중단 · %s 버튼 미확인',word);return False
     context.checkpoint();service.check()
     service.click_hit(hd.real_hit(row['rx'],row['ry']))
     want=before-COSTS[word]
-    end=time.monotonic()+8
+    end=time.monotonic()+20;escaped=0;sent=time.monotonic();again=0
     while time.monotonic()<end:
         context.wait(.5)
         now=tickets(service,context)
-        if now==want:return True
+        if now==want:
+            keep_skipping(service,context);return True
+        if now==before and time.monotonic()-sent>5 and again<2:
+            # A press on the result screen went unheard: 13 stayed 13 for 20 s (pc1 10:55). Pressing again is safe,
+            # since only the count falling counts, and a double one is a wrong count that stops.
+            row=button(service,word)
+            if row is not None:
+                context.checkpoint();service.check();service.click_hit(hd.real_hit(row['rx'],row['ry']))
+                again+=1;sent=time.monotonic();LOG.info('가호 소환 · %s 다시 누름 · 소환권 그대로 %d',word,before)
         if now is not None and now!=before:
             LOG.info('가호 소환 중단 · 소환권 %d → %d · 예상 %d',before,now,want);return False
+        if now is None and button(service,'나가기') is None and escaped<12:
+            # No count and no result buttons: a cutscene. ESC is its own skip.
+            context.checkpoint();service.check();service.key(0x1b);escaped+=1;context.wait(.8)
     LOG.info('가호 소환 중단 · %s 결과 미확인 · 소환권 %d',word,before);return False
 
 

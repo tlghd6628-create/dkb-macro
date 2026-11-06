@@ -86,9 +86,13 @@ def clean_digits(area,scale):
 
 def read_digits(root,area,scales=(2,3),minimum=.5):
     """Number rows from the cleaned digits, the first scale that reads any; [] when none does."""
+    import owner_digit_shape as shape
     for scale in scales:
         rows=read_area(root,clean_digits(area,scale),language='number',scale=1,minimum=minimum)
-        if any(re.search(r'\d',str(row['text'])) for row in rows):return rows
+        if any(re.search(r'\d',str(row['text'])) for row in rows):
+            # A lone number whose glyphs outnumber its digits dropped a narrow 1 (11 read 1): put it back by shape.
+            if len(rows)==1:rows=[dict(rows[0],text=shape.fill_ones(str(rows[0]['text']),area))]
+            return rows
     return []
 
 
