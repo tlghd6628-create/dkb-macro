@@ -300,6 +300,12 @@ def install(gui):
                         unknown_since=None
                         continue
                 if initial==second=='unknown':
+                    # A tutorial's pointing hand: the native highlight handler read the screen as unknown and the
+                    # start stopped after 40 s (pc1 01:56, 몽련의 선물). The hand is followed by its fingertip.
+                    from owner_tutorial_hand import hand,follow
+                    if getattr(second_frame,'hi',None) is not None and hand(second_frame.hi):
+                        if follow(service,context):
+                            unknown_since=None;continue
                     # A guide can open a known full-screen menu after the start check already ran.
                     from owner_start_menu import kind as menu_kind,menu_panel,normalize as leave_menu
                     if (menu_kind(first) and menu_kind(first)==menu_kind(second_frame)) or (menu_panel(first) and menu_panel(second_frame)):

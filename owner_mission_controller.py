@@ -177,6 +177,9 @@ def restart_idle_quest(ui,idle):
   # Only this quest's own row: another title there would walk off to another quest, past its purchase or emote
   # handling (pc2 17:07, 메마른 늪 walked to while 도술 구매 was selected).
   head=tracker_title(ui.frame(),ui.adapter.mode,getattr(ui.adapter,'_owner_active_title',None))
+  from owner_tutorial_hand import hand,follow
+  if getattr(ui.frame(),'hi',None) is not None and hand(ui.frame().hi) and follow(ui.service,ui.context):
+   idle.update(crop=None,at=time.monotonic());return True
   try:
    if guide_skill(ui):return True
   except Pending as exc:
