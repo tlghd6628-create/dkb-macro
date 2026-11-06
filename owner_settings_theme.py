@@ -14,7 +14,7 @@ SIDEBAR='#EEF0F4';PAGE='#F7F8FA';SURFACE='#FFFFFF';BORDER='#DCE0E6';TEXT='#1B1F2
 ACCENT='#4F46E5';ACCENT_HOVER='#4338CA';ACCENT_SOFT='#EEF0FF';HOVER='#F1F2F5';DISABLED='#A3A8B2'
 FONT='Malgun Gothic'
 
-NAV_GROUPS=(('기본',('기본 설정','보상·정리','사냥터','상점','아이템 사용','문파')),
+NAV_GROUPS=(('기본',('기본 설정','보상·정리','사냥터','상점','아이템 사용','단 봉인해제','문파')),
             ('성장',('장비','도술','가호','기운','화첩')),
             ('스케줄',('요일·시간','비경·보스','수련')),
             ('기타',('진단',)))
@@ -26,7 +26,8 @@ SECTIONS={
             ('스킬 프리셋',('common.skill_preset','auto_schedule.field_boss.skill_preset','auto_schedule.boss_raid.skill_preset'))),
  '문파':(('문파 보스',('auto_schedule.clan_boss_request',)),('문파 도움',('auto_rewards.clan_help',)),('문파 협력수련',('auto_growth.clan_cooperative_training',))),
  '보상·정리':(('자동 보상',('auto_rewards',)),('거래소 등록',('auto_register.market',)),('장비 정리',('auto_register.equipment_disassembly',))),
- '아이템 사용':(('아이템 사용',('auto_rewards.inventory_use',)),('단 봉인 해제',('auto_rewards.seal_release',))),
+ '아이템 사용':(('아이템 사용',('auto_rewards.inventory_use',)),),
+ '단 봉인해제':(('단 봉인해제',('auto_rewards.seal_release',)),),
  '가호':(('가호 일괄 획득',('auto_rewards.blessing',)),),
  '비경·보스':(('일일·주간',('auto_schedule.daily_quest','auto_schedule.weekly_quest','auto_challenge.ascension_tower','auto_challenge.treasure_hunt')),
             ('월드보스',('auto_schedule.field_boss',)),

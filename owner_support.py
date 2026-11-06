@@ -204,6 +204,8 @@ def finish_local_ui(gui):
         gui.logger.exception('임무 인식 성능 기록 연결 실패 · 기본 동작 유지')
     from owner_dialogue import install as install_dialogue
     install_dialogue(gui)
+    from owner_seal_shop import install as install_seal_shop
+    install_seal_shop(gui)
     from owner_hunt_settings_candidate import install as install_hunt_settings
     install_hunt_settings(gui)
     from owner_program_runtime import install as install_program_runtime

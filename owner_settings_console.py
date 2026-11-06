@@ -14,7 +14,8 @@ def category(key):
  if key.startswith('common.daily_restart.') or key in ('common.potion_and_favorite.source','common.potion_and_favorite.slot'):return None
  if key.startswith(('common.skill_preset.','auto_schedule.field_boss.skill_preset.','auto_schedule.boss_raid.skill_preset.')):return '기본 설정'
  if key.startswith(('auto_schedule.clan_boss_request.','auto_rewards.clan_help.','auto_growth.clan_cooperative_training.')):return '문파'
- if key in ('auto_rewards.inventory_use.enabled','auto_rewards.seal_release.enabled') or key.startswith('auto_rewards.inventory_use.boxes.'):return '아이템 사용'
+ if key=='auto_rewards.seal_release.enabled':return '단 봉인해제'
+ if key=='auto_rewards.inventory_use.enabled' or key.startswith('auto_rewards.inventory_use.boxes.'):return '아이템 사용'
  if key=='auto_rewards.blessing.enabled':return '가호'
  if key.startswith('auto_growth.spirit_training.') or key=='inner_path.enabled':return '수련'
  if key.startswith(('auto_schedule.','auto_challenge.')):return '비경·보스'
@@ -203,7 +204,7 @@ class SettingsConsole:
   tabs=ttk.Notebook(main,style='OwnerDirect.TNotebook');tabs.pack(fill='both',expand=True,padx=24,pady=(0,12))
   links={}
   def link(label,outer,inner=None,page=None):links[label]=(outer,inner,page)
-  for label in ('기본 설정','보상·정리','문파','성장','사냥터','상점','아이템 사용','스케줄','진단'):
+  for label in ('기본 설정','보상·정리','문파','성장','사냥터','상점','아이템 사용','단 봉인해제','스케줄','진단'):
    frame=ttk.Frame(tabs);tabs.add(frame,text=label)
    if label not in ('성장','스케줄'):link(label,frame)
    if label in ('기본 설정','보상·정리','문파'):self.native.build(frame,label)
@@ -249,6 +250,10 @@ class SettingsConsole:
     self.native.build(frame,label,compact=True)
     from owner_starter_choice_candidate import open_settings
     self.editors.append(open_settings(frame,gui.project.root,identity,embedded=True))
+   elif label=='단 봉인해제':
+    self.native.build(frame,label,compact=True)
+    from owner_seal_shop import open_settings as seal_settings
+    self.editors.append(seal_settings(frame,gui.project.root,identity,embedded=True))
    elif label=='진단':
     from owner_telemetry import show
     show(gui,parent=frame,embedded=True)

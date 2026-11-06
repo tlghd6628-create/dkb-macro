@@ -134,7 +134,7 @@ class Console(Base):
  def test_every_page_is_reachable_and_group_titles_lead_to_a_page(self):
   console=self.console();nav=console.navigation
   labels=[nav.item(k,'text').strip() for k in nav.get_children() if k in console.destinations]
-  self.assertEqual(labels,['기본 설정','보상·정리','사냥터','상점','아이템 사용','문파','장비','도술','가호','기운','화첩','요일·시간','비경·보스','수련','진단'])
+  self.assertEqual(labels,['기본 설정','보상·정리','사냥터','상점','아이템 사용','단 봉인해제','문파','장비','도술','가호','기운','화첩','요일·시간','비경·보스','수련','진단'])
   group=next(k for k in nav.get_children() if k not in console.destinations and nav.item(k,'text')=='성장')
   nav.selection_set(group);self.tk.update()
   self.assertEqual(nav.item(nav.selection()[0],'text').strip(),'장비')

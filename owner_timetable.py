@@ -45,6 +45,8 @@ JOBS=(
  Job('raid','보스 레이드','auto_schedule.boss_raid.enabled','17:30',60,'boss_raid.run_boss_raid'),
  Job('daily24_dungeon','비경탐험(일일-24시간)','auto_challenge.secret_exploration_always.enabled','10:30',75,'secret_exploration.run_secret_exploration'),
  Job('shop','잡화상점 구매','owner_shop.enabled','11:45',15,'#shop'),
+ # An hour before the 05:00 reset, so the day's 단각 limits are still there to use (user 11-06).
+ Job('seal_release','단 봉인해제','auto_rewards.seal_release.enabled','04:00',20,'#seal'),
  Job('shop_weekly_verify','주간 상점 구매 확인','owner_shop.enabled','23:10',15,'#shop',True,weekday=1),
 )
 BY_KEY={job.key:job for job in JOBS};LABEL_JOB={job.label:job.key for job in JOBS}
@@ -959,6 +961,10 @@ def invoke(adapter,job,context,inputs):
         result=run(adapter,context,inputs,'gear' if job.key=='gear_equip' else 'blessing')
         LOG.info('%s · %s',job.label,result)
         return not str(result).startswith('보류')
+    if job.key=='seal_release':
+        from owner_seal_shop import run as seal
+        LOG.info('%s · %s',job.label,seal(adapter,context,inputs))
+        return True
     if job.key in ('shop','shop_weekly_verify'):
         from owner_shop_runtime_candidate import dispatch_configured
         from owner_schedule_priority import LOCAL as priority

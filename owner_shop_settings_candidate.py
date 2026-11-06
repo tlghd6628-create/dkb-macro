@@ -159,10 +159,20 @@ def both_shops(rows):
 
 
 class ShopSettings:
+    SWITCH = '설정 상품 구매 사용'
+    # The 단각 교환 table (owner_seal_shop) is this same table over its own file.
+    def make_store(self, root, character): return ShopSettingsStore(root, character)
+    def rows_of(self, document): return one_list(document['items'])
+    def saved_rows(self, rows): return both_shops(rows)
+    def check(self, rows): return validate(self.saved_rows(rows))
+    def new_row(self):
+        return dict(shop='remote', name='', enabled=False, mode='quantity', quantity=1,
+                    verification='사용자 추가·게임 확인 필요', source='사용자 입력')
+
     def __init__(self, parent, root, character, *, embedded=False):
-        self.store = ShopSettingsStore(root, character)
+        self.store = self.make_store(root, character)
         document,self.open_revision = self.store.snapshot()
-        self.rows = one_list(document['items'])
+        self.rows = self.rows_of(document)
         self.embedded=embedded
         self.window = ttk.Frame(parent) if embedded else tk.Toplevel(parent)
         if embedded:self.window.pack(fill='both',expand=True)
@@ -172,7 +182,7 @@ class ShopSettings:
         top.pack(fill='both', expand=True)
         self.enabled=tk.BooleanVar(self.window,value=document.get('enabled',True))
         self.enabled_row=ttk.Frame(top);self.enabled_row.pack(fill='x',pady=(0,8))
-        ttk.Checkbutton(self.enabled_row,text='설정 상품 구매 사용',variable=self.enabled).pack(side='left')
+        ttk.Checkbutton(self.enabled_row,text=self.SWITCH,variable=self.enabled).pack(side='left')
         table = ttk.Frame(top)
         table.pack(fill='both', expand=True)
         tree = ttk.Treeview(table, columns=('order', 'name', 'enabled', 'target'), show='headings', selectmode='browse')
@@ -270,8 +280,7 @@ class ShopSettings:
         self.edit(None)
 
     def edit(self, index):
-        row = dict(self.rows[index]) if index is not None else dict(shop='remote', name='', enabled=False,
-            mode='quantity', quantity=1, verification='사용자 추가·게임 확인 필요', source='사용자 입력')
+        row = dict(self.rows[index]) if index is not None else self.new_row()
         dialog = tk.Toplevel(self.window); dialog.title('상점 품목 설정'); dialog.transient(self.window)
         body = ttk.Frame(dialog, padding=12); body.pack(fill='both', expand=True)
         name = tk.StringVar(value=row['name'])
@@ -280,12 +289,12 @@ class ShopSettings:
         def apply():
             try:
                 changed = dict(row, name=name.get().strip())
-                if changed['name'] != row['name']:
+                if changed['name'] != row['name'] and 'source' in row:
                     changed.update(source='사용자 입력', verification='사용자 수정·게임 확인 필요')
                 candidate = list(self.rows)
                 if index is None: candidate.append(changed)
                 else: candidate[index] = changed
-                validate(both_shops(candidate))
+                self.check(candidate)
             except ValueError as error:
                 messagebox.showerror('품목 확인', str(error), parent=dialog); return
             self.rows = candidate; self.refresh(); dialog.destroy()
@@ -298,7 +307,7 @@ class ShopSettings:
 
     def save(self):
         try:
-            self.store.write(both_shops(self.rows), DEFAULT_COIN_RESERVE,expected_revision=self.open_revision,enabled=self.enabled.get())
+            self.store.write(self.saved_rows(self.rows), DEFAULT_COIN_RESERVE,expected_revision=self.open_revision,enabled=self.enabled.get())
         except (ValueError, OSError) as error:
             messagebox.showerror('상점 설정 저장 실패', str(error), parent=self.window); return
         self.open_revision=self.store.revision()

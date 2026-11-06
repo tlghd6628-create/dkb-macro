@@ -13,6 +13,7 @@ TREASURE='treasure'
 SHOP='shop';SHOP_KEY='owner_shop.enabled'
 WORN='worn';WORN_KEY='owner_worn.status'
 COUPON='coupon'
+SEAL='seal'
 EQUIP='equip';GEAR_EQUIP_KEY='owner_equip.gear.enabled';BLESSING_EQUIP_KEY='owner_equip.blessing.enabled'
 TARGETS={
  'main_quest.first_coupon.enabled':('쿠폰 등록',COUPON),
@@ -21,6 +22,7 @@ TARGETS={
  BLESSING_EQUIP_KEY:('가호 높은 등급 장착',EQUIP),
  'owner_summon.blessing.enabled':('가호 소환',EQUIP),
  SHOP_KEY:('잡화상점 구매',SHOP),
+ 'auto_rewards.seal_release.enabled':('단 봉인해제',SEAL),
  'auto_rewards.blessing.enabled':('가호 일괄 획득',BLESSING),
  'auto_growth.equipment.enabled':('장비 성장',GROWTH),
  'auto_growth.blessing.enabled':('가호 성장',GROWTH),
@@ -246,6 +248,9 @@ def execute(adapter,context,inputs,key):
         if kind==RAID:return raid_real(adapter,context,inputs)
         if kind==TREASURE:return treasure(adapter,context,inputs,key)
         if kind==SHOP:return shop(adapter,context,inputs)
+        if kind==SEAL:
+            from owner_seal_shop import run as seal
+            return seal(adapter,context,inputs)
         if kind==WORN:return worn(adapter,context,inputs)
         if kind==EQUIP and key=='owner_summon.blessing.enabled':
             from owner_blessing_summon import run as summon
