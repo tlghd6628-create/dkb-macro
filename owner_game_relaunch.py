@@ -268,10 +268,12 @@ def install(gui):
             ordinary_run=native.DKBLauncherFlow.run
             def run(self,token,context):
                 window=self.gui.game_window;launcher=self.gui.official_launcher
-                if not window.candidates() and (window.hwnd or getattr(launcher,'requested',False)):
-                    # 'requested' stays on after a start that worked, and the next start only waited for the old
-                    # game window (08:31 stack: wait_window before the launcher).
-                    LOG.info('끊긴 게임창 연결 정리 · 런처로 다시 시작');window.hwnd=0;launcher.requested=False
+                if not window.candidates() and (window.hwnd or getattr(launcher,'requested',False) or getattr(self,'game_started',False)):
+                    # The DKB start remembers game_started once a game was connected in this program session, and
+                    # then only waits for that window to come back (08:31 and 08:36 stacks: wait_window before the
+                    # launcher). 'requested' and the old handle stay set too. All three are reset, as on a new program.
+                    LOG.info('끊긴 게임창 연결 정리 · 런처로 다시 시작')
+                    window.hwnd=0;launcher.requested=False;self.game_started=False;self.game_entry_stage=0
                 return ordinary_run(self,token,context)
             run._owner_dead_hwnd=True
             native.DKBLauncherFlow.run=run
