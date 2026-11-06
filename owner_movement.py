@@ -241,10 +241,34 @@ def confirm_choice(ui,*,initial_distance=None):
  LOG.info('축지술 B 두 번째 입력 · 선택창 통과 확인 · 거리=%.0fm',initial_distance)
  return True
 
+REAL_BAR=(560,522,250,42)   # real: 자동 이동 중 74m B above the HP bar (pc1 14:3x)
+
+
+def real_moving(frame):
+ """Metres left on the auto-move bar when it shows 자동 이동 중 and its B key, else None."""
+ from owner_text import read,clean
+ rows=[clean(r['text']) for r in read(None,frame,REAL_BAR,scale=2,minimum=.6)]
+ if not any('자동이동' in w for w in rows) or 'B' not in rows:return None
+ found=[int(m.group(1)) for w in rows for m in [re.fullmatch(r'(\d{1,5})m',w)] if m]
+ return found[0] if len(found)==1 else None
+
+
 def travel(ui):
  from owner_skill_goal import Pending
  first=ui.frame()
  if choice(first):return confirm_choice(ui)
+ if getattr(first,'hi',None) is not None:
+  # At 1366 the bar's pictures rarely match (pc2 11-06: no 축지술 in story mode since 16:16, 895 m walked). Its own
+  # words say it: 자동 이동 중, the distance, and B. Two reads must agree within 50 m.
+  a=real_moving(first)
+  if a is None or a<200:return False
+  ui.context.wait(.3);b=real_moving(ui.frame())
+  if b is None or b<200 or abs(a-b)>50:return False
+  ui.key(0x42)
+  try:ui.wait(choice,seconds=2)
+  except Pending:
+   LOG.info('축지술 B 입력 후 선택창 미확인 · 기본 이동 계속 · 거리=%dm',b);return False
+  return confirm_choice(ui,initial_distance=b)
  bar=moving_bar(first)
  if not bar or not moving_field(first):return False
  l,t,r,b=bar[2]
