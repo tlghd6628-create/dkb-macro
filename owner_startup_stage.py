@@ -267,7 +267,7 @@ def install(gui):
     @wraps(ordinary_run)
     def run(adapter,context,inputs):
         if getattr(LOCAL,'owner',None):return ordinary_run(adapter,context,inputs)
-        stage_attempts={};tutorial_handler=None;tutorial_deadline=None;unknown_since=None
+        stage_attempts={};tutorial_handler=None;tutorial_deadline=None;unknown_since=None;title_state={}
         try:
             while True:
                 context.checkpoint();LOCAL.owner=(gui,context,inputs,gui._owner_stage_epoch);LOCAL.monitoring=True
@@ -391,6 +391,10 @@ def install(gui):
                     if unknown_since is None:
                         unknown_since=time.monotonic()
                         LOG.info('시작 화면 전환 대기 · 알려진 위치 확인 후 임무 준비 · 최대 40초')
+                    # The game just relaunched (owner_game_relaunch): its patch, title and 게임 시작 screens.
+                    from owner_game_relaunch import title_step
+                    if title_step(service,context,second_frame,title_state):
+                        unknown_since=time.monotonic();continue
                     # A full-screen menu the start does not know (몽련 치료하기 after its reward, pc1 02:03) shows a title
                     # beside the back arrow: back out, at most three times, before the 40 s limit.
                     if time.monotonic()-unknown_since>=8 and menu_title(second_frame):
