@@ -57,9 +57,11 @@ def run(adapter,context,inputs):
     service=TownServices(adapter,context,inputs,list(dict.fromkeys(guide_rewards.NAMES+favorite_hunt.NAMES+market_inventory.INVENTORY_USE_NAMES)))
     # Hunting in place while growing: the loop comes back every minute and opened the bag each time to read power
     # (pc1 00:09, 00:10). Within ten minutes, with AUTO still lit, it just goes on.
-    from owner_hunt_here import auto_lit
-    if time.monotonic()-getattr(adapter,'_owner_growing_hunt_at',-1e9)<600 and auto_lit(service.capture()):
-        adapter._owner_hunt_ready=True;return True
+    # (The AUTO button shows the quest icon in a quest mode, so its orange ring is not the proof here; the native
+    # AUTO check is, and it presses nothing when AUTO is already on.)
+    if time.monotonic()-getattr(adapter,'_owner_growing_hunt_at',-1e9)<600:
+        if favorite_hunt.ensure_auto_active(service.actions,context,LOG,post_click_wait=1,poll_seconds=.5) is not False:
+            adapter._owner_hunt_ready=True;return True
     # Refresh level/power through the ordinary inventory entry, then close it.
     if market_inventory.open_inventory(service) is False:raise RuntimeError('사냥터 선택 전 인벤토리 확인 실패')
     observe_inventory(service)
