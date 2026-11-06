@@ -27,7 +27,8 @@ LIST_COUNT=(1066,78,105,24);SECOND_TILE=(1150,146)  # the growth list: how many 
 RESULT_CLOSE=(400,640,560,100);RESULT_SECONDS=20
 BACK=(35,30)                   # real place of the growth screen's back arrow
 ACTION_PILL=(470,700,325,42)   # real pixels of the 돌파 or 각성 button and its price
-VISIT_SECONDS=300;ITEM_SECONDS=90;RESULT_READS=8;ROUNDS=8;LEVEL_STEP=3
+VISIT_SECONDS=300;ITEM_SECONDS=VISIT_SECONDS;  # one stay per item: leaving every 90 s to reread its details was the in-and-out (user 11-06)
+RESULT_READS=8;ROUNDS=8;LEVEL_STEP=3
 FRESH_SECONDS=8
 ENHANCE,BREAK,AWAKEN='enhance','breakthrough','awaken'
 LABEL={ENHANCE:'강화',BREAK:'돌파',AWAKEN:'각성'}
@@ -86,8 +87,10 @@ def read_panel(root,frame):
     """The selected item's level and next step on the 강화 tab, from one real frame, or None."""
     if not title_words(root,frame):return None
     pair=clean_pair(frame,root)
-    left,right=text.read(root,frame,BLESSING_LEVEL,scale=3),text.read(root,frame,BLESSING_NEXT,scale=3)
-    pair=pair or level_pair(left,right) or font_pair(left,right)
+    if pair is None:
+        # Only when the cleaned digits did not read: two OCR calls fewer on every look (user 11-06: 강화 too slow).
+        left,right=text.read(root,frame,BLESSING_LEVEL,scale=3),text.read(root,frame,BLESSING_NEXT,scale=3)
+        pair=level_pair(left,right) or font_pair(left,right)
     if pair is None:
         left,right=text.read(root,frame,BLESSING_LEVEL,scale=2),text.read(root,frame,BLESSING_NEXT,scale=2)
         pair=level_pair(left,right) or font_pair(left,right)
@@ -258,7 +261,13 @@ class Route:
             panel=read_panel(self.root,self.frame())
             if panel:
                 item.values=dict(item.values or {},enhance=panel['level']);self.settle(item)
-        end=time.monotonic()+ITEM_SECONDS;rereads=0
+        end=time.monotonic()+ITEM_SECONDS;rereads=0;started=time.monotonic();first=(item.values or {}).get(ENHANCE)
+        try:return self._enhance_loop(item,cap,observer,guard,goal,targets,end,rereads)
+        finally:
+            last=(observer.panel or {}).get('level')
+            if type(last) is int:
+                LOG.info('착용 %s 강화 머문 시간 %.0f초 · %s → %d',item.slot,time.monotonic()-started,first,last)
+    def _enhance_loop(self,item,cap,observer,guard,goal,targets,end,rereads):
         def one(latest,mark_sent):
             frame=self.frame();panel=read_panel(self.root,frame)
             if not panel or not panel['active'] or panel['level']!=latest['second'].enhancement or panel['word']!=latest['button_name']:raise worn.ReadAgain()

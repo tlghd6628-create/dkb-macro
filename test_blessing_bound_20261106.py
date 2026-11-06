@@ -23,12 +23,21 @@ class Sweep(unittest.TestCase):
             self.clicks.append(hit[:2]);self.open=self.opens and hit[:2] in self.tiles
         self.service=NS(context=NS(checkpoint=lambda:None,wait=lambda s:None),check=lambda:None,capture=lambda:self.frame,click_hit=click)
         self.tiles=[hd.real_hit(*place)[:2] for place in b.places(16)]
-    def run_it(self,count,titles,**options):
+    def run_it(self,count,titles,acquire=None,**options):
         names=iter(titles)
+        self.acquire=acquire
         def closing(service,context,kind):self.open=False
         with patch.object(b,'tile_count',return_value=count),patch.object(b,'window_kind',side_effect=lambda f:'compare' if self.open else None),\
-             patch.object(b,'close_window',side_effect=closing),patch.object(b,'window_title',side_effect=lambda f,kind:next(names)):
+             patch.object(b,'close_window',side_effect=closing),patch.object(b,'window_title',side_effect=lambda f,kind:next(names)),\
+             patch.object(b,'acquire_popup',side_effect=lambda f:None if self.open or self.acquire is None else self.acquire),patch.object(b,'close_acquire'):
             return b.skip_reason(self.service,**options)
+    def test_a_blessing_made_from_bound_pieces_passes(self):
+        # pc1 11-06: unclaimed tiles open 가호를 획득하시겠습니까? (거래 가능 소모 조각 : 0개).
+        self.opens=False
+        self.assertIsNone(self.run_it(2,[],acquire=0))
+    def test_one_that_would_use_tradeable_pieces_stops(self):
+        self.opens=False
+        self.assertIn('거래 가능 조각',self.run_it(2,[],acquire=3))
     def tile_clicks(self):return [c for c in self.clicks if c in self.tiles]
     def test_all_bound_may_press(self):
         self.assertIsNone(self.run_it(3,['가호1(귀속)','가호2(귀속)','가호3(귀속)']))
@@ -94,41 +103,66 @@ class Hook(unittest.TestCase):
 
 
 class Claim(unittest.TestCase):
-    """The claim alone: open, check 귀속, press 일괄 획득, leave. Equip and summon are never reached."""
-    def run_claim(self,reason=None,button=True,dialog=()):
+    """The claim alone, on the 전체 tab, by its own confirmation window. Equip and summon are never reached."""
+    def run_claim(self,button=True):
         clicks=[];left=[]
         service=NS(capture=lambda:NS(hi=np.zeros((768,1366,3),np.uint8)),check=lambda:None,click_hit=lambda hit:clicks.append(hit[:2]))
         context=NS(checkpoint=lambda:None,wait=lambda s:None)
         def read(root,frame,box,**k):
             if box==b.CLAIM_BUTTON:return [dict(text='일괄 획득',rx=1182,ry=717)] if button else []
-            if box==b.DIALOG:return [dict(text=w,rx=760,ry=480) for w in dialog]
             return []
-        with patch('project_adapter.town_services.TownServices',lambda *a:service),patch.object(worn,'open_blessing_screen',return_value=True),\
-             patch.object(b,'skip_reason',return_value=reason),patch('owner_text.read',read),patch.object(b,'window_kind',return_value=None),\
-             patch.object(worn,'leave_blessing_screen',side_effect=lambda *a:left.append(1)),patch.object(b,'watch',return_value=[]):
+        with patch('project_adapter.town_services.TownServices',lambda *a:service),patch.object(worn,'open_blessing_screen',return_value=True),             patch('owner_text.read',read),patch.object(b,'window_kind',return_value=None),             patch.object(worn,'leave_blessing_screen',side_effect=lambda *a:left.append(1)),patch.object(b,'watch',return_value=[]),             patch.object(b,'skip_reason',side_effect=AssertionError('no tile sweep')):
             result=b.claim(NS(),context,None)
         return result,clicks,left
-    def test_pressed_when_all_are_bound(self):
+    def test_pressed_on_the_all_tab(self):
         result,clicks,left=self.run_claim()
-        self.assertTrue(result);self.assertEqual(clicks,[hd.real_hit(1182,717)[:2]]);self.assertEqual(left,[1])
-    def test_a_reason_presses_nothing(self):
-        result,clicks,left=self.run_claim(reason='귀속 없는 가호 · 연꽃')
-        self.assertTrue(result);self.assertEqual(clicks,[]);self.assertEqual(left,[1])
+        self.assertTrue(result);self.assertEqual(clicks,[hd.real_hit(*b.ALL_TAB)[:2],hd.real_hit(1182,717)[:2]]);self.assertEqual(left,[1])
     def test_no_button_word_presses_nothing(self):
-        result,clicks,_=self.run_claim(button=False);self.assertEqual(clicks,[])
+        result,clicks,_=self.run_claim(button=False);self.assertEqual(clicks,[hd.real_hit(*b.ALL_TAB)[:2]])
 
 
 class Watch(unittest.TestCase):
-    def run_watch(self,dialog):
-        clicks=[];service=NS(capture=lambda:None,check=lambda:None,click_hit=lambda hit:clicks.append(hit[:2]))
+    def run_watch(self,dialog,tradeable=0,grades=None):
+        clicks=[];keys=[];service=NS(capture=lambda:None,check=lambda:None,click_hit=lambda hit:clicks.append(hit[:2]),key=keys.append)
         context=NS(checkpoint=lambda:None,wait=lambda s:None)
         def read(root,frame,box,**k):
-            return [dict(text=w,rx=760,ry=480) for w in dialog] if box==b.DIALOG else []
-        with patch('owner_text.read',read):b.watch(service,context,seconds=.05)
-        return clicks
-    def test_a_claim_window_is_confirmed(self):self.assertTrue(self.run_watch(['가호를 획득하시겠습니까','확인']))
-    def test_a_sale_window_is_left(self):self.assertEqual(self.run_watch(['판매 후 획득','확인']),[])
-    def test_no_window_presses_nothing(self):self.assertEqual(self.run_watch([]),[])
+            return [dict(text=w,rx=760 if w!='취소' else 700,ry=480) for w in dialog] if box==b.DIALOG else []
+        with patch('owner_text.read',read),patch.object(b,'acquire_popup',return_value=tradeable),patch.object(b,'popup_grades',return_value=grades):
+            b.watch(service,context,seconds=.05)
+        return clicks,keys
+    def test_a_claim_using_only_bound_pieces_is_confirmed(self):
+        clicks,keys=self.run_watch(['가호를 획득하시겠습니까','확인']);self.assertTrue(clicks);self.assertEqual(set(clicks),{hd.real_hit(760,480)[:2]})
+    def test_tradeable_pieces_are_kept(self):
+        # The user's rule: anything tradeable stops the claim. 취소, not 확인.
+        clicks,keys=self.run_watch(['가호를 획득하시겠습니까','확인','취소'],tradeable=3);self.assertEqual(clicks,[hd.real_hit(700,480)[:2]])
+        clicks,keys=self.run_watch(['가호를 획득하시겠습니까','확인'],tradeable=None);self.assertEqual(clicks,[]);self.assertEqual(keys,[0x1b])
+    def test_tradeable_pieces_may_go_for_common_and_rare_only(self):
+        # User 11-06: 일반·희귀 are claimed even with tradeable pieces; any 영웅 or higher, or an unread grade, is not.
+        dialog=['가호를 획득하시겠습니까','확인','취소']
+        self.assertEqual(set(self.run_watch(dialog,53,['희귀','일반'])[0]),{hd.real_hit(760,480)[:2]})
+        self.assertEqual(self.run_watch(dialog,53,['희귀','영웅'])[0],[hd.real_hit(700,480)[:2]])
+        self.assertEqual(self.run_watch(dialog,53,['일반',None])[0],[hd.real_hit(700,480)[:2]])
+        self.assertEqual(self.run_watch(dialog,53,None)[0],[hd.real_hit(700,480)[:2]])
+    def test_a_sale_window_is_left(self):self.assertEqual(self.run_watch(['판매 후 획득','확인'])[0],[])
+    def test_no_window_presses_nothing(self):self.assertEqual(self.run_watch([])[0],[])
+
+
+class Grades(unittest.TestCase):
+    """The 일괄 획득 window's slots drawn as pc1 11-06 showed them: plain ground (50,50,50), slots 56 wide, 73 apart."""
+    def frame(self,frames):
+        real=np.full((768,1366,3),50,np.uint8)
+        for k,colour in enumerate(frames):
+            x=540+73*k;real[350:406,x:x+56]=colour;real[362:396,x+12:x+44]=(200,150,90)
+        return NS(hi=real)
+    def test_grey_is_common_blue_rare_else_high(self):
+        self.assertEqual(b.popup_grades(self.frame([(59,56,52),(24,35,66),(120,60,130),(150,110,30)])),['일반','희귀',None,None])
+    def test_no_slot_is_unread(self):self.assertIsNone(b.popup_grades(self.frame([])))
+    def test_the_saved_window(self):
+        import os
+        path=os.environ.get('DKB_CLAIM_FRAME')
+        if not path:self.skipTest('local frame only')
+        from PIL import Image
+        self.assertEqual(b.popup_grades(NS(hi=np.asarray(Image.open(path).convert('RGB')))),['일반']*4)
 
 
 class PolicyAtRealSize(unittest.TestCase):

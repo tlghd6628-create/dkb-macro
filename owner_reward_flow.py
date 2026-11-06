@@ -12,6 +12,19 @@ RECEIPT_WORDS=('보상받기','아이템획득');RECEIPT_AREAS=((600,150,170,30)
 BLANKS=((288,93),(286,19),(286,19))
 LIST_BOX=(165,125,130,265)
 BODY_TOP=204;BANNER_WAIT=1.5
+ATTENDANCE_GRID=(450,330,680,290)   # real pixels: the day tiles of an attendance tab (특별 출석)
+
+
+def attendance_dots(real):
+    """Small red dots inside the day grid, as real points, top-left first."""
+    import numpy as np,cv2
+    x,y,w,h=ATTENDANCE_GRID;a=np.asarray(real)[y:y+h,x:x+w].astype(np.int16)
+    r,g,b=a[...,0],a[...,1],a[...,2]
+    mask=((r>190)&(g<90)&(b<90)).astype(np.uint8)
+    n,labels,stats,centres=cv2.connectedComponentsWithStats(mask,connectivity=8)
+    found=[(int(cx)+x,int(cy)+y) for i,(sx,sy,sw,sh,area) in enumerate(stats) if i and 6<=area<=60 and sw<=10 and sh<=10
+           for cx,cy in [centres[i]]]
+    return sorted(found,key=lambda p:(p[1],p[0]))
 MISSION_DRAG=((459,240),(459,372));TAB_SETTLE=.8  # logical: the mission rows of an event tab, top to bottom
 CLAIMED,NOTHING,PARTIAL,FAILED='claimed','none','partial','failed'
 LABELS={CLAIMED:'수령 완료',NOTHING:'보상 없음',PARTIAL:'일부 미확인',FAILED:'실패'}
@@ -107,6 +120,31 @@ class Flow:
             Image.fromarray(before).save(folder/'before.png');Image.fromarray(after).save(folder/'after.png')
             (folder/'reason.txt').write_text(reason+' · %s · (%d,%d)'%(self.key,x,y),encoding='utf-8');self.saved+=1
         except OSError:pass
+    def attendance_grid(self):
+        """The real frame when the open event tab is a day grid (1일차 … 7일차), else None."""
+        import owner_text as text
+        real=getattr(self.frame(),'hi',None)
+        if real is None:return None
+        x,y,w,h=ATTENDANCE_GRID;import numpy as np;real=np.asarray(real)
+        days=[t for t in (text.clean(r['text']) for r in text.read_area(None,real[y:y+h,x:x+w],scale=2,minimum=.6)) if t.endswith('일차')]
+        return real if len(days)>=3 else None
+    def claim_attendance(self,inputs):
+        """Today's attendance tile carries a small red dot on its icon's top-right (pc1 7일차, pc2 4일차, 11-06). The
+        original took the day grid for a mission list, dragged it and never pressed the tile. Each dotted tile is
+        pressed once, on its icon; True when the grid was there (so it is not dragged)."""
+        import owner_hd as hd
+        real=self.attendance_grid()
+        if real is None:return False
+        for _ in range(3):
+            dots=attendance_dots(real)
+            if not dots:break
+            dx,dy=dots[0];hit=hd.real_hit(dx-22,dy+24)
+            LOG.info('이벤트 출석 칸 받기 · 빨간 점 (%d,%d)',dx,dy)
+            inputs.click(hit[0],hit[1]);self.counts['clicks']+=1;self.context.wait(1.5)
+            self.note_banner(self.frame())
+            real=self.attendance_grid()
+            if real is None:break
+        return True
     def missions_to_top(self,inputs):
         """Pull the open tab's mission list down to its top. A press that moves is a drag, so no row takes it."""
         self.context.wait(TAB_SETTLE)
@@ -214,7 +252,9 @@ class FlowInputs:
         # A tab, on the left or a day above the rows: its mission list keeps where it was scrolled, and rows above
         # the top are never seen (2일차 hid 30/30 and 200/200, 11-06). The native search reads only what shows.
         if flow.key=='event' and not blank and not leaving and (x<LIST_BOX[0]+LIST_BOX[2] or y<BODY_TOP):
-            flow.missions_to_top(self._real)
+            # An attendance tab is a day grid, not a list: its dotted tile is pressed and nothing is dragged.
+            flow.context.wait(TAB_SETTLE)
+            if not flow.claim_attendance(self._real):flow.missions_to_top(self._real)
         return result
     def transaction(self,*a,**k):
         flow=self._flow;frame=flow.frame();x,y,w,h=LIST_BOX

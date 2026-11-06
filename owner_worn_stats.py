@@ -214,10 +214,24 @@ def close_bag(service,context):
  if left:service.click_hit(hd.real_hit(295,28));context.wait(.5)
  if right or left:service.click_hit(hd.real_hit(1344,85));context.wait(.5)
 
+SKIP_WORD=(1230,10,136,80)   # real: 넘기기 ESC at the top right of a story scene, where the full menu button was
+
+
+def skip_scene(service,context):
+ """A story scene (pc1 11-06 12:12, after 일괄 획득) hides the full menu: ESC while its 넘기기 shows, at most 8 times."""
+ from owner_text import clean,read
+ for _ in range(8):
+  context.checkpoint();service.check()
+  if not any('넘기기' in clean(row['text']) for row in read(None,service.capture(),SKIP_WORD,scale=2,minimum=.6)):return
+  LOG.info('가호 화면 열기 전 대화 넘기기 · ESC')
+  service.key(0x1b);context.wait(1.2)
+
+
 def open_blessing_screen(service,context):
  """From the field or the bag, by the full menu's 가호."""
  import owner_hd as hd
  if on_blessing_screen(service):return True
+ skip_scene(service,context)
  close_bag(service,context)
  service.click_hit(hd.real_hit(*REAL_MENU));context.wait(1.5)
  service.click_hit(hd.real_hit(*REAL_MENU_BLESSING))

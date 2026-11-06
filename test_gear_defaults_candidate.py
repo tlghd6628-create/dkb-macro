@@ -33,8 +33,8 @@ class Defaults(unittest.TestCase):
    self.assertEqual(loaded['album'],{'mode':'조각 등록만'})
    self.assertEqual(loaded['blessings']['5번'],{'enabled':False,'enhance':49,'breakthrough':0})
    self.assertIsNone(loaded['energies']['홍염']['stage'])
-   # The higher-grade steps (11-06) read as unticked on an old document.
-   self.assertEqual(loaded['blessing_equip'],{'enabled':True,'priorities':[],'normal_to_rare':False,'rare_to_hero':False})
+   # 높은 등급 우선 장착 (11-06) reads as off on an old document.
+   self.assertEqual(loaded['blessing_equip'],{'enabled':True,'priorities':[],'higher':False})
    self.assertNotIn('skills',json.loads(store.path.read_text(encoding='utf-8')))
  def test_invalid_skill_settings_rejected(self):
   value=copy.deepcopy(DEFAULT);value['skills']['파멸']['enhance']=True

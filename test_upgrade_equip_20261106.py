@@ -11,18 +11,29 @@ import owner_hd as hd
 
 
 class Steps(unittest.TestCase):
-    def test_each_step_needs_its_tick(self):
-        both={'normal_to_rare':True,'rare_to_hero':True}
-        self.assertTrue(up.allowed('일반','희귀',both));self.assertTrue(up.allowed('희귀','영웅',both))
-        self.assertTrue(up.allowed('일반','희귀',{'normal_to_rare':True}))
-        self.assertFalse(up.allowed('희귀','영웅',{'normal_to_rare':True}))
-        self.assertFalse(up.allowed('일반','희귀',{'rare_to_hero':True}))
-    def test_two_steps_need_both(self):
-        self.assertTrue(up.allowed('일반','영웅',{'normal_to_rare':True,'rare_to_hero':True}))
-        self.assertFalse(up.allowed('일반','영웅',{'rare_to_hero':True}))
-    def test_never_down_or_sideways_or_unread(self):
-        both={'normal_to_rare':True,'rare_to_hero':True}
-        for a,b in (('희귀','일반'),('희귀','희귀'),(None,'희귀'),('일반',None),('희귀','전설')):self.assertFalse(up.allowed(a,b,both),(a,b))
+    def test_any_higher_grade_when_on(self):
+        on={'higher':True}
+        for a,b in (('일반','희귀'),('희귀','영웅'),('일반','영웅'),('영웅','전설'),('일반','전설')):self.assertTrue(up.allowed(a,b,on),(a,b))
+    def test_never_off_down_sideways_or_unread(self):
+        on={'higher':True}
+        self.assertFalse(up.allowed('일반','희귀',{'higher':False}))
+        for a,b in (('희귀','일반'),('희귀','희귀'),(None,'희귀'),('일반',None),('전설','영웅')):self.assertFalse(up.allowed(a,b,on),(a,b))
+
+
+class Pattern(unittest.TestCase):
+    def test_same_grade_follows_the_pattern_rank(self):
+        # User 11-06: 나비 first, so every slot should end up 나비.
+        on={'higher':True};order=('나비','도깨비','토끼')
+        self.assertTrue(up.blessing_better('희귀','희귀','도깨비','나비',on,order))
+        self.assertFalse(up.blessing_better('희귀','희귀','나비','도깨비',on,order))
+        self.assertTrue(up.blessing_better('희귀','희귀','연꽃','토끼',on,order))      # unlisted stands last
+        self.assertFalse(up.blessing_better('희귀','희귀','도깨비','연꽃',on,order))
+        self.assertFalse(up.blessing_better('희귀','희귀','도깨비',None,on,order))
+    def test_grade_comes_first(self):
+        on={'higher':True};order=('나비','도깨비')
+        self.assertTrue(up.blessing_better('일반','희귀','나비','도깨비',on,order))
+        self.assertFalse(up.blessing_better('희귀','일반','도깨비','나비',on,order))
+        self.assertFalse(up.blessing_better('희귀','희귀','도깨비','나비',{'higher':False},order))
 
 
 class Colour(unittest.TestCase):
@@ -47,20 +58,20 @@ class Settings(unittest.TestCase):
         from owner_gear_settings_candidate import DEFAULT
         old=copy.deepcopy(DEFAULT);old.pop('gear_equip');old['blessing_equip']={'enabled':True,'priorities':[]}
         root,store=self.store(old);value=store.read()
-        self.assertEqual(value['gear_equip'],{'normal_to_rare':False,'rare_to_hero':False})
-        self.assertFalse(value['blessing_equip']['normal_to_rare'])
+        self.assertEqual(value['gear_equip'],{'higher':False})
+        self.assertFalse(value['blessing_equip']['higher'])
         with patch('owner_hunt_rules_candidate.configured_identity',return_value='who'):
             self.assertFalse(up.enabled(root,'gear'));self.assertFalse(up.enabled(root,'blessing'))
     def test_a_tick_turns_its_kind_on_alone(self):
         from owner_gear_settings_candidate import DEFAULT
-        doc=copy.deepcopy(DEFAULT);doc['gear_equip']['normal_to_rare']=True
+        doc=copy.deepcopy(DEFAULT);doc['gear_equip']={'normal_to_rare':True}   # an old step tick still turns it on
         root,store=self.store(doc)
         with patch('owner_hunt_rules_candidate.configured_identity',return_value='who'):
             self.assertTrue(up.enabled(root,'gear'));self.assertFalse(up.enabled(root,'blessing'))
-            self.assertEqual(up.settings(root,'gear'),{'normal_to_rare':True,'rare_to_hero':False})
+            self.assertEqual(up.settings(root,'gear'),{'higher':True})
     def test_a_wrong_value_is_refused(self):
         from owner_gear_settings_candidate import DEFAULT,validate
-        doc=copy.deepcopy(DEFAULT);doc['gear_equip']['rare_to_hero']='yes'
+        doc=copy.deepcopy(DEFAULT);doc['gear_equip']['higher']='yes'
         with self.assertRaisesRegex(ValueError,'높은 등급'):validate(doc)
 
 
@@ -110,7 +121,7 @@ class Grow(unittest.TestCase):
              patch.object(up,'gear',return_value=[('목걸이','유리구슬목걸이','일반','희귀',True)]),\
              patch.object(up.bound,'window_kind',return_value=None),patch.object(up.worn,'leave_blessing_screen'),patch.object(up.worn,'close_bag'),\
              patch('owner_progression.inventory_parts',return_value=(False,False)),patch('owner_worn_growth.grow') as grow:
-            result=up.run(NS(project=NS(root='x')),context,NS(),'gear',choice={'normal_to_rare':True})
+            result=up.run(NS(project=NS(root='x')),context,NS(),'gear',choice={'higher':True})
         self.assertEqual(result,'장비 교체 1개');self.assertEqual(grow.call_args[0][3],['목걸이'])
     def test_growth_follows_the_saved_switch(self):
         import owner_worn_growth as g
@@ -159,15 +170,15 @@ class Test(unittest.TestCase):
         frame=NS(hi=np.zeros((768,1366,3),np.uint8))
         service=NS(capture=lambda:frame,context=None)
         with patch('project_adapter.town_services.TownServices',lambda *a:service):
-            self.assertIn('선택한 등급 단계 없음',up.run(NS(project=NS(root='x')),NS(),NS(),'gear',choice={}))
+            self.assertIn('꺼짐',up.run(NS(project=NS(root='x')),NS(),NS(),'gear',choice={}))
     def test_not_at_1366_does_nothing(self):
         service=NS(capture=lambda:np.zeros((479,897,3),np.uint8),context=None)
         with patch('project_adapter.town_services.TownServices',lambda *a:service):
-            self.assertIn('1366',up.run(NS(project=NS(root='x')),NS(),NS(),'gear',choice={'normal_to_rare':True}))
+            self.assertIn('1366',up.run(NS(project=NS(root='x')),NS(),NS(),'gear',choice={'higher':True}))
 
 
 class Compare(unittest.TestCase):
-    def run_compare(self,left,right,choice={'normal_to_rare':True}):
+    def run_compare(self,left,right,choice={'higher':True}):
         real=np.zeros((768,1366,3),np.uint8)
         def read(_,area,**k):
             read.n=getattr(read,'n',0)+1;return [dict(text=left if read.n==1 else right)]
@@ -177,9 +188,31 @@ class Compare(unittest.TestCase):
     def test_higher_grade_is_taken_whatever_its_stats(self):
         # An unenhanced 영웅 may show less 전투력 than the worn one, and no arrow (user, 11-06).
         self.assertIsNone(self.run_compare('일반','희귀')[3])
-        self.assertIsNone(self.run_compare('희귀','영웅',{'rare_to_hero':True})[3])
+        self.assertIsNone(self.run_compare('희귀','영웅')[3]);self.assertIsNone(self.run_compare('영웅','전설')[3])
     def test_same_grade_is_left(self):
         self.assertEqual(self.run_compare('희귀','희귀')[3],'등급 조건 아님')
+
+
+class Acquire(unittest.TestCase):
+    """A blessing not made yet on a slot tab: made there when it uses no tradeable piece (user 11-06), else left."""
+    def run_slots(self,tradeable):
+        state=dict(opened=0,made=0,closed=0)
+        frame=NS(hi=np.zeros((768,1366,3),np.uint8))
+        service=NS(capture=lambda:frame,check=lambda:None,click_hit=lambda hit:None)
+        context=NS(checkpoint=lambda:None,wait=lambda s:None)
+        def open_compare(service,context,place):
+            state['opened']+=1;return 'compare' if state['made'] else None
+        def press(service,context):state['made']+=1;return True
+        def close(service,context):state['closed']+=1;return True
+        with patch.object(up.worn,'open_blessing_screen',return_value=True),patch.object(up.bound,'tile_count',return_value=2),             patch.object(up,'seen_before',return_value=False),patch.object(up,'remember'),patch.object(up,'tile_plus',return_value=0),             patch.object(up,'open_compare',open_compare),patch.object(up.bound,'acquire_popup',side_effect=lambda f:None if state['made'] else tradeable),             patch.object(up.bound,'press_acquire',press),patch.object(up.bound,'close_acquire',close),             patch.object(up.bound,'window_kind',return_value=None),patch.object(up.bound,'close_window'),             patch.object(up,'compare',return_value=('희귀','희귀','x',None)),patch.object(up,'bound_title',return_value='나비 가호 장식1'):
+            up.blessings(NS(),service,context,{'higher':True},('나비',))
+        return state
+    def test_made_with_no_tradeable_piece_then_compared(self):
+        state=self.run_slots(0)
+        self.assertEqual(state['made'],1);self.assertEqual(state['closed'],0);self.assertEqual(state['opened'],1+5)
+    def test_left_when_tradeable_pieces_would_go(self):
+        state=self.run_slots(3);self.assertEqual(state['made'],0);self.assertEqual(state['closed'],5)
+        state=self.run_slots(-1);self.assertEqual(state['made'],0)
 
 
 if __name__=='__main__':unittest.main()

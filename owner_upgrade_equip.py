@@ -17,18 +17,21 @@ import owner_worn_stats as worn
 import owner_blessing_bound as bound
 
 LOG=logging.getLogger('project_gui.DKB')
-ORDER=('일반','희귀','영웅')
-STEPS=(('일반','희귀','normal_to_rare'),('희귀','영웅','rare_to_hero'))
-CHOICES=tuple(key for _,_,key in STEPS)
+ORDER=('일반','희귀','영웅','전설')
+# One switch (user, 11-06, after a 전설 appeared): any higher grade goes on. The old per-step ticks still turn it on.
+CHOICES=('higher',)
+LEGACY=('normal_to_rare','rare_to_hero')
 GEAR_KEY='owner_equip.gear.enabled';BLESSING_KEY='owner_equip.blessing.enabled'
 # Real pixels, 1366x768 (pc1 11-06 photographs).
 BAG_FILTER=(1335,215)                                   # the bag's equipment list (25 on pc1)
 BAG_X=(1097,1157,1217,1277);BAG_Y=tuple(177+60*row for row in range(10))
 LEFT_GRADE=(445,200,110,45);RIGHT_GRADE=(695,200,110,45)  # worn on the left, the clicked spare on the right
+LEFT_TITLE=(435,155,215,32)                               # the worn one's name (토끼 가호 장식5) on the left
 RIGHT_BUTTONS=(690,560,230,46);RIGHT_PART=(830,200,95,40)  # 귀걸이 at (884,219)
 POWER_ROW=(695,338,225,20)                                # 전투력 6,334 1,965▲ on the spare's window
 TOAST=(560,572,240,36)                                    # 전투력 +1955▲ after an equip
 TILE_SPREAD=20
+MAX_ACQUIRE=4                                             # blessings made on one slot tab per run
 # The bag's sorted view (▼ON) puts 무기 · 방어구 · 장신구 headings between rows, so the fixed grid lands on headings and
 # gaps: pc2's TEST never reached its rare fan and three tiles 'did not open' (11-06). The view goes to OFF for the work
 # and back after.
@@ -36,16 +39,23 @@ GROUPING=(1300,112,66,34);GROUPING_HIT=(1337,129)                               
 
 
 def allowed(worn_grade,new_grade,choice):
-    """True when new_grade is above worn_grade and every step between is ticked."""
-    if worn_grade not in ORDER or new_grade not in ORDER:return False
-    low,high=ORDER.index(worn_grade),ORDER.index(new_grade)
-    if high<=low:return False
-    return all(choice.get(key) is True for a,b,key in STEPS if low<=ORDER.index(a) and ORDER.index(b)<=high)
+    """True when the switch is on and new_grade is above worn_grade."""
+    if choice.get('higher') is not True or worn_grade not in ORDER or new_grade not in ORDER:return False
+    return ORDER.index(new_grade)>ORDER.index(worn_grade)
+
+
+def blessing_better(left,right,left_kind,right_kind,choice,priorities):
+    """A blessing goes on when its grade is higher, or the grade is the same and its pattern stands higher in the user's
+    같은 등급 문양 순위 (나비 first: every slot should end up 나비, user 11-06). A lower grade never."""
+    if choice.get('higher') is not True or left not in ORDER or right not in ORDER:return False
+    if ORDER.index(right)!=ORDER.index(left):return ORDER.index(right)>ORDER.index(left)
+    rank=lambda kind:len(priorities)-list(priorities).index(kind) if kind in priorities else 0
+    return right_kind is not None and rank(right_kind)>rank(left_kind)
 
 
 def grade(real,box):
     x,y,w,h=box
-    found={text.clean(row['text']) for row in text.read_area(None,real[y:y+h,x:x+w],scale=2,minimum=.6)}&set(ORDER+('전설',))
+    found={text.clean(row['text']) for row in text.read_area(None,real[y:y+h,x:x+w],scale=2,minimum=.6)}&set(ORDER)
     return found.pop() if len(found)==1 else None
 
 
@@ -88,10 +98,12 @@ def open_compare(service,context,place):
     bound.wait_closed(service,context)
     context.checkpoint();service.check()
     service.click_hit(hd.real_hit(*place))
-    for _ in range(worn.OPEN_LOOKS):
+    for look in range(worn.OPEN_LOOKS):
         context.wait(.2);context.checkpoint();service.check()
-        kind=bound.window_kind(service.capture())
+        frame=service.capture();kind=bound.window_kind(frame)
         if kind:context.wait(.4);return kind
+        # A blessing not made yet opens 가호를 획득하시겠습니까? instead; no need to wait the rest out.
+        if look%3==2 and bound.acquire_popup(frame) is not None:return None
     return None
 
 
@@ -135,7 +147,9 @@ def equip_chosen(service,context,row):
         if kind:bound.close_window(service,context,kind)
         return '비교창 아님'
     left,right,title,_=compare(service,context,{key:True for key in CHOICES})
-    if (left,right,title)!=(row['worn'],row['spare'],row['title']):
+    # The name's digit and marks read differently between looks (나비가호장식 / 나비가호장식], 11:22): letters only.
+    same=lambda t:re.sub(r'[\d\]\[|lI()]','',t or '')
+    if (left,right,same(title))!=(row['worn'],row['spare'],same(row['title'])):
         bound.close_window(service,context,'compare');return '다시 연 창이 다름 · %s %s'%(title,right)
     if not press_equip(service,context):
         bound.close_window(service,context,'compare');return '장착 버튼 미확인'
@@ -273,6 +287,11 @@ def mark_stale(adapter,slot):
     except Exception as exc:LOG.info('착용 표 갱신 보류 · %s',type(exc).__name__)
 
 
+def bound_title(service,box):
+    real=np.asarray(service.capture().hi);x,y,w,h=box
+    return ''.join(text.clean(row['text']) for row in text.read_area(None,real[y:y+h,x:x+w],minimum=.5))
+
+
 def tile_plus(service,place):
     """The +43 on a blessing tile, or 0 when none reads."""
     real=np.asarray(service.capture().hi);x,y=place
@@ -298,28 +317,42 @@ def blessings(adapter,service,context,choice,priorities=()):
         LOG.info('가호 높은 등급 장착 · 가호 목록 지난 확인과 같음 · 칸 열지 않음');return swaps
     rank=lambda kind:-(list(priorities).index(kind)) if kind in priorities else -len(priorities)-1
     for slot in (1,2,3,4,5):
-        for _ in range(3):
+        acquired=0
+        for _ in range(3+MAX_ACQUIRE):
             context.checkpoint();service.check()
             service.click_hit(hd.real_hit(worn.REAL_FILTER_X,worn.REAL_FILTER_Y[slot]));context.wait(1.2)
             count=bound.tile_count(service.capture())
             if count>=len(bound.TILE_X)*len(bound.TILE_Y):
                 LOG.info('가호%d 높은 등급 장착 생략 · 목록이 한 화면을 넘을 수 있음',slot);break
-            found=[]
+            found=[];made=False
             for place in bound.places(count)[1:]:
                 plus=tile_plus(service,place)
                 kind=open_compare(service,context,place)
                 if kind!='compare':
                     if kind:bound.close_window(service,context,kind)
+                    elif bound.acquire_popup(service.capture()) is not None:
+                        # Not made yet. With no tradeable piece it is made here (user 11-06) and the slot read again,
+                        # since the list moves; else it is left with 취소.
+                        tradeable=bound.acquire_popup(service.capture())
+                        if tradeable==0 and acquired<MAX_ACQUIRE and bound.press_acquire(service,context):
+                            acquired+=1;made=True;LOG.info('가호%d 획득 · 거래 가능 조각 0개',slot);context.wait(1.2)
+                            if bound.window_kind(service.capture()):bound.close_window(service,context,bound.window_kind(service.capture()))
+                            break
+                        bound.close_acquire(service,context)
+                        LOG.info('가호%d 획득 안 함 · 거래 가능 조각 %s',slot,tradeable if tradeable is not None and tradeable>=0 else '미확인')
                     else:unread+=1
                     continue
-                left,right,title,reason=compare(service,context,choice)
-                if reason:
+                left,right,title,_=compare(service,context,choice)
+                worn_title=bound_title(service,LEFT_TITLE)
+                left_kind,right_kind=worn.blessing_kind(worn_title or ''),worn.blessing_kind(title or '')
+                if not blessing_better(left,right,left_kind,right_kind,choice,priorities):
                     unread+=left is None or right is None
-                    LOG.info('가호%d 높은 등급 장착 안 함 · %s · 착용 %s · %s %s',slot,reason,left or '미확인',title or '제목 미확인',right or '미확인')
+                    LOG.info('가호%d 장착 안 함 · 착용 %s %s · 예비 %s %s',slot,left_kind or '미확인',left or '미확인',right_kind or title or '미확인',right or '미확인')
                 else:
-                    found.append(dict(place=place,slot='가호%d'%slot,worn=left,spare=right,title=title,kind=worn.blessing_kind(title or ''),plus=plus))
-                    LOG.info('가호%d 높은 등급 후보 · %s → %s · %s · +%d',slot,left,right,title,plus)
+                    found.append(dict(place=place,slot='가호%d'%slot,worn=left,spare=right,title=title,kind=right_kind,plus=plus))
+                    LOG.info('가호%d 장착 후보 · %s %s → %s %s · +%d',slot,left_kind,left,right_kind,right,plus)
                 bound.close_window(service,context,'compare')
+            if made:continue
             if not found:break
             row=max(found,key=lambda r:(ORDER.index(r['spare']),rank(r['kind']),r['plus']))
             before=np.asarray(service.capture().hi)[128:176,1068:1116].astype(int)
@@ -332,6 +365,8 @@ def blessings(adapter,service,context,choice,priorities=()):
             changed=float(np.abs(after-before).mean())>12
             LOG.info('가호%d 높은 등급 장착 %s · %s → %s · %s · +%d',slot,'완료' if changed else '결과 미확인',row['worn'],row['spare'],row['title'],row['plus'])
             swaps.append((row['slot'],row['title'],row['worn'],row['spare'],changed))
+            # The best was chosen from every spare, so this slot needs no second look (user: too many repeats).
+            break
     remember(adapter,'blessing',None if swaps or unread else fingerprint)
     return swaps
 
@@ -343,12 +378,15 @@ def run(adapter,context,inputs,kind,choice=None):
     service=TownServices(adapter,context,inputs,market_inventory.INVENTORY_USE_NAMES);service.context=context
     if getattr(service.capture(),'hi',None) is None:return '보류 · 1366x768 화면이 아님'
     if choice is None:choice=settings(adapter.project.root,kind)
-    if not any(choice.get(key) is True for key in CHOICES):return '보류 · 선택한 등급 단계 없음'
+    if choice.get('higher') is not True:return '보류 · 높은 등급 우선 장착 꺼짐'
     label='장비' if kind=='gear' else '가호'
-    LOG.info('%s 높은 등급 장착 시작 · %s',label,' · '.join(f'{a}→{b}' for a,b,key in STEPS if choice.get(key) is True))
+    LOG.info('%s 높은 등급 장착 시작',label)
     from owner_progression import inventory_parts
     initially_open=inventory_parts(service.capture())==(True,True)
     try:
+        if kind=='blessing':
+            # 일괄 획득 first, so blessings made from pieces are owned before any swap (user, 11-06).
+            bound.claim(adapter,context,inputs,leave=False)   # the swaps go on from the same screen
         swaps=gear(adapter,service,context,choice) if kind=='gear' else blessings(adapter,service,context,choice,priorities(adapter.project.root))
     finally:
         context.checkpoint();service.check()
@@ -372,7 +410,7 @@ def settings(root,kind):
     try:document=Store(root,configured_identity(root)).read()
     except (OSError,ValueError,TypeError):return {}
     section=document.get('gear_equip' if kind=='gear' else 'blessing_equip',{})
-    return {key:section.get(key) is True for key in CHOICES}
+    return {'higher':section.get('higher') is True or any(section.get(key) is True for key in LEGACY)}
 
 
 def priorities(root):

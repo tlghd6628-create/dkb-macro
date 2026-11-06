@@ -23,12 +23,14 @@ DEFAULT = {'version': 1, 'recheck_minutes': 20, 'grades': {
     'individual': {}, 'album': {'mode': '조각 등록만'},
     'blessings': {name: {'enabled': False, 'enhance': 49, 'breakthrough': 0} for name in BLESSINGS},
     'energies': {name: {'enabled': False, 'stage': None} for name in ENERGIES},
-    'blessing_equip': {'enabled': True, 'priorities': [], 'normal_to_rare': False, 'rare_to_hero': False},
+    'blessing_equip': {'enabled': True, 'priorities': [], 'higher': False},
     # Higher grade first, by step (owner_upgrade_equip). Each kind has its own time in the timetable.
-    'gear_equip': {'normal_to_rare': False, 'rare_to_hero': False},
+    'gear_equip': {'higher': False},
     # 가호 소환 (owner_blessing_summon): 10회 while ten tickets or more, 1회 for the rest.
     'blessing_summon': {'one': False, 'ten': False}}
-EQUIP_STEPS = (('normal_to_rare', '일반 → 희귀'), ('rare_to_hero', '희귀 → 영웅'))
+# 높은 등급 우선 장착 is one switch now; the per-step ticks it replaced still read as it (owner_upgrade_equip.LEGACY).
+EQUIP_STEPS = (('higher', '높은 등급 우선 장착'),)
+EQUIP_LEGACY = ('normal_to_rare', 'rare_to_hero')
 # A TEST result goes on its own line under its controls, as wide as they are and clipped there. Beside the button a
 # longer text moved 기능 사용 and TEST, and a click meant for the checkbox started a second TEST (pc2 11-06); a box of
 # fixed size beside them widened the page's columns instead.
@@ -120,7 +122,7 @@ def validate(document):
         validate_order(equip.get('priorities'))
     for section in ('blessing_equip','gear_equip'):
         if section in document:
-            if not isinstance(document[section],dict) or any(type(document[section].get(key,False)) is not bool for key,_ in EQUIP_STEPS):
+            if not isinstance(document[section],dict) or any(type(document[section].get(key,False)) is not bool for key in ('higher',)+EQUIP_LEGACY):
                 raise ValueError('높은 등급 우선 장착 설정을 확인해 주세요.')
     if 'blessing_summon' in document:
         summon=document['blessing_summon']
@@ -169,8 +171,10 @@ class Store:
         document.setdefault('blessings',copy.deepcopy(DEFAULT['blessings']))
         document.setdefault('energies',copy.deepcopy(DEFAULT['energies']))
         document.setdefault('blessing_equip',copy.deepcopy(DEFAULT['blessing_equip']))
-        for key,_ in EQUIP_STEPS:document['blessing_equip'].setdefault(key,False)
         document.setdefault('gear_equip',copy.deepcopy(DEFAULT['gear_equip']))
+        for section in ('blessing_equip','gear_equip'):
+            row=document[section]
+            row.setdefault('higher',any(row.get(key) is True for key in EQUIP_LEGACY))
         document.setdefault('blessing_summon',copy.deepcopy(DEFAULT['blessing_summon']))
         return document,revision
 
@@ -387,13 +391,12 @@ class GearSettings:
         result.set('세부설정 창에서 실행해 주세요')
 
     def equip_line(self,parent,kind,section,*,row,columnspan):
-        """높은 등급 우선 장착: one tick per grade step, and its TEST. The time is in the timetable."""
+        """높은 등급 우선 장착: one tick, and its TEST. The time is in the timetable."""
         outer,line=controls_line(parent,row=row,column=0,columnspan=columnspan,sticky='w',pady=(9,3))
-        ttk.Label(line,text='높은 등급 우선 장착').pack(side='left')
         steps={}
         for key,text in EQUIP_STEPS:
             steps[key]=tk.BooleanVar(self.window,value=section.get(key) is True)
-            ttk.Checkbutton(line,text=text,variable=steps[key]).pack(side='left',padx=(10,0))
+            ttk.Checkbutton(line,text=text,variable=steps[key]).pack(side='left')
         result=tk.StringVar(self.window,value='')
         ttk.Button(line,text='TEST',width=6,command=lambda:self.equip_test(kind,result)).pack(side='left',padx=(10,8))
         result_label(outer,result)
@@ -416,7 +419,8 @@ class GearSettings:
             value['individual']=self.individual.export()
             value['album']['mode']=self.album_mode.get()
             steps={key:var.get() for key,var in self.blessing_steps.items()}
-            # The old single switch (the original priority equip, at the old size) follows the steps.
+            # The old single switch (the original priority equip, at the old size) follows it; the old step ticks go.
+            for key in EQUIP_LEGACY:value['blessing_equip'].pop(key,None);value['gear_equip'].pop(key,None)
             value['blessing_equip'].update(enabled=any(steps.values()),**steps,
                                            priorities=collect_rank_fields([v.get() for v in self.blessing_rank]))
             value['gear_equip'].update({key:var.get() for key,var in self.gear_steps.items()})
