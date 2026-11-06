@@ -25,6 +25,23 @@ class Distance(unittest.TestCase):
         self.assertIn(h.hd.real_hit(h.ROW_X,h.ROW_Y0+h.ROW_STEP)[:2],clicks)
         self.assertEqual(self.run_it(['64m'])[0],64)
         self.assertIsNone(self.run_it([])[0])
+    def test_drifted_spot_is_walked_back(self):
+        """pc2 홍짱군 slot 3, 11-07 07:17: 9m off against the cave wall, accepted as already there."""
+        clicks=[];state={'map':False}
+        def key(k):state['map']=True
+        def click(hit):
+            clicks.append(hit[:2])
+            if hit[:2]==h.hd.real_hit(*h.CLOSE)[:2]:state['map']=False
+        service=NS(check=lambda:None,key=key,click_hit=click,capture=lambda:NS(hi=1))
+        walk=[{'text':'걸어가기','rx':1250,'ry':685,'score':.99}]
+        with patch.object(h,'map_open',side_effect=lambda f:state['map']),patch.object(h,'words',return_value=['9m']),             patch.object(h.text,'read',return_value=walk):
+            self.assertEqual(h.distance(service,NS(wait=lambda s:None),3,walk=True),9)
+            self.assertIn(h.hd.real_hit(1250,685)[:2],clicks)
+            clicks.clear();h.distance(service,NS(wait=lambda s:None),3,walk=False)
+            self.assertNotIn(h.hd.real_hit(1250,685)[:2],clicks)
+        with patch.object(h,'map_open',side_effect=lambda f:state['map']),patch.object(h,'words',return_value=['4m']),             patch.object(h.text,'read',return_value=walk):
+            clicks.clear();h.distance(service,NS(wait=lambda s:None),3,walk=True)
+            self.assertNotIn(h.hd.real_hit(1250,685)[:2],clicks)
     def test_slot_from_the_route(self):
         self.assertEqual(h.slot_number(NS(values={'common.potion_and_favorite.slot':'2번','common.potion_and_favorite.source':'저장위치'})),2)
         self.assertIsNone(h.slot_number(NS(values={'common.potion_and_favorite.slot':'2번','common.potion_and_favorite.source':'즐겨찾기'})))

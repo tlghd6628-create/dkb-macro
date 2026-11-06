@@ -437,7 +437,9 @@ def install(gui):
                         from owner_single_preset import resume as preset_return
                         preset_return(adapter,context,inputs)
                         # An open boss range record is restored by the hunt itself once at the saved spot (owner_hunt).
-                    if kind in ('field','dungeon'):
+                    # 제자리 사냥: hunting goes on first, and the overdue jobs come from the hunt's own timetable turns
+                    # (pc2 홍짱군 11-07 07:29: ten jobs ran first and it was not hunting ten minutes later).
+                    if kind in ('field','dungeon') and getattr(adapter,'mode',None)!='auto_mode':
                         from owner_timetable import catch_up_overdue
                         catch_up_overdue(adapter,context,inputs)
                     return ordinary_run(adapter,context,inputs)

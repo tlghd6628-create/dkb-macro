@@ -8,7 +8,8 @@ import owner_hd as hd
 import owner_text as text
 
 LOG=logging.getLogger('project_gui.DKB')
-NEAR=15
+NEAR=15;RANGE=5     # the game's 이동 고정 range: farther than this, walk back before AUTO
+WALK_AREA=(860,630,506,110)   # real: the panel's 걸어가기 beside the distance
 MAP_TITLE=(90,14,100,34)        # real: 세계지도
 PIN=(35,284)                    # real: the saved-location list
 ROW_Y0,ROW_STEP,ROW_X=125,52,180  # real: saved rows 1, 2, ...
@@ -40,19 +41,33 @@ def slot_number(adapter):
     return int(m.group(1)) if m and adapter.values.get('common.potion_and_favorite.source')=='저장위치' else None
 
 
-def distance(service,context,slot):
-    """Metres to saved location slot, read on the map, or None. The map is closed again either way."""
+def distance(service,context,slot,walk=False):
+    """Metres to saved location slot, read on the map, or None. The map is closed again either way.
+    With walk, a spot farther than RANGE and within NEAR is walked to with the panel's 걸어가기 (free)."""
     service.check();service.key(0x4D);context.wait(1.5)
     if not map_open(service.capture()):return None
     try:
         service.click_hit(hd.real_hit(*PIN));context.wait(1.)
         service.click_hit(hd.real_hit(ROW_X,ROW_Y0+ROW_STEP*(slot-1)));context.wait(1.)
         found=[int(m.group(1)) for w in words(service.capture(),DISTANCE) for m in [re.fullmatch(r'(\d{1,4})m',w.replace('O','0').replace('o','0'))] if m]   # 0m read as Om
-        return found[0] if len(found)==1 else None
+        metres=found[0] if len(found)==1 else None
+        if walk and metres is not None and RANGE<metres<=NEAR:press_walk(service,context,metres)
+        return metres
     finally:
         for _ in range(3):
             if not map_open(service.capture()):break
             service.click_hit(hd.real_hit(*CLOSE));context.wait(1.)
+
+
+def press_walk(service,context,metres):
+    """The anchor drifted: each AUTO re-enable after an in-place job set it where the character stood, and 9m off
+    against the cave wall it killed nothing (pc2 홍짱군 slot 3, 11-07 07:17). Walk back; 걸어가기 costs nothing."""
+    rows=[r for r in text.read(None,service.capture(),WALK_AREA,scale=2,minimum=.6) if '걸어' in text.clean(r['text'])]
+    if not rows:
+        LOG.info('저장위치 %dm · 걸어가기 버튼 미확인 · 그 자리 유지',metres);return False
+    LOG.info('저장위치에서 %dm 벗어남 · 걸어가기',metres)
+    service.click_hit(hd.real_hit(rows[0]['rx'],rows[0]['ry']));context.wait(min(2+metres/3,8))
+    return True
 
 
 def already_there(adapter,context,inputs):
@@ -66,7 +81,7 @@ def already_there(adapter,context,inputs):
     from owner_town_return import town_pair
     if town_pair(adapter,context,inputs):return False
     if still_hunting(adapter,context,service):return True
-    try:metres=distance(service,context,slot)
+    try:metres=distance(service,context,slot,walk=True)
     except Exception as exc:
         LOG.info('저장위치 거리 확인 보류 · %s',type(exc).__name__);return False
     if metres is None or metres>NEAR:
