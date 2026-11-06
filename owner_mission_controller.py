@@ -183,6 +183,26 @@ def restart_idle_quest(ui,idle):
    LOG.info('임무 자리 정체 · 추적창 제목 누름 · %s',head['word'])
  return True
 
+POTIONS_ENOUGH=50
+POTION_SLOT=(556,712,66,34)   # real: the Ctrl+1 quick slot's count, '100' at (582,729) and '523' at (586,732)
+
+
+def potions_held(adapter,context,inputs):
+ """The count on the potion quick slot, or None when it does not read as a number on two looks."""
+ import re
+ try:
+  from project_adapter.town_services import TownServices
+  from owner_text import read,clean
+  service=TownServices(adapter,context,inputs,[]);seen=[]
+  for _ in range(2):
+   frame=service.capture()
+   if getattr(frame,'hi',None) is None:return None
+   nums=[int(clean(r['text'])) for r in read(None,frame,POTION_SLOT,scale=3,minimum=.5) if re.fullmatch(r'\d{1,4}',clean(r['text']))]
+   seen.append(max(nums) if nums else None);context.wait(.2)
+  return seen[0] if seen[0] is not None and seen[0]==seen[1] else None
+ except Exception:return None
+
+
 def guide_skill(ui):
  """[길잡이] 도술 장착N asks for a skill learned and worn: walking does nothing (pc2 q002-q011, lv9-18, every time).
  The skill window's 모두 배우기 learns it and the game wears it in the next free slot. Once per tracker row."""
@@ -270,7 +290,11 @@ def prepare(adapter,context,inputs):
   # belong to the existing inventory appointment, after quest AUTO is active.
   # Its durable incomplete/result-only retry is maintained by the timetable.
   if adapter.values.get('common.potion_and_favorite.enabled'):
-   if adapter.run_potion_purchase(context,inputs) is False:LOG.info('시작 물약 보충 보류 · 기존 보유 물약으로 퀘스트 진행')
+   held=potions_held(adapter,context,inputs)
+   if held is not None and held>=POTIONS_ENOUGH:
+    # Each F1 walked to town for potions with 100 in the slot (pc1 22:52, a minute each time).
+    LOG.info('시작 물약 보충 생략 · 단축칸 %d개 · 퀘스트 바로 진행',held)
+   elif adapter.run_potion_purchase(context,inputs) is False:LOG.info('시작 물약 보충 보류 · 기존 보유 물약으로 퀘스트 진행')
   defer(adapter,context,inputs);adapter._owner_initial_context=context
  return state(adapter)
 
@@ -392,7 +416,13 @@ def run(adapter,context,inputs):
      # list reading before every hunt). The hunt's own rechecks (power growth, the story timer) are unchanged.
      key=None
      LOG.info('최근 임무 확인에서 진행 가능 임무 없음 · 같은 전투력 · 목록 재확인 없이 사냥')
-    else:key=ui.pick(book,requested,progress.power)
+    else:
+     # A guide step the tracker shows is done first, as a person would: [길잡이] 도술 장착 held the main quest and the
+     # list read fell back to side stories for minutes (pc1 22:54).
+     if ui.normal():
+      try:guide_skill(ui)
+      except Pending as exc:LOG.info('길잡이 도술 장착 보류 · %s',exc)
+     key=ui.pick(book,requested,progress.power)
     if key is not None and book.item.get('story_full_hunt',{}).get('status')=='waiting':
      book.item['story_full_hunt'].update(status='resumed',resumed_at=time.time());book.commit()
     boundary=not previous_active or book.item['quests'].get(previous_active,{}).get('completed') is True
