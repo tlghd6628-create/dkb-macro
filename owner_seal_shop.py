@@ -243,8 +243,10 @@ class Run:
         done={}
         for name in DANS:
             for _ in range(MAX_PASSES):
-                counts=dan_counts(self.frame())
-                if name not in counts:raise RuntimeError(name+' 수량 판독 실패')
+                counts=self.counts(name)
+                if name not in counts:
+                    # A lone red 0 is the read OCR misses most (19:20); not unsealing is the safe side.
+                    LOG.info('단 봉인해제 · %s 수량 판독 안 됨 · 건너뜀',name);break
                 count,x=counts[name]
                 if count<=0:break
                 self.tap(x,ORB_Y,1.)
@@ -257,11 +259,19 @@ class Run:
                     frame=self.until(lambda f:self.word_at(f,RESULT,word) is not None,10)
                     if frame is None:raise RuntimeError('봉인 해제 결과 '+word+' 미확인')
                     row=self.word_at(frame,RESULT,word);self.tap(round(row['rx']),round(row['ry']),1.5)
-                if self.until(lambda f:name in dan_counts(f),6) is None:raise RuntimeError('봉인 해제 화면 복귀 미확인')
+                if self.until(lambda f:self.word_at(f,UNSEAL_BUTTON,'봉인해제') is not None,8) is None:raise RuntimeError('봉인 해제 화면 복귀 미확인')
                 done[name]=done.get(name,0)+min(count,100)
                 LOG.info('단 봉인해제 · %s %d개',name,min(count,100))
+                if count<=100:break  # the pass took all there was
             else:raise RuntimeError(name+' 봉인 해제 반복 한도')
         return done
+
+    def counts(self,name,tries=3):
+        for _ in range(tries):
+            found=dan_counts(self.frame())
+            if name in found:return found
+            self.context.wait(.4)
+        return found
 
     def drag_list(self,up):
         top,bottom=LIST_DRAG;a,b=(bottom,top) if up else (top,bottom)
