@@ -208,6 +208,8 @@ def finish_local_ui(gui):
     install_seal_shop(gui)
     from owner_boss_purple import install as install_boss_purple
     install_boss_purple(gui)
+    from owner_clan_absent import install as install_clan_absent
+    install_clan_absent(gui)
     from owner_hunt_settings_candidate import install as install_hunt_settings
     install_hunt_settings(gui)
     from owner_program_runtime import install as install_program_runtime
