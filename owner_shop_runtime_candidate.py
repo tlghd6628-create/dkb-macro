@@ -540,6 +540,26 @@ def buy_one(adapter,context,inputs,item,shop):
 
 def buy_remote_one(adapter,context,inputs,item):return buy_one(adapter,context,inputs,item,'remote')
 
+def _day_path(root):return Path(root)/'settings/owner-shop-day.json'
+
+
+def _shop_day(root,profile):
+ """The item bought on this game day for this character, or None."""
+ from owner_timetable import now,day_at
+ try:row=json.loads(_day_path(root).read_text(encoding='utf-8')).get(profile) or {}
+ except (OSError,ValueError):return None
+ return row.get('item') if row.get('day')==day_at(now()).isoformat() else None
+
+
+def _mark_shop_day(root,profile,item):
+ from owner_timetable import now,day_at,save
+ path=_day_path(root)
+ try:data=json.loads(path.read_text(encoding='utf-8'))
+ except (OSError,ValueError):data={}
+ data[profile]={'day':day_at(now()).isoformat(),'item':item}
+ save(path,data)
+
+
 def dispatch_configured(adapter,context,inputs):
  """Run selected items only from the shop appointment on the same worker."""
  from owner_schedule_priority import hold_reason
@@ -558,10 +578,16 @@ def dispatch_configured(adapter,context,inputs):
  route='remote' if paid(root) else 'town'
  names={(r['shop'],r['name']) for r in selected}
  supported=[r for r in selected if r['shop']==route or (('remote' if r['shop']=='town' else 'town',r['name']) not in names)]
+ # User 11-06: the shop's items are weekly, so one item a day, the first in the user's order that can still be bought.
+ today=_shop_day(root,profile)
+ if today:
+  LOG.info('상점 구매 · 오늘 이미 %s 구매 · 하루 한 품목',today)
+  return {'status':'processed','held_items':[],'confirmed':0,'retryable':False,'reason':''}
  holds=[];confirmed=0
  visit=_Visit();adapter._owner_shop_visit=visit
  try:
   for setting in supported:
+   if confirmed:break
    # Bound the native weekly limit; each item gets its own fresh recheck,
    # durable intent and receipt, and the same input thread can yield to Stop.
    for _ in range(50):
@@ -579,6 +605,7 @@ def dispatch_configured(adapter,context,inputs):
     if status=='settled':continue
     if status!='confirmed':return result
     confirmed+=result.get('quantity',1)
+    _mark_shop_day(root,profile,setting['name'])
     if result.get('finished'):break
    else:
     LOG.warning('상점 품목 50회 제한 · %s',setting['name']);holds.append(setting['name'])
