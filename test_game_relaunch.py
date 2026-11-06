@@ -33,7 +33,7 @@ class Launcher(unittest.TestCase):
         game=S(candidates=lambda:[] if games_after is None or clock[0]<games_after else [1])
         gui=S(official_launcher=S(window=Win()),game_window=game)
         ctx=S(checkpoint=lambda:None,wait=lambda s:clock.__setitem__(0,clock[0]+s))
-        got=gr.wait_launcher_ready(gui,ctx,clock=lambda:clock[0],rows=lambda:next(seen),press=pressed.append)
+        got=gr.wait_launcher_ready(gui,ctx,clock=lambda:clock[0],rows=lambda:next(seen),press=pressed.append,front=None)
         return got,pressed,clock[0]
     def test_waits_through_an_update_then_ready(self):
         got,pressed,spent=self.run_it([[row('업데이트')],[row('12%')],[row('80%')],[row('게임 실행')]])
@@ -47,7 +47,7 @@ class Launcher(unittest.TestCase):
         gui=S(official_launcher=S(window=Win()),game_window=S(candidates=lambda:[]))
         ctx=S(checkpoint=lambda:None,wait=lambda s:clock.__setitem__(0,clock[0]+s))
         with self.assertRaises(RuntimeError):
-            gr.wait_launcher_ready(gui,ctx,clock=lambda:clock[0],rows=lambda:[row('50%')],press=lambda r:None)
+            gr.wait_launcher_ready(gui,ctx,clock=lambda:clock[0],rows=lambda:[row('50%')],press=lambda r:None,front=None)
 
 class Watching(unittest.TestCase):
     def gui(self,games=(),status='stopped'):
@@ -60,9 +60,9 @@ class Watching(unittest.TestCase):
     def test_error_end_without_a_game_relaunches_spaced_and_capped(self):
         gui,calls=self.gui();w=gr.Watch(gui)
         self.record(w,"자동 동작 종료: (1400, 'ClientToScreen', '잘못된 창 핸들입니다.')")
-        self.assertTrue(w.check(now=1000));self.assertFalse(w.check(now=1100))
-        for t in (1400,1800,2200):self.assertTrue(w.check(now=t))
-        self.assertFalse(w.check(now=2600));self.assertEqual(len(calls),4)
+        self.assertTrue(w.check(now=1000));self.assertFalse(w.check(now=1050))
+        for t in (1100,1200,1300,1400,1500):self.assertTrue(w.check(now=t))
+        self.assertFalse(w.check(now=1600));self.assertEqual(len(calls),6)
     def test_user_stop_and_present_game_never_relaunch(self):
         gui,calls=self.gui();w=gr.Watch(gui)
         self.record(w,'자동 동작 종료: x');self.record(w,'단축키 F3 · stop');self.assertFalse(w.check(now=1))
