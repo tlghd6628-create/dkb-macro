@@ -84,6 +84,20 @@ def apply_fallback(adapter,context,inputs):
  adapter._owner_hunt_fallback_due=False
  return True
 
+def clan_help(adapter,context,inputs):
+ """문파 도움 while hunting too: it was only tried in the quest loop, so 제자리 사냥 left it lit (user 11-06)."""
+ try:
+  ui=getattr(adapter,'_owner_hunt_help_ui',None)
+  if ui is None or ui.context is not context or ui.inputs is not inputs:
+   from owner_mission_ui import MissionUI
+   ui=MissionUI(adapter,context,inputs);adapter._owner_hunt_help_ui=ui
+  from owner_clan_field_help import attempt
+  return attempt(ui)
+ except Exception as exc:
+  from biol_base.session import Cancelled
+  if isinstance(exc,Cancelled):raise
+  __import__('logging').getLogger('project_gui.DKB').info('문파도움 확인 보류 · %s',str(exc)[:80]);return False
+
 @contextmanager
 def active_hunt(adapter,context,inputs):
  old=getattr(LOCAL,'owner',None);LOCAL.owner=(adapter,context,inputs)
@@ -101,6 +115,7 @@ def install(gui):
   def tick(*args,**kwargs):
    context.checkpoint()
    apply_fallback(adapter,context,inputs)
+   clan_help(adapter,context,inputs)
    return periodic(*args,**kwargs) if periodic else True
   with active_hunt(adapter,context,inputs):return original(adapter,context,periodic=tick,inputs=inputs)
  reservations.wait_reservations=waiting

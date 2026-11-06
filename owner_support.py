@@ -206,6 +206,8 @@ def finish_local_ui(gui):
     install_dialogue(gui)
     from owner_seal_shop import install as install_seal_shop
     install_seal_shop(gui)
+    from owner_boss_purple import install as install_boss_purple
+    install_boss_purple(gui)
     from owner_hunt_settings_candidate import install as install_hunt_settings
     install_hunt_settings(gui)
     from owner_program_runtime import install as install_program_runtime
