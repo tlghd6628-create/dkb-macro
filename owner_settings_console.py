@@ -14,7 +14,7 @@ def category(key):
  if key.startswith('common.daily_restart.') or key in ('common.potion_and_favorite.source','common.potion_and_favorite.slot'):return None
  if key.startswith(('common.skill_preset.','auto_schedule.field_boss.skill_preset.','auto_schedule.boss_raid.skill_preset.')):return '기본 설정'
  if key.startswith(('auto_schedule.clan_boss_request.','auto_rewards.clan_help.','auto_growth.clan_cooperative_training.')):return '문파'
- if key in ('auto_rewards.inventory_use.enabled','auto_rewards.seal_release.enabled'):return '아이템 사용'
+ if key in ('auto_rewards.inventory_use.enabled','auto_rewards.seal_release.enabled') or key.startswith('auto_rewards.inventory_use.boxes.'):return '아이템 사용'
  if key=='auto_rewards.blessing.enabled':return '가호'
  if key.startswith('auto_growth.spirit_training.') or key=='inner_path.enabled':return '수련'
  if key.startswith(('auto_schedule.','auto_challenge.')):return '비경·보스'

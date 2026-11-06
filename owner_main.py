@@ -260,6 +260,8 @@ def install(gui):
         add_falling_limit(schema);install_falling_guard()
         from owner_disassembly_settings import add_fields as add_disassembly_fields
         add_disassembly_fields(schema)
+        from owner_item_boxes import add_fields as add_box_fields
+        add_box_fields(schema)
         schema['modes']=[m for m in schema['modes'] if m['id'] in ('main_quest','sub_quest','auto_mode')]
         for mode in schema['modes']:
             if mode['id']=='sub_quest':mode['label']='서사퀘 진행'

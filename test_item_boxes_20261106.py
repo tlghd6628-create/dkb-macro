@@ -1,0 +1,29 @@
+"""Per-box switches under 아이템 사용, from level 30. Fake values; never a game test."""
+from pathlib import Path
+import sys,unittest
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+import bootstrap
+import owner_item_boxes as b
+import owner_equipment_boxes as e
+
+
+class Switches(unittest.TestCase):
+    def test_default_on_master_first(self):
+        self.assertTrue(b.enabled({b.MASTER:True},'weapon'))
+        self.assertFalse(b.enabled({b.MASTER:True,b.key('weapon'):False},'weapon'))
+        self.assertFalse(b.enabled({b.MASTER:False},'weapon'))
+    def test_plan_from_level_30_by_switch(self):
+        worn={'무기':False,'팔찌':False,'반지':True}
+        self.assertEqual(e.plan(worn,29,None,{b.MASTER:True})[0],[])
+        items=e.plan(worn,30,None,{b.MASTER:True})[0]
+        self.assertIn(e.WEAPON,items);self.assertIn(e.ACCESSORY,items)
+        items=e.plan(worn,30,None,{b.MASTER:True,b.key('weapon'):False,b.key('accessory'):False})[0]
+        self.assertEqual(items,[])
+    def test_fields_added_after_the_master(self):
+        schema={'tabs':[{'groups':[{'fields':[{'id':b.MASTER,'label':'아이템 사용','default':False}]}]}]}
+        b.add_fields(schema)
+        ids=[f['id'] for f in schema['tabs'][0]['groups'][0]['fields']]
+        self.assertEqual(ids,[b.MASTER]+[b.key(c) for c,_ in b.BOXES])
+
+
+if __name__=='__main__':unittest.main()

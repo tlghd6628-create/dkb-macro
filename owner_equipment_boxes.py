@@ -77,13 +77,17 @@ def agree(first,second):
     a,b=inspect(first),inspect(second)
     return {part:a[part] if a[part] is b[part] else None for part in SLOTS}
 
-def plan(worn,level=None,rare_weapon=None):
+def plan(worn,level=None,rare_weapon=None,values=None):
     items=[]
+    # User 11-06: boxes open from level 30, each by its own switch.
+    from owner_item_boxes import enabled
+    on=(lambda code:enabled(values,code)) if values is not None else (lambda code:True)
+    if type(level) is not int or level<30:return items,[],[]
     # The coupon rare fan is a level-30 task; unknown level never opens it.
-    if (worn.get('무기') is False or (worn.get('무기') is True and rare_weapon is False)) and type(level) is int and level>=30:items.append(WEAPON)
+    if on('weapon') and (worn.get('무기') is False or (worn.get('무기') is True and rare_weapon is False)) and type(level) is int and level>=30:items.append(WEAPON)
     armor=[p for p in ARMOR_PARTS if worn.get(p) is False]
     # The accessory box opens on the same turn as the rare fan, under the same known-level rule.
-    accessories=[p for p in ('팔찌','반지','목걸이','귀걸이') if worn.get(p) is False] if type(level) is int and level>=30 else []
+    accessories=[p for p in ('팔찌','반지','목걸이','귀걸이') if worn.get(p) is False] if type(level) is int and level>=30 and on('accessory') else []
     if armor:items.append(ARMOR)
     if accessories:items.append(ACCESSORY)
     return items,armor,accessories
@@ -124,6 +128,10 @@ def close_inventory(service):
 
 def energy_after_inventory(adapter,context,inputs,skip_before):
     """Reuse only a genuinely admitted, completed native inventory opportunity."""
+    from owner_item_boxes import key as box_key
+    # This runs after the inventory routine, which the master switch already admitted: only the box's own switch.
+    if (getattr(adapter,'values',None) or {}).get(box_key('energy'),True) is False:
+        LOG.info('기운 선택상자 · 상자 스위치 꺼짐');return 'switch_off'
     if getattr(adapter,'_owner_inventory_skip_generation',0)!=skip_before:
         LOG.info('기운 선택상자 보류 · 인벤토리 일정이 건너뛰어짐')
         return 'inventory_skipped'
@@ -171,7 +179,7 @@ def install(gui):
         first=service.capture();context.wait(.15);service.check();second=service.capture()
         worn=agree(first,second)
         rare_weapon=paired_rare_weapon(Path(adapter.project.root)/'profiles/DKB',first,second) if worn.get('무기') is True else None
-        items,armor,accessories=plan(worn,level,rare_weapon)
+        items,armor,accessories=plan(worn,level,rare_weapon,adapter.values)
         adapter._owner_worn_equipment={'context':context,'time':time.monotonic(),'parts':worn,'rare_weapon':rare_weapon}
         LOG.info('상자 사전 점검 · 장착=%s · 빈 칸=%s · 판독 보류=%s',
           ','.join(p for p,v in worn.items() if v is True) or '없음',

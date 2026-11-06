@@ -427,12 +427,14 @@ def install(gui):
      try:
       context.checkpoint()
       try:
-       result_scan=scan_learned(adapter,context,inputs)
+       from owner_item_boxes import enabled as box_on
+       result_scan=scan_learned(adapter,context,inputs) if box_on(adapter.values,'skill_choice') else 'switch_off'
        if result_scan=='unknown':
         from owner_coupon_skills_candidate import process
         process(adapter,context,inputs)
       except (Pending,OSError,ValueError) as exc:LOG.info('선택상자 도술 확인 보류 · %s',str(exc))
-      try:open_chosen_manual(adapter,context,inputs)
+      try:
+       if box_on(adapter.values,'manual'):open_chosen_manual(adapter,context,inputs)
       except (Pending,OSError,ValueError) as exc:LOG.info('요령서 상자 확인 보류 · %s',str(exc))
      finally:priority.feature=previous
     return result
