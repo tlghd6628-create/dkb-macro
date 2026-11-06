@@ -118,6 +118,11 @@ def tick(adapter,context,inputs):
     from owner_job_timing import long_ok,LONG_REWARDS
     long=long_ok(adapter)
     selected=[key for key in TARGETS if PATHS[key] is not None and adapter.values.get(key) is True and (long or key not in LONG_REWARDS)]
+    # While growing (below level 40) a reward runs only when its red dot brought it forward (owner_growth_signals).
+    from owner_job_timing import growing
+    if growing(adapter):
+        signalled=getattr(adapter,'_owner_reward_signal',None) or {}
+        selected=[key for key in selected if time.time()-signalled.get(key,-1e9)<1800]
     if not selected:return False
     if reservation_hold(adapter.project.root,adapter.values):return False
     try:book=ledger(adapter);selected=[key for key in selected if book.due(key,time.time())]

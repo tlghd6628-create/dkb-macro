@@ -53,6 +53,9 @@ def bring_reward(adapter,name):
     key=REWARD_KEYS[name]
     if adapter.values.get(key) is not True:return []
     from owner_reward_cycle import ledger
+    signalled=getattr(adapter,'_owner_reward_signal',None)
+    if signalled is None:signalled=adapter._owner_reward_signal={}
+    signalled[key]=time.time()
     book=ledger(adapter);row=book.rows.get(key)
     if isinstance(row,dict) and row.get('state')!='running':
         row['at']=0;row.pop('rechecks',None)

@@ -177,9 +177,35 @@ def restart_idle_quest(ui,idle):
   # Only this quest's own row: another title there would walk off to another quest, past its purchase or emote
   # handling (pc2 17:07, 메마른 늪 walked to while 도술 구매 was selected).
   head=tracker_title(ui.frame(),ui.adapter.mode,getattr(ui.adapter,'_owner_active_title',None))
+  if guide_skill(ui):return True
   if head:
    click(ui,(round(head['rx']),round(head['ry'])),1.)
    LOG.info('임무 자리 정체 · 추적창 제목 누름 · %s',head['word'])
+ return True
+
+def guide_skill(ui):
+ """[길잡이] 도술 장착N asks for a skill learned and worn: walking does nothing (pc2 q002-q011, lv9-18, every time).
+ The skill window's 모두 배우기 learns it and the game wears it in the next free slot. Once per tracker row."""
+ from owner_emote_real import words,TRACKER
+ rows=words(ui.frame(),TRACKER,.5)
+ if not any('도술장착' in r['word'] for r in rows):return False
+ key=tuple(r['word'] for r in rows if '도술장착' in r['word'] or '장착하기' in r['word'])
+ if getattr(ui.adapter,'_owner_guide_skill',None)==key:return False
+ ui.adapter._owner_guide_skill=key
+ from owner_skill_ui import SkillUI
+ skills=SkillUI(ui.adapter,ui.context,ui.inputs)
+ try:
+  pressed=skills.learn_all()
+  if not pressed:
+   # pc2 q003: the first one shows only the row's own 배우기 at the top of the list, real (1226,160).
+   from owner_skill_ui import skill_screen,Pending as SkillPending
+   try:
+    button=skills.word('배우기',(730,75,165,50),minimum=.85)
+    skills.click(button['x'],button['y'],skill_screen);ui.context.wait(.8)
+    skills.click_word('확인',(430,290,112,55),lambda f:True,minimum=.85);ui.context.wait(1.2);pressed=1
+   except SkillPending:pass
+  LOG.info('길잡이 도술 장착 · 배우기 %d회 · %s',pressed,' '.join(key))
+ finally:skills.close_known()
  return True
 
 def quest_range(adapter,context,inputs):
