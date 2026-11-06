@@ -33,6 +33,11 @@ class Tracker(unittest.TestCase):
         with patch.object(e,'words',return_value=rows):
             self.assertEqual(e.tracker_title(NS(hi=1),'main_quest')['ry'],153);self.assertEqual(e.tracker_title(NS(hi=1),'sub_quest')['ry'],247)
         with patch.object(e,'words',return_value=rows[:1]):self.assertIsNone(e.tracker_title(NS(hi=1),'main_quest'))
+    def test_only_the_selected_quest_row(self):
+        rows=[row('①[첫걸음]도술구매',1170,153),row('①[외전]메마른늪의여흘1',1170,247)]
+        with patch.object(e,'words',return_value=rows):
+            self.assertEqual(e.tracker_title(NS(hi=1),'sub_quest','[첫걸음] 도술 구매')['ry'],153)
+            self.assertIsNone(e.tracker_title(NS(hi=1),'sub_quest','[외전] 호랑이의 영혼'))
 
 
 class Run(unittest.TestCase):

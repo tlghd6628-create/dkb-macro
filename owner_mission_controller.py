@@ -174,7 +174,9 @@ def restart_idle_quest(ui,idle):
   # At 1366 the re-press alone left the character standing; the quest's title in the tracker walked it on (pc1 13:40,
   # pc2 lv9). Pressed after the re-press, on the row of this mode's quest.
   from owner_emote_real import tracker_title,click
-  head=tracker_title(ui.frame(),ui.adapter.mode)
+  # Only this quest's own row: another title there would walk off to another quest, past its purchase or emote
+  # handling (pc2 17:07, 메마른 늪 walked to while 도술 구매 was selected).
+  head=tracker_title(ui.frame(),ui.adapter.mode,getattr(ui.adapter,'_owner_active_title',None))
   if head:
    click(ui,(round(head['rx']),round(head['ry'])),1.)
    LOG.info('임무 자리 정체 · 추적창 제목 누름 · %s',head['word'])
@@ -438,6 +440,7 @@ def run(adapter,context,inputs):
      read_power(adapter,context,inputs);adapter.mode=requested;continue
     row=book.item['quests'][key];adapter.mode=row['mode'];progress.begin_work(adapter.mode)
     LOG.info('임무 탭 선택 · %s · %s · 전투력=%s',adapter.mode,row['title'],progress.power)
+    adapter._owner_active_title=row['title']
     from owner_quest_purchase import execute as quest_purchase
     if quest_purchase(ui,book,key):continue
     if not restored:ui.start_selected()

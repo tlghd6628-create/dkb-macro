@@ -40,10 +40,16 @@ def requirement(frame,title):
     return None
 
 
-def tracker_title(frame,mode):
-    """The tracker's row of the running quest: a [N장] title for the main quest, else the first other [..] title."""
+def tracker_title(frame,mode,title=None):
+    """The tracker's row of the running quest: with its title known, only the row that reads as that title; else a
+    [N장] title for the main quest, or the first other [..] title."""
     rows=sorted(words(frame,TRACKER,.5),key=lambda r:r['ry'])
     titled=[r for r in rows if '[' in r['word'] and ']' in r['word']]
+    if title:
+        from difflib import SequenceMatcher
+        want=text.clean(title).lstrip('!①')
+        near=[r for r in titled if SequenceMatcher(None,r['word'].lstrip('!①'),want).ratio()>=.8]
+        return near[0] if len(near)==1 else None
     main=[r for r in titled if re.search(r'\d+장\]',r['word'])]
     if mode=='main_quest':return main[0] if main else None
     others=[r for r in titled if r not in main]
