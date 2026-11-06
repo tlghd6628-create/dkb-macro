@@ -29,7 +29,7 @@ TITLE=(85,12,160,38)
 TAB_UNSEAL=(20,68,145,34);TAB_SHOP=(162,68,145,34)
 SKIP_BOX=(24,723,22,22);SKIP_WORD=(48,720,100,28)
 ORB_ROW=(300,598,770,44);ORB_Y=548
-AMOUNT=(610,646,150,28);UNSEAL_BUTTON=(640,688,140,32);RESULT=(590,700,190,46)
+AMOUNT=(610,646,150,28);BUTTON_COUNT=(570,689,90,28);UNSEAL_BUTTON=(640,688,140,32);RESULT=(590,700,190,46)
 BALANCE=(595,14,60,30)
 LIST=(15,112,290,636);LIST_X=160;LIST_DRAG=(660,180)
 POPUP_TITLE=(590,255,190,32);POPUP_COUNT=(630,384,80,28);POPUP_MAX=(777,397);POPUP_PLUS=(747,397)
@@ -252,9 +252,15 @@ class Run:
                 self.tap(x,ORB_Y,1.)
                 # The game fills the amount itself (all held, at most 100); that figure is the pass, since an 8
                 # under the orb read as 7 here (19:27) and all of it goes anyway.
-                frame=self.frame();amount=[number(r['word']) for r in words(frame,AMOUNT) if number(r['word'])]
-                if len(amount)!=1 or not 1<=amount[0]<=100:raise RuntimeError('%s 수량 판독 %s'%(name,amount))
-                count=amount[0]
+                # A lone digit can go unread in one place (영기단 5, 19:43): the button repeats the amount, and the
+                # count under the orb is the last word.
+                frame=self.frame();amount=None
+                for box in (AMOUNT,BUTTON_COUNT):
+                    read=[number(r['word']) for r in words(frame,box,.4) if number(r['word'])]
+                    if len(read)==1 and 1<=read[0]<=100:amount=read[0];break
+                if amount is None and count<100:amount=count
+                if amount is None:raise RuntimeError('%s 수량 판독 실패'%name)
+                count=amount
                 button=self.word_at(frame,UNSEAL_BUTTON,'봉인해제')
                 if button is None:raise RuntimeError('봉인 해제 버튼 미확인')
                 self.tap(round(button['rx']),round(button['ry']),1.5)
