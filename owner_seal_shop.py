@@ -250,8 +250,11 @@ class Run:
                 count,x=counts[name]
                 if count<=0:break
                 self.tap(x,ORB_Y,1.)
+                # The game fills the amount itself (all held, at most 100); that figure is the pass, since an 8
+                # under the orb read as 7 here (19:27) and all of it goes anyway.
                 frame=self.frame();amount=[number(r['word']) for r in words(frame,AMOUNT) if number(r['word'])]
-                if amount!=[min(count,100)]:raise RuntimeError('%s 수량 %s · 기대 %d'%(name,amount,min(count,100)))
+                if len(amount)!=1 or not 1<=amount[0]<=100:raise RuntimeError('%s 수량 판독 %s'%(name,amount))
+                count=amount[0]
                 button=self.word_at(frame,UNSEAL_BUTTON,'봉인해제')
                 if button is None:raise RuntimeError('봉인 해제 버튼 미확인')
                 self.tap(round(button['rx']),round(button['ry']),1.5)
@@ -260,9 +263,9 @@ class Run:
                     if frame is None:raise RuntimeError('봉인 해제 결과 '+word+' 미확인')
                     row=self.word_at(frame,RESULT,word);self.tap(round(row['rx']),round(row['ry']),1.5)
                 if self.until(lambda f:self.word_at(f,UNSEAL_BUTTON,'봉인해제') is not None,8) is None:raise RuntimeError('봉인 해제 화면 복귀 미확인')
-                done[name]=done.get(name,0)+min(count,100)
-                LOG.info('단 봉인해제 · %s %d개',name,min(count,100))
-                if count<=100:break  # the pass took all there was
+                done[name]=done.get(name,0)+count
+                LOG.info('단 봉인해제 · %s %d개',name,count)
+                if count<100:break  # the pass took all there was
             else:raise RuntimeError(name+' 봉인 해제 반복 한도')
         return done
 
