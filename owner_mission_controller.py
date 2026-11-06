@@ -518,6 +518,8 @@ def run(adapter,context,inputs):
       # old power may predate a long quest and is not a valid failure baseline.
       held=book.death(key,None)
       LOG.warning('개별 임무 사망 · %s · %d회 · %s',row['title'],row['deaths'],'전투력 15% 성장까지 보류' if held else '같은 임무 재시도')
+      from owner_job_timing import after_death
+      after_death(adapter)
       break
      if result in ('QUEST_NEXT_MODE','STALLED_SKIPPED','QUEST_PROGRESS_REPEAT_SKIPPED','BOSS_TIMEOUT_RECOVERED'):
       if result=='STALLED_SKIPPED' or getattr(LOCAL,'stalled',None)==key:
@@ -545,7 +547,10 @@ def run(adapter,context,inputs):
      while not ui.normal() and time.monotonic()<end:
       context.checkpoint();step(runner,context,scene_changes);context.wait(.2)
      if not ui.normal():raise Pending('임무 경계 후 일반 필드 확인 필요')
-    safe_jobs(adapter,context,inputs,boundary=False)
+    from owner_job_timing import boundary as quest_boundary,arrow_check
+    with quest_boundary():
+     arrow_check(adapter,context,inputs)
+     safe_jobs(adapter,context,inputs,boundary=False)
    except ResumeWork:
     LOCAL.active=None
     adapter._owner_restore_story_once=True

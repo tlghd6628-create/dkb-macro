@@ -1019,6 +1019,8 @@ def post_equip_growth(adapter,context,inputs,plan):
     from owner_equipment_upgrade_candidate import Journal,Hold
     from owner_gear_settings_candidate import Store
     if plan.values.get('auto_growth.equipment.enabled') is not True:return False
+    from owner_job_timing import long_ok
+    if not long_ok(adapter):return False
     if clock.monotonic()<getattr(adapter,'_owner_post_equip_retry_at',0):return False
     root=adapter.project.root
     try:
@@ -1072,14 +1074,10 @@ def idle_once(adapter,context,inputs):
         if navigation_open(ui):return False
     plan=planner(adapter);due=plan.due()
     if not due:return post_equip_growth(adapter,context,inputs,plan)
-    job=due[0]
-    if (job.key=='gear' and plan.state[job.key].get('growth_recheck')) or (job.key in EQUIP_JOBS and plan.state[job.key].get('equip_recheck')):
-        # A repeat check waits for the hunt or a walk, like the growth recheck: it never breaks into a quest step.
-        from owner_task_flow import LOCAL as task
-        import time as clock
-        observed=getattr(task,'quest_state',None)
-        moving=bool(observed and observed[1]=='auto_move' and 0<=clock.monotonic()-observed[2]<5)
-        if adapter.mode!='auto_mode' and not moving:return False
+    # In a quest only short jobs run on the way; long ones wait for its boundary or the hunt (owner_job_timing).
+    from owner_job_timing import pick
+    job=pick(adapter,due)
+    if job is None:return False
     if plan.reason(job.key):return False
     old_values=adapter.values;adapter.values=dict(plan.values)
     try:

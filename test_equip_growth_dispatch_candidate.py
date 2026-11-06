@@ -13,7 +13,10 @@ class GrowthDispatchTests(unittest.TestCase):
   journal=NS(path=NS(exists=lambda:True),growth_request=lambda:{'slot':'무기','growth_request_id':'req'},mark_growth_dispatched=saved.append)
   ctx=NS(checkpoint=lambda:None)
   with patch.object(owner_hunt_rules_candidate,'configured_identity',return_value='server'),patch.object(owner_progression,'state',return_value=progress),patch.object(owner_equipment_upgrade_candidate,'Journal',return_value=journal),patch.object(owner_gear_settings_candidate,'Store',return_value=NS(read=lambda:{'grades':{'희귀':{'enabled':True}}})),patch.object(timetable,'busy_windows',return_value=[]),patch.object(timetable,'invoke',side_effect=lambda a,*args:seen.append(dict(a.values))):
-   self.assertTrue(timetable.post_equip_growth(adapter,ctx,None,plan))
+   # 11-06: in a quest the follow-up growth waits for the quest's boundary (owner_job_timing).
+   self.assertFalse(timetable.post_equip_growth(adapter,ctx,None,plan))
+   import owner_job_timing
+   with owner_job_timing.boundary():self.assertTrue(timetable.post_equip_growth(adapter,ctx,None,plan))
   self.assertEqual(saved,['req']);self.assertEqual(adapter.values,{'original':'preserved'})
   self.assertTrue(seen[0]['auto_growth.equipment.enabled']);self.assertFalse(seen[0]['auto_growth.blessing.enabled']);self.assertFalse(seen[0]['auto_growth.taoist.enabled'])
  def test_disabled_and_stale_do_not_dispatch(self):
@@ -28,7 +31,8 @@ class GrowthDispatchTests(unittest.TestCase):
   plan=NS(values={'auto_growth.equipment.enabled':True})
   journal=NS(path=NS(exists=lambda:True),growth_request=lambda:{'slot':'무기','growth_request_id':'req'},mark_growth_dispatched=saved.append)
   with patch.object(owner_hunt_rules_candidate,'configured_identity',return_value='server'),patch.object(owner_progression,'state',return_value=progress),patch.object(owner_equipment_upgrade_candidate,'Journal',return_value=journal),patch.object(owner_gear_settings_candidate,'Store',return_value=NS(read=lambda:{'grades':{'희귀':{'enabled':True}}})),patch.object(timetable,'busy_windows',return_value=[]),patch.object(timetable,'invoke',return_value=False):
-   self.assertTrue(timetable.post_equip_growth(adapter,NS(checkpoint=lambda:None),None,plan))
+   import owner_job_timing
+   with owner_job_timing.boundary():self.assertTrue(timetable.post_equip_growth(adapter,NS(checkpoint=lambda:None),None,plan))
   self.assertEqual(saved,[]);self.assertEqual(adapter.values,{'old':1})
 
 if __name__=='__main__':unittest.main()
