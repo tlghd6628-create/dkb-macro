@@ -159,7 +159,8 @@ def shop_rows(frame):
     for head in rows:
         name=compact(head['word'])
         if name not in known:continue
-        price=[r for r in rows if 8<r['ry']-head['ry']<34 and re.fullmatch(r'\d{1,4}',r['word'])]
+        # The coin left of the price reads as a 0 on some rows (엽전, 19:58); the price stands right of it.
+        price=[r for r in rows if 8<r['ry']-head['ry']<34 and r['rx']>100 and re.fullmatch(r'\d{1,4}',r['word'])]
         limit=[m for r in rows if 26<r['ry']-head['ry']<56 for m in [LIMIT.search(r['word'])] if m]
         if len(price)==1 and len(limit)==1:
             m=limit[0]

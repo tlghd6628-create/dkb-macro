@@ -36,11 +36,12 @@ class Reading(unittest.TestCase):
             self.assertEqual(s.dan_counts(None),{'정기단':(574,364),'영기단':(6,523),'천지단':(0,683)})
     def test_shop_rows_need_name_price_and_limit(self):
         rows=[row('요혼석',101,132),row('10',111,153),row('도사일일한정:(0/100)',140,173),
-              row('가호주머니',101,676),row('50',111,697),row('도사주간한정:(7/10)',140,717),
+              row('엽전',94,280),row('0',90,301),row('10',112,301),row('TOK',58,318),row('도사일일한정(0/100)',142,321),row('가호주머니',101,676),row('50',111,697),row('도사주간한정:(7/10)',140,717),
               row('여명의정수',105,428)]
         with patch.object(s,'words',return_value=rows):found=s.shop_rows(None)
         self.assertEqual(found['요혼석'],dict(ry=132,price=10,period='일일',used=0,limit=100))
         self.assertEqual(found['가호주머니'],dict(ry=676,price=50,period='주간',used=7,limit=10))
+        self.assertEqual(found['엽전'],dict(ry=280,price=10,period='일일',used=0,limit=100))
         self.assertNotIn('여명의정수',found)
     def test_balance_is_the_first_number(self):
         with patch.object(s,'words',return_value=[row('1,487',740,28),row('20',623,28)]):self.assertEqual(s.balance(None),20)
