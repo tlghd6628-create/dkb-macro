@@ -83,9 +83,22 @@ def _price(text):
 REAL_LIST=(10,90,300,678)
 ROW_SHIFT=8  # real pixels a row may have glided since it was read; the rows are 74 apart
 
+def joined(rows):
+ """Words on one line put back together, left to right: a band read split 전설 장비 / 강화 비법서 (pc1 16:34)."""
+ out=[]
+ for row in sorted(rows,key=lambda r:(round(r['ry']),r['bounds'][0])):
+  last=out[-1] if out else None
+  if last and abs(last['ry']-row['ry'])<=4 and -20<=row['bounds'][0]-last['bounds'][2]<=14:
+   l,t,_,b=last['bounds'];_,t2,r2,b2=row['bounds']
+   out[-1]=dict(last,text=last['text'].rstrip()+' '+row['text'].lstrip(),bounds=(l,min(t,t2),r2,max(b,b2)),score=min(last['score'],row['score']))
+  else:out.append(dict(row))
+ return out
+
+
 def quote_from_words(rows,item):
  """This item's row from the words of the list, top to bottom: name, price, then the limit under it. None when it
  is not all on screen. Places are real pixels, so a row is what stands within one row height under its name."""
+ rows=joined(rows)
  names=[r for r in rows if r['bounds'][0]>=60 and re.search(r'[가-힣]{2}',r['text']) and _name_candidate(r['text'],(item,))==item]
  if len(names)>1:raise Hold('같은 상품으로 읽힌 행이 둘 이상입니다')
  if not names:return None
@@ -121,10 +134,17 @@ def _real_quote(ui,item):
  ui._owner_shop_last_page=[r['text'] for r in rows if re.search(r'[가-힣]{2}',r['text']) and '한정' not in r['text'] and '구매' not in r['text']]
  a=quote_from_words(rows,item)
  if a is None:return None
+ # The whole list reads its small yellow digits loosely (5/50 as 6/50, 0/50 as 0/60, pc1 16:34); the row's own band
+ # reads them right. Two band reads on two frames decide; the whole list only finds the row.
+ top=a['name_row']['ry']-18;band=(REAL_LIST[0],max(0,top),REAL_LIST[2],84)
+ a=quote_from_words(read(ui.adapter.project.root,ui.frame(),band,scale=3),item) or a
  ui.context.wait(.12)
- top=a['name_row']['ry']-18
- b=quote_from_words(read(ui.adapter.project.root,ui.frame(),(REAL_LIST[0],max(0,top),REAL_LIST[2],84),scale=3),item)
- if b is None or any(a[key]!=b[key] for key in ('price','first','limit','bracketed','sold_out')):raise Pending('상점 목록 두 화면 확인 필요')
+ b=quote_from_words(read(ui.adapter.project.root,ui.frame(),band,scale=3),item)
+ if b is None or any(a[key]!=b[key] for key in ('price','first','limit','bracketed','sold_out')):
+  import logging
+  keys=('price','first','limit','bracketed','sold_out')
+  logging.getLogger('project_gui.DKB').info('상점 목록 두 화면 · %s · 첫 %s · 둘째 %s',item,{k:a[k] for k in keys},b and {k:b[k] for k in keys})
+  raise Pending('상점 목록 두 화면 확인 필요')
  limit,first_number=a['limit'],a['first']
  # A row saying 구매 불가 can hold over its limit (구매 가능 320/250), and is simply used up.
  if limit==0 or (first_number>limit and not a['sold_out']):raise Pending('구매 수량 판독 확인 필요')
@@ -142,7 +162,12 @@ REAL_POPUP=(540,290,420,80)
 
 def popup_from_words(rows,item):
  """(name is this item, price, owned) from the words of the quantity popup, or None for what did not read."""
- named=any(_name_candidate(r['text'],(item,))==item for r in rows)
+ named=any(_name_candidate(r['text'],(item,))==item for r in joined(rows))   # a split name joined (전설 장비 / 강화 비법서)
+ if not named:
+  # The name can wrap onto two lines (전설 장비 / 강화 비법서, pc1 16:40): its letters in reading order, before 개당.
+  ordered=[r['text'] for r in sorted(rows,key=lambda r:(round(r['ry']/8),r['bounds'][0]))]
+  head=re.sub(r'[^가-힣0-9]','',''.join(ordered)).split('개당')[0].replace('상점','')
+  named=re.sub(r'[^가-힣0-9]','',item) in head
  def number(word):
   for row in rows:
    found=re.search(word+r'[^0-9]*([0-9][0-9,]*)',re.sub(r'\s','',row['text']))
@@ -178,7 +203,12 @@ def _popup(ui,price,item):
   frames=[ui.frame()];ui.context.wait(.12);frames.append(ui.frame())
   if not all(title(frame) for frame in frames):raise Hold('수량 화면 변경')
   a,b=(words(frame) for frame in frames)
-  if not (a[0] and b[0]):reason='수량창 상품명 두 화면 확인 필요';continue
+  if not (a[0] and b[0]):
+   reason='수량창 상품명 두 화면 확인 필요'
+   if attempt==5:
+    import logging
+    logging.getLogger('project_gui.DKB').info('수량창 글자 · %s · %s',item,[r['text'] for r in read(ui.adapter.project.root,frames[-1],REAL_POPUP,scale=3)])
+   continue
   if None in a or a!=b:reason='수량 또는 금액 판독 확인 필요';continue
   if a[1]!=price:raise Hold('상품 개당 가격 불일치')
   def proof(frame):
@@ -420,6 +450,8 @@ def _buy_one(adapter,context,inputs,item,shop):
  ui.wait(lambda f:not _quantity_shown(f),seconds=5)
  # The popup's own limit can stop short of the count, so the cart says how many.
  total=_total(ui);quantity=total//unit
+ # An empty cart after adding: the game took none, the coins do not reach one (pc1 16:47, 2,275 left after 585,000).
+ if total==0:return {'status':'no_coins','item':item}
  if total%unit or not 1<=quantity<=count:raise Hold('장바구니 합계 불일치')
  entry=_record_intent(journal,profile,fingerprint,week,item,quote,owned,_not_read(),0,shop=shop,quantity=quantity)
  LOG.info('상점 구매 · %s %d개 · 합계 %d',item,quantity,total)
@@ -427,7 +459,8 @@ def _buy_one(adapter,context,inputs,item,shop):
  if total_now!=total:raise Hold('장바구니 합계 불일치')
  verified_cart=ui.last_text_frame.copy()
  total_box=TOTAL_BOXES[getattr(ui,'_owner_shop_kind','remote')]
- ui.click_word('구매',(730,430,65,40),lambda f:guard() and _same_cart(f,verified_cart,total,total_box),minimum=.90)
+ # Exactly 구매: 자동 구매 stands beside it at 1366 and also holds the word (pc1 16:40, no purchase made).
+ ui.click_word('구매',(730,430,65,40),lambda f:guard() and _same_cart(f,verified_cart,total,total_box),minimum=.90,exact=True)
  ui.context.wait(1)
  # Coins are not read: without enough of them the game's button does nothing and the cart stays full.
  if _total(ui)!=0:return {'status':'no_coins','item':item}

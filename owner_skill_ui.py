@@ -453,7 +453,11 @@ class SkillUI:
         return dict(row,bounds=logical_bounds(row,frames[-1]))
     @staticmethod
     def _word_rows(rows,text,minimum,exact=False):
-        # The same words alone come first: 구매 must not lose to its neighbour 자동 구매.
+        # The same words alone come first: 구매 must not lose to its neighbour 자동 구매. At 1366 that neighbour reads
+        # as 자동 + 구매 (pc1 16:44, nothing bought), so words side by side on one line are joined first.
+        if rows and all('bounds' in r for r in rows):
+            from owner_shop_runtime_candidate import joined
+            rows=joined(rows)
         same=[r for r in rows if r['score']>=minimum and clean(r['text'])==clean(text)]
         return same if same or exact else [r for r in rows if r['score']>=minimum and clean(text) in clean(r['text'])]
     def _word_stands(self,text,box,row,frame,minimum):
@@ -461,9 +465,9 @@ class SkillUI:
         from owner_text import read,word_box
         found=self._word_rows(read(self.adapter.project.root,frame,word_box(box),scale=3),text,minimum)
         return len(found)==1 and abs(found[0]['rx']-row['rx'])<=8 and abs(found[0]['ry']-row['ry'])<=8
-    def click_word(self,text,box,proof,minimum=.90):
+    def click_word(self,text,box,proof,minimum=.90,*,exact=False):
         import cv2,numpy as np
-        row=self.word(text,box,minimum);l,t,r,b=row['bounds'];source=self.last_text_frame[t:b,l:r].copy();tick=self.last_text_tick
+        row=self.word(text,box,minimum,exact=exact);l,t,r,b=row['bounds'];source=self.last_text_frame[t:b,l:r].copy();tick=self.last_text_tick
         def fresh(frame):
             patch=frame[t:b,l:r]
             if time.monotonic()-tick>3 or patch.shape!=source.shape or not proof(frame):return False
