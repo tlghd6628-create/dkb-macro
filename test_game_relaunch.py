@@ -68,6 +68,17 @@ class Watching(unittest.TestCase):
         self.record(w,'자동 동작 종료: x');self.record(w,'단축키 F3 · stop');self.assertFalse(w.check(now=1))
         gui,calls=self.gui(games=[1]);w=gr.Watch(gui);self.record(w,'자동 동작 종료: x')
         self.assertFalse(w.check(now=1));self.assertIsNone(w.ended)
+    def test_game_gone_under_a_run_relaunches_after_a_plain_stop(self):
+        """07:46 test: closing the game logged only 사용자 정지."""
+        state={'status':'running'};games=[[1]]
+        calls=[];gui=S(session=S(snapshot=lambda:dict(status=state['status'],worker_alive=False)),game_window=S(candidates=lambda:games[0]),
+            official_launcher=S(configured=True),input_preparation=S(before_start=lambda cb:calls.append('start')),action=lambda cb:None,closed=threading.Event())
+        w=gr.Watch(gui);self.assertFalse(w.check(now=100))
+        state['status']='stopped';games[0]=[];self.record(w,'사용자 정지')
+        self.assertTrue(w.check(now=115));self.assertEqual(calls,['start'])
+    def test_stopped_long_ago_without_a_game_is_left_alone(self):
+        gui,calls=self.gui();w=gr.Watch(gui);w.live=0
+        self.assertFalse(w.check(now=500));self.assertEqual(calls,[])
     def test_running_session_is_left_alone(self):
         gui,calls=self.gui(status='running');w=gr.Watch(gui);self.record(w,'자동 동작 종료: x')
         self.assertFalse(w.check(now=1));self.assertEqual(calls,[])

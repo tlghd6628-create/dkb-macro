@@ -126,14 +126,16 @@ def wait_launcher_ready(gui,context,clock=time.monotonic,rows=None,press=None):
 
 
 class Watch(logging.Handler):
-    """Arms on a run that ended on an error, disarms on the user's stop."""
+    """Arms when the game window goes while a run is on, or a run or launcher start ends on an error; F3 disarms.
+
+    Closing the game ends the run either way: an invalid window handle error (04:44) or a plain stop (07:46 test)."""
     def __init__(self,gui):
-        super().__init__();self.gui=gui;self.ended=None;self.tries=[]
+        super().__init__();self.gui=gui;self.ended=None;self.tries=[];self.live=None
     def emit(self,record):
         try:text=record.getMessage()
         except Exception:return
-        if text.startswith('자동 동작 종료:') or text.startswith('게임 준비 중단'):self.ended=time.time()
-        elif '사용자 정지' in text or text.startswith('단축키 F3'):self.ended=None
+        if text.startswith(('자동 동작 종료:','게임 준비 중단','Official launcher preparation failed')):self.ended=time.time()
+        elif text.startswith('단축키 F3'):self.ended=None;self.live=None
     def tick(self):
         gui=self.gui
         if gui.closed.is_set():return
@@ -142,11 +144,15 @@ class Watch(logging.Handler):
         gui.root.after(TICK_MS,self.tick)
     def check(self,now=None):
         gui=self.gui;now=time.time() if now is None else now
-        if self.ended is None:return False
-        state=gui.session.snapshot()
-        if state['status'] in ('running','paused') or state['worker_alive']:return False
-        if gui.game_window.candidates():
-            self.ended=None;return False   # The game is there: an ordinary error stays stopped as before.
+        state=gui.session.snapshot();games=gui.game_window.candidates()
+        if state['status'] in ('running','paused') or state['worker_alive']:
+            if games:self.live=now
+            return False
+        if games:
+            self.ended=None;self.live=None;return False   # The game is there: an ordinary stop or error stays.
+        # The game went while a run was on: seen running with it at the last look or so.
+        if self.ended is None and not (self.live is not None and now-self.live<=TICK_MS/1000+40):return False
+        self.live=None
         if not gui.official_launcher.configured:return False
         self.tries=[t for t in self.tries if now-t<3600]
         if len(self.tries)>=TRIES or (self.tries and now-self.tries[-1]<SPACING):return False
