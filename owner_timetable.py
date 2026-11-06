@@ -963,6 +963,9 @@ def timed_invoke(adapter,job,context,inputs):
         except RuntimeError as exc:LOG.info('일정 후 메뉴 정리 보류 · %s',exc)
 
 def invoke(adapter,job,context,inputs):
+    # Content the character has not opened (비경, 승천의 탑, 레이드 on 짱군네 at level 50) is passed over, not tried.
+    from owner_content_lock import gate
+    if gate(adapter,job,context,inputs):return True
     if job.key=='blessing_summon':
         from owner_blessing_summon import run as summon
         result=summon(adapter,context,inputs)

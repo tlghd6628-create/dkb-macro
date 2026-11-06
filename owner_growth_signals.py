@@ -91,6 +91,12 @@ def quest_end(adapter):
     """A quest just ended: its reward may have brought materials. Growth and equip move up, at most every
     QUEST_GROWTH_SECONDS; a level-up moves them at once."""
     now=time.monotonic();reason=None
+    # Closed content (비경, 승천의 탑, 레이드) opens with story quests: the kept menu read is dropped, and the next
+    # time one of them comes due the full menu is read again (user 11-07).
+    try:
+        from owner_content_lock import forget
+        forget(adapter)
+    except Exception:pass
     try:
         from owner_progression import state
         level=state(adapter).level
