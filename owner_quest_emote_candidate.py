@@ -63,7 +63,12 @@ def empty_chat(frame):
  if real is not None:
   # Typed text is bright across the box. An empty one shows at most its caret, one column wide.
   x,y,w,h=REAL_INPUT
-  return int((np.asarray(real)[y:y+h,x:x+w].min(axis=2)>150).any(axis=0).sum())<=3
+  if int((np.asarray(real)[y:y+h,x:x+w].min(axis=2)>150).any(axis=0).sum())<=3:return True
+  # At 1366 the placeholder 채팅을 입력해주세요. is drawn bright too (pc1 11-06 13:16: 108 bright columns on an empty box),
+  # so it is read: the placeholder alone is empty, anything else is typed text.
+  from owner_text import clean,read_area
+  words=''.join(clean(row['text']) for row in read_area(None,np.asarray(real)[y:y+h,x:x+w],scale=2,minimum=.6))
+  return words.startswith('채팅을입력') and len(words)<=len('채팅을입력해주세요')+1
  patch=frame[448:468,55:214]
  for name in ('placeholder','placeholder-alt'):
   reference=asset(name)

@@ -31,6 +31,8 @@ RIGHT_BUTTONS=(690,560,230,46);RIGHT_PART=(830,200,95,40)  # 귀걸이 at (884,2
 POWER_ROW=(695,338,225,20)                                # 전투력 6,334 1,965▲ on the spare's window
 TOAST=(560,572,240,36)                                    # 전투력 +1955▲ after an equip
 TILE_SPREAD=20
+SINGLE_POWER=(570,338,225,20)   # real: 전투력 9,166 on a spare's own window when its part is empty (pc1 11-06 13:25)
+BAG_WHEEL=(1187,400);PAGE_NOTCHES=3;MAX_PAGES=12  # real: the bag list, scrolled a few notches at a time
 MAX_ACQUIRE=4                                             # blessings made on one slot tab per run
 # The bag's sorted view (▼ON) puts 무기 · 방어구 · 장신구 headings between rows, so the fixed grid lands on headings and
 # gaps: pc2's TEST never reached its rare fan and three tiles 'did not open' (11-06). The view goes to OFF for the work
@@ -70,8 +72,81 @@ def above_common(real,place):
     return bool(b>=r+10 or (r>g+10 and b>g+10))
 
 
+def tile_grade(real,place):
+    """A bag tile's grade by its corners, or None when not plain: blue 희귀, purple 영웅, gold 전설."""
+    x,y=place
+    corners=[real[y+dy:y+dy+5,x+dx:x+dx+5].reshape(-1,3).mean(0) for dx,dy in ((-24,-24),(19,-24),(-24,19),(19,19))]
+    r,g,b=np.median(np.array(corners,np.float32),0)
+    if r>g+10 and b>g+10:return '영웅'
+    if b>=r+10:return '희귀'
+    if r>=b+40 and g>=b+20:return '전설'
+    return None
+
+
+def blessing_shade(real,place):
+    """A blessing tile's grade by its frame inside the top and left edges. pc1 11-06: 전설 (127,85,21), 희귀 (24,35,46),
+    일반 (36,34,31). None when not plain."""
+    x,y=place;tile=np.asarray(real)[y-28:y+28,x-28:x+28].astype(np.float32)
+    r,g,b=np.concatenate([tile[3:7,10:46].reshape(-1,3),tile[10:46,3:7].reshape(-1,3)]).mean(0)
+    if b>=r+12 and b>=g+5:return '희귀'
+    if max(r,g,b)-min(r,g,b)<=10 and max(r,g,b)<70:return '일반'
+    if r>=b+50 and g>=b+30:return '전설'
+    if r>=g+8 and b>=g+8:return '영웅'
+    return None
+
+
+def worn_floor(adapter):
+    """The lowest grade worn, from the program's own table of worn gear, or None when any part is unread."""
+    try:
+        from owner_progression import state
+        from owner_growth_current import equipped_rows
+        grades=[row[1] for row in equipped_rows(adapter.project.root,state(adapter).character)]
+    except Exception:return None
+    if not grades or any(grade not in ORDER for grade in grades):return None
+    return min(grades,key=ORDER.index)
+
+
 def candidates(real):
-    return [(x,y) for y in BAG_Y for x in BAG_X if above_common(real,(x,y))]
+    return [(x,y) for y in BAG_Y for x in BAG_X if above_common(real,(x,y)) or better_mark(real,(x,y))]
+
+
+def better_mark(real,place):
+    """The game's own green arrow at a bag tile's top right: better than what is worn there, an empty part included.
+    pc1 11-06 13:25, earring taken off: 59 and 60 green pixels on the two earrings, 0 on every other tile."""
+    x,y=place;t=np.asarray(real)[y-22:y+2,x+6:x+28].astype(np.int32)
+    return int(((t[...,1]>t[...,0]+50)&(t[...,1]>t[...,2]+50)&(t[...,1]>120)).sum())>=25
+
+
+def shade_index(real,place):
+    shade=tile_grade(real,place);return ORDER.index(shade) if shade in ORDER else 0   # a plain tile is 일반
+
+
+def empty_hint(real,floor):
+    """A green arrow on a tile below the lowest worn grade: only an empty part makes it better."""
+    if floor not in ORDER:return False
+    return any(better_mark(real,(x,y)) and shade_index(real,(x,y))<ORDER.index(floor) for y in BAG_Y for x in BAG_X
+               if np.asarray(real)[y-24:y+24,x-24:x+24].std()>=TILE_SPREAD)
+
+
+def worth_opening(real,place,floor,hint):
+    """Only a grade above the lowest worn one is compared (user 11-06: 희귀를 끼고 있으면 일반·희귀는 비교 안 함). A tile
+    with the green arrow is opened too when some part is empty. With the worn grades unknown, every candidate is."""
+    if floor not in ORDER:return True
+    if shade_index(real,place)>ORDER.index(floor):return True
+    return hint and better_mark(real,place)
+
+
+def empty_part_spare(service):
+    """A spare whose part is empty opens alone, with 성장 and 장착 (a worn item's says 장착 해제). Its row, or None."""
+    frame=service.capture();real=np.asarray(frame.hi)
+    if worn.offers_unequip(frame):return None
+    buttons=[text.clean(row['text']) for row in text.read(None,frame,worn.REAL_DETAIL_BUTTONS,scale=2,minimum=.6)]
+    if '장착' not in buttons:return None
+    title,spare=worn.real_heading(real)
+    x,y,w,h=worn.REAL_PART;words=[text.clean(row['text']) for row in text.read_area(None,real[y:y+h,x:x+w],scale=2,minimum=.6)]
+    x,y,w,h=SINGLE_POWER;power=[str(row['text']).strip() for row in text.read_area(None,real[y:y+h,x:x+w],scale=2,minimum=.6)]
+    numbers=[int(p.replace(',','')) for p in power if re.fullmatch(r'\d{1,3}(?:,\d{3})+|\d{1,6}',p)]
+    return dict(slot=part_slot(words,title),worn=None,spare=spare,title=title,power=numbers[0] if numbers else None,empty=True)
 
 
 def signature(real,place):
@@ -143,6 +218,15 @@ def best(found,key):
 def equip_chosen(service,context,row):
     """Open the chosen tile again, check it is the same spare, and press 장착. The window's own words decide."""
     kind=open_compare(service,context,row['place'])
+    if row.get('empty'):
+        again=empty_part_spare(service) if kind=='worn' else None
+        same=lambda t:re.sub(r'[\d\]\[|lI()]','',t or '')
+        if not again or (again['slot'],again['spare'],same(again['title']))!=(row['slot'],row['spare'],same(row['title'])):
+            if kind:bound.close_window(service,context,kind)
+            return '다시 연 창이 다름 · 빈 칸'
+        if not press_equip(service,context):
+            bound.close_window(service,context,kind);return '장착 버튼 미확인'
+        return None
     if kind!='compare':
         if kind:bound.close_window(service,context,kind)
         return '비교창 아님'
@@ -156,17 +240,26 @@ def equip_chosen(service,context,row):
     return None
 
 
-def scan_gear(service,context,choice):
-    """Every candidate tile once, closed again: the allowed spares with their slot and 전투력, and how many went unread."""
+def scan_gear(service,context,choice,floor=None,seen=None,page=0):
+    """Every candidate tile once, closed again: the allowed spares with their slot and 전투력, and how many went unread.
+    A tile plainly no higher than the lowest worn grade is not opened (pc1 11-06: 26 희귀 spares opened one by one, about
+    50 s, with every part worn 희귀)."""
     context.checkpoint();service.check();real=np.asarray(service.capture().hi)
-    found=[];unread=0;seen=set()
+    found=[];unread=0;seen=set() if seen is None else seen
     for place in candidates(real):
+        if not worth_opening(real,place,floor,empty_hint(real,floor)):continue
         mark=signature(real,place)
         if mark in seen:continue  # a second copy of one item answers the same
         seen.add(mark)
         kind=open_compare(service,context,place)
         if kind!='compare':
-            # A worn item opens its own window alone: nothing to compare.
+            # A worn item opens its own window alone: nothing to compare. So does a spare for an empty part, which goes on
+            # whatever its grade (user 11-06: 빈 칸은 끼워야지).
+            row=empty_part_spare(service) if kind=='worn' else None
+            if row and row['slot'] and row['spare'] in ORDER:
+                row.update(place=place,page=page);found.append(row)
+                LOG.info('장비 빈 칸 후보 · %s · %s %s · 전투력 %s',row['slot'],row['spare'],row['title'],row['power'] or '미확인')
+            elif row:unread+=1
             if kind:bound.close_window(service,context,kind)
             else:LOG.info('장비 높은 등급 장착 · 상세창 안 열림');unread+=1
             continue
@@ -175,7 +268,7 @@ def scan_gear(service,context,choice):
             unread+=left is None or right is None
             LOG.info('장비 높은 등급 장착 안 함 · %s · 착용 %s · %s %s',reason,left or '미확인',title or '제목 미확인',right or '미확인')
         else:
-            row=dict(place=place,slot=part_slot(read_part(service),title),worn=left,spare=right,title=title,power=spare_power(service))
+            row=dict(place=place,page=page,slot=part_slot(read_part(service),title),worn=left,spare=right,title=title,power=spare_power(service))
             LOG.info('장비 높은 등급 후보 · %s · %s → %s · %s · 전투력 %s',row['slot'] or '부위 미확인',left,right,title,row['power'] or '미확인')
             if row['slot']:found.append(row)
             else:unread+=1
@@ -205,7 +298,7 @@ def restore_grouping(service,context,changed):
         service.click_hit(hd.real_hit(*GROUPING_HIT));context.wait(.8)
 
 
-def gear(adapter,service,context,choice):
+def gear(adapter,service,context,choice,inputs=None):
     """Swap worn gear for the best spare of an allowed higher grade, part by part: the highest grade, then the most 전투력.
     Every candidate is read before any press, so a +0 spare never wins over a better one further down the bag."""
     from owner_progression import open_inventory_by_key,inventory_parts
@@ -216,26 +309,63 @@ def gear(adapter,service,context,choice):
     changed=plain_grid(service,context)
     if changed is None:
         LOG.info('장비 높은 등급 장착 생략 · 가방 정렬 보기 상태 미확인');return swaps
-    try:return gear_grid(adapter,service,context,choice,swaps)
+    try:return gear_grid(adapter,service,context,choice,swaps,inputs)
     finally:restore_grouping(service,context,changed)
 
 
-def gear_grid(adapter,service,context,choice,swaps):
+def bag_ui(adapter,context,inputs):
+    if inputs is None:return None
+    from owner_mission_ui import MissionUI
+    return MissionUI(adapter,context,inputs)
+
+
+def scroll_bag(ui,service,context,direction,notches):
+    """Wheel the bag list; True when the list moved."""
+    from owner_progression import inventory_parts
+    before=np.asarray(service.capture().hi)[150:740,1068:1305].astype(np.int16)
+    x,y=hd.logical_of(*BAG_WHEEL)
+    ui.wheel(direction,notches,at=(round(x),round(y)),scene=lambda f:inventory_parts(f)[1] is True,verify_cursor=True)
+    context.wait(.6)
+    after=np.asarray(service.capture().hi)[150:740,1068:1305].astype(np.int16)
+    return float(np.abs(after-before).mean())>3
+
+
+def scan_pages(adapter,service,context,choice,floor,ui):
+    """Every screen of the bag, top to bottom (user 11-06: 다음 화면도 넘겨봐). Each row keeps its page to be found again."""
+    seen=set();found,unread=scan_gear(service,context,choice,floor,seen,0)
+    real=np.asarray(service.capture().hi)
+    full=all(real[y-24:y+24,x-24:x+24].std()>=TILE_SPREAD for x in BAG_X for y in BAG_Y[-1:])
+    page=0
+    while full and ui is not None and page<MAX_PAGES and scroll_bag(ui,service,context,-1,PAGE_NOTCHES):
+        page+=1;more,missed=scan_gear(service,context,choice,floor,seen,page);found+=more;unread+=missed
+    if page:
+        LOG.info('장비 높은 등급 장착 · 가방 %d화면 확인',page+1);scroll_bag(ui,service,context,1,PAGE_NOTCHES*(page+2))
+    return found,unread
+
+
+def to_page(ui,service,context,page):
+    if page and ui is not None:scroll_bag(ui,service,context,-1,PAGE_NOTCHES*page)
+
+
+def gear_grid(adapter,service,context,choice,swaps,inputs=None):
     unread=0
     real=np.asarray(service.capture().hi)
-    if all(real[y-24:y+24,x-24:x+24].std()>=TILE_SPREAD for x in BAG_X for y in BAG_Y[-1:]):
-        LOG.info('장비 높은 등급 장착 · 장비 목록이 한 화면을 넘을 수 있음 · 보이는 칸만 확인')
+    ui=bag_ui(adapter,context,inputs)
     fingerprint=tuple(signature(real,(x,y)) for y in BAG_Y for x in BAG_X if real[y-24:y+24,x-24:x+24].std()>=TILE_SPREAD)
     if seen_before(adapter,'gear',(fingerprint,tuple(sorted(choice.items())))):
         LOG.info('장비 높은 등급 장착 · 가방 장비 지난 확인과 같음 · 칸 열지 않음');return swaps
-    LOG.info('장비 높은 등급 장착 · 후보 칸 %d개',len(candidates(real)))
+    floor=worn_floor(adapter)
+    higher=[p for p in candidates(real) if worth_opening(real,p,floor,empty_hint(real,floor))]
+    LOG.info('장비 높은 등급 장착 · 후보 칸 %d개 · 착용 최저 %s · 열 칸 %d개',len(candidates(real)),floor or '미확인',len(higher))
     done=set()
     for _ in range(len(worn.PART_WORDS)+2):
-        found,missed=scan_gear(service,context,choice);unread+=missed
+        found,missed=scan_pages(adapter,service,context,choice,floor,ui);unread+=missed
         chosen=[row for row in best(found,lambda r:(ORDER.index(r['spare']),r['power'] or -1)) if row['slot'] not in done]
         if not chosen:break
         row=chosen[0];done.add(row['slot'])
+        to_page(ui,service,context,row.get('page',0))
         why=equip_chosen(service,context,row)
+        if row.get('page'):scroll_bag(ui,service,context,1,PAGE_NOTCHES*(row['page']+2))
         if why:
             LOG.info('장비 높은 등급 장착 안 함 · %s · %s',why,row['title']);unread+=1;continue
         risen=watch_power(service,context)
@@ -325,7 +455,13 @@ def blessings(adapter,service,context,choice,priorities=()):
             if count>=len(bound.TILE_X)*len(bound.TILE_Y):
                 LOG.info('가호%d 높은 등급 장착 생략 · 목록이 한 화면을 넘을 수 있음',slot);break
             found=[];made=False
+            real=np.asarray(service.capture().hi);worn_shade=blessing_shade(real,bound.places(count)[0]) if count else None
             for place in bound.places(count)[1:]:
+                # 등급순: once a tile is plainly below the worn one, so is every tile after it (pc1 11-06: a slot wearing
+                # 전설 opened all its 일반 spares).
+                shade=blessing_shade(real,place)
+                if worn_shade in ORDER and shade in ORDER and ORDER.index(shade)<ORDER.index(worn_shade):
+                    LOG.info('가호%d 나머지 칸 착용보다 낮은 등급 · 열지 않음',slot);break
                 plus=tile_plus(service,place)
                 kind=open_compare(service,context,place)
                 if kind!='compare':
@@ -387,7 +523,7 @@ def run(adapter,context,inputs,kind,choice=None):
         if kind=='blessing':
             # 일괄 획득 first, so blessings made from pieces are owned before any swap (user, 11-06).
             bound.claim(adapter,context,inputs,leave=False)   # the swaps go on from the same screen
-        swaps=gear(adapter,service,context,choice) if kind=='gear' else blessings(adapter,service,context,choice,priorities(adapter.project.root))
+        swaps=gear(adapter,service,context,choice,inputs) if kind=='gear' else blessings(adapter,service,context,choice,priorities(adapter.project.root))
     finally:
         context.checkpoint();service.check()
         kind_open=bound.window_kind(service.capture())

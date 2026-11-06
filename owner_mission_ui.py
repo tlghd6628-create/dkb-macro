@@ -319,7 +319,10 @@ class MissionUI(SkillUI):
   # A running story used to skip the main list altogether, so a main step waiting on a side story was never
   # read again while another story was on hand ('읽은 행=0' at 14:50). Its row is read first until it opens.
   main_waiting=requested=='main_quest' and not fill and any(r.get('mode')=='main_quest' and r.get('block',{}).get('reason')=='prerequisite' for r in book.item['quests'].values())
-  if active and book.item['quests'][active]['mode'] in modes and not main_waiting:
+  # 메인퀘 mode reads the main list first and a main step it can run comes before a saved side story (user 11-06: the
+  # program ran [외전] in 메인퀘 mode, and never read the main list, '읽은 행=0').
+  main_first=requested=='main_quest' and not fill
+  if active and book.item['quests'][active]['mode'] in modes and not main_waiting and not main_first:
    modes=(book.item['quests'][active]['mode'],)+tuple(m for m in modes if m!=book.item['quests'][active]['mode'])
   keys=[];seen=set();expanded=set();unknown=0;partial=False
   for mode in modes:
@@ -385,7 +388,9 @@ class MissionUI(SkillUI):
      waiting=book.item.get('active')
      # Except a main step whose condition just cleared: the story was only ever filling that wait.
      reopened=choice and mode=='main_quest' and book.item['quests'][choice].get('condition_recovered')
-     if choice and (not waiting or choice==waiting or reopened):
+     over_story=main_first and choice and mode=='main_quest' and waiting and book.item['quests'].get(waiting,{}).get('mode')=='sub_quest'
+     if choice and (not waiting or choice==waiting or reopened or over_story):
+      if over_story and choice==key:LOG.info('메인퀘 모드 · 본편 임무 우선 · 저장된 서사 %s 뒤로',book.item['quests'][waiting]['title'])
       if choice!=key:continue
       book.item['quests'][key].pop('condition_recovered',None)
       book.activate(key);return key

@@ -193,6 +193,41 @@ class Compare(unittest.TestCase):
         self.assertEqual(self.run_compare('희귀','희귀')[3],'등급 조건 아님')
 
 
+class Floor(unittest.TestCase):
+    """Bag tiles no higher than the lowest worn grade are not opened."""
+    def test_tile_shades(self):
+        real=np.zeros((768,1366,3),np.uint8);places=[(up.BAG_X[i],up.BAG_Y[0]) for i in range(4)]
+        for (x,y),shade in zip(places,((51,102,139),(120,60,130),(150,120,40),(70,66,60))):real[y-26:y+26,x-26:x+26]=shade
+        self.assertEqual([up.tile_grade(real,p) for p in places],['희귀','영웅','전설',None])
+    def test_floor_needs_every_part(self):
+        with patch('owner_progression.state',return_value=NS(character='c')),patch('owner_growth_current.equipped_rows',return_value=[('무기','희귀'),('반지','영웅')]):
+            self.assertEqual(up.worn_floor(NS(project=NS(root='x'))),'희귀')
+        with patch('owner_progression.state',return_value=NS(character='c')),patch('owner_growth_current.equipped_rows',return_value=[('무기','희귀'),('반지','미확인')]):
+            self.assertIsNone(up.worn_floor(NS(project=NS(root='x'))))
+    def bag(self,tiles):
+        real=np.zeros((768,1366,3),np.uint8)
+        for (i,shade,arrow) in tiles:
+            x,y=up.BAG_X[i],up.BAG_Y[0];real[y-26:y+26,x-26:x+26]=shade;real[y-10:y+10,x-10:x+10]=(240,240,240)
+            if arrow:real[y-18:y-8,x+12:x+22]=(60,200,60)
+        return real
+    def test_arrow_tiles_open_only_for_an_empty_part(self):
+        # pc1 13:25, earring off: a rare earring and a plain one carry the arrow; every part else wears 희귀.
+        real=self.bag([(0,(51,102,139),True),(1,(70,66,60),True),(2,(51,102,139),False)])
+        hint=up.empty_hint(real,'희귀');self.assertTrue(hint)
+        self.assertEqual([i for i in range(3) if up.worth_opening(real,(up.BAG_X[i],up.BAG_Y[0]),'희귀',hint)],[0,1])
+        real=self.bag([(0,(51,102,139),True),(2,(51,102,139),False)])
+        self.assertFalse(up.empty_hint(real,'희귀'))
+        self.assertEqual([i for i in (0,2) if up.worth_opening(real,(up.BAG_X[i],up.BAG_Y[0]),'희귀',False)],[])
+    def test_same_grade_tiles_are_not_opened(self):
+        real=np.zeros((768,1366,3),np.uint8);opened=[]
+        for i,shade in enumerate(((51,102,139),(120,60,130))):
+            x,y=up.BAG_X[i],up.BAG_Y[0];real[y-26:y+26,x-26:x+26]=shade;real[y-10:y+10,x-10:x+10]=(240,240,240)
+        service=NS(capture=lambda:NS(hi=real),check=lambda:None)
+        with patch.object(up,'open_compare',side_effect=lambda s,c,p:opened.append(p)):
+            up.scan_gear(service,NS(checkpoint=lambda:None),{'higher':True},'희귀')
+        self.assertEqual(opened,[(up.BAG_X[1],up.BAG_Y[0])])
+
+
 class Acquire(unittest.TestCase):
     """A blessing not made yet on a slot tab: made there when it uses no tradeable piece (user 11-06), else left."""
     def run_slots(self,tradeable):

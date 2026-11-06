@@ -405,4 +405,17 @@ class Stand(unittest.TestCase):
             self.assertEqual(r.recover(adapter,context,NS(held=())),'no_pending')
 
 
+
+class Hold(unittest.TestCase):
+    """돌파 asks for 길게 터치하여 돌파: the button is held until the prompt goes."""
+    def test_held_until_the_prompt_goes(self):
+        import owner_worn_growth as g
+        events=[];looks=iter([True,True,False])
+        inputs=NS(transaction=lambda:__import__('contextlib').nullcontext(),move=lambda x,y:events.append(('move',x,y)),
+                  down=lambda *a:events.append('down'),up=lambda *a:events.append('up'))
+        route=g.Route.__new__(g.Route);route.inputs=inputs;route.context=NS(wait=lambda s:None);route.service=NS(capture=lambda:None)
+        with patch.object(g.Route,'hold_needed',side_effect=lambda f:next(looks)):route.hold_press(NS(slot='목걸이'))
+        self.assertEqual(events[1:],['down','up']);self.assertEqual(events[0][1:],g.real_hit(*g.HOLD_BUTTON)[:2])
+
+
 if __name__=='__main__':unittest.main()

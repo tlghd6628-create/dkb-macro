@@ -25,6 +25,8 @@ SIDE_TABS=(0,100,170,240)      # real pixels of 강화 돌파 각성
 GROWTH_BUTTON=(570,560,120,46) # real pixels of the details window's 성장
 LIST_COUNT=(1066,78,105,24);SECOND_TILE=(1150,146)  # the growth list: how many it shows, and the tile after the selected one
 RESULT_CLOSE=(400,640,560,100);RESULT_SECONDS=20
+HOLD_WORDS=(520,555,330,45);HOLD_BUTTON=(683,648);HOLD_SECONDS=6  # real: 돌파 asks 길게 터치하여 돌파 over its button (pc1 11-06 13:02)
+SKIP_BOXES=((1180,8,186,90),(1180,660,186,108))  # real: its 넘기기, which the user says does the 돌파 (top right on pc1 13:02)
 BACK=(35,30)                   # real place of the growth screen's back arrow
 ACTION_PILL=(470,700,325,42)   # real pixels of the 돌파 or 각성 button and its price
 VISIT_SECONDS=300;ITEM_SECONDS=VISIT_SECONDS;  # one stay per item: leaving every 90 s to reread its details was the in-and-out (user 11-06)
@@ -350,6 +352,13 @@ class Route:
             self.context.wait(.3);frame=self.frame()
             if coins_short(frame):
                 self.intents.complete('short_of_coins');raise CoinsShort()
+            if kind==BREAK and self.hold_needed(frame):
+                # The user's way (11-06): 넘기기. Held down only when no 넘기기 reads.
+                skip=next((row for box in SKIP_BOXES for row in text.read(None,frame,box,scale=2,minimum=.6) if '넘기기' in text.clean(row['text'])),None)
+                if skip:
+                    self.service.click_hit(real_place(skip));LOG.info('착용 %s 돌파 넘기기',item.slot);self.context.wait(1.5)
+                else:self.hold_press(item)
+                continue
             row=only_word(text.read(None,frame,RESULT_CLOSE,scale=2),('클릭하여닫기',),.7)
             if row:
                 self.service.click_hit(real_place(row));self.context.wait(1);return
@@ -358,6 +367,24 @@ class Route:
                 quiet+=1
                 if quiet>=(8 if kind==AWAKEN else 12):return
             else:quiet=0
+    def hold_needed(self,frame):
+        return any('길게' in text.clean(row['text']) or '눌러주세요' in text.clean(row['text'])
+                   for row in text.read(None,frame,HOLD_WORDS,scale=2,minimum=.6))
+    def hold_press(self,item):
+        """The 돌파 button held down until its 길게 터치 prompt goes, at most HOLD_SECONDS. A click did nothing and the job
+        waited out its 20 s, and the next job found the screen unknown (pc1 11-06 13:02)."""
+        x,y,_=real_hit(*HOLD_BUTTON);started=time.monotonic();pressed=False
+        with self.inputs.transaction():
+            self.inputs.move(x,y);self.context.wait(.05)
+            try:
+                self.inputs.down('mouse','left');pressed=True
+                while time.monotonic()-started<HOLD_SECONDS:
+                    self.context.wait(.4)
+                    if not self.hold_needed(self.service.capture()):break
+            finally:
+                if pressed:self.inputs.up('mouse','left')
+        LOG.info('착용 %s 돌파 길게 누름 · %.1f초',item.slot,time.monotonic()-started)
+        self.context.wait(1)
     def choose_material(self,item):
         """The list under an item on the 각성 tab holds it and the spares the game accepts: 강화되지 않은 동일한 장비. The next tile is one."""
         shown=list_count(self.frame())
