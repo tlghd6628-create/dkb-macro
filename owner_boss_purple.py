@@ -39,16 +39,19 @@ def install(gui=None):
     def danger_mask(self,rgb,*,hsv=None):
         mask=original(self,rgb,hsv=hsv)
         try:
+            import numpy as np
             pillar,floor=purple(rgb,hsv)
             h,w=floor.shape;x0,y0,x1,y1=(round(a*b) for a,b in zip(BEAM_AREA,(w/1366,h/768,w/1366,h/768)))
             beam=float(pillar[y0:y1,x0:x1].mean())
-            extra=floor.copy()
+            # The dark purple floor read 2.5% of the 21:00 field boss's own ground all along, and the
+            # character stopped attacking; only the pillars count until the floor is told apart.
+            extra=np.zeros_like(floor)
             if beam>=BEAM_SHARE:
                 # pc2: the pillars come before a full-screen cross; dodge on them wherever they stand.
                 fx0,fy0,fx1,fy1=(round(a*b) for a,b in zip(FEET,(w/1366,h/768,w/1366,h/768)))
                 extra|=pillar;extra[fy0:fy1,fx0:fx1]=True
             share=float(extra.mean())
-            if share<MIN_SHARE and beam<BEAM_SHARE:return mask
+            if beam<BEAM_SHARE:return mask
             now=time.monotonic()
             if now-getattr(self,'_owner_purple_noted',-1e9)>=5:
                 self._owner_purple_noted=now
