@@ -429,4 +429,24 @@ class Idle(unittest.TestCase):
         adapter._owner_worn_idle=(time.monotonic()-1,'r1');self.assertFalse(g.idle_skip(adapter,'r1'))
 
 
+
+class Table(unittest.TestCase):
+    """A part read lately with nothing to do is not opened again; a short step rests."""
+    def route(self,goal):
+        r=g.Route.__new__(g.Route);r.adapter=NS();r.root='x';r.profile='p'
+        r.document={'grades':{'희귀':dict(enabled=True,enhance=50,breakthrough=3,awaken=goal)}}
+        return r
+    def test_at_goal_is_skipped_else_read(self):
+        item=g.Item('반지',False)
+        with patch('owner_growth_current.recent_reading',return_value=('희귀',{'enhance':50,'breakthrough':3,'awaken':0})),patch.object(g,'breakthrough_allowed',return_value=True):
+            self.assertTrue(self.route(0).from_table(item))
+            item=g.Item('반지',False);self.assertFalse(self.route(1).from_table(item));self.assertIsNone(item.values)
+    def test_a_short_step_rests(self):
+        r=self.route(1);item=g.Item('반지',False)
+        g.rest(r.adapter,'반지',g.AWAKEN)
+        with patch('owner_growth_current.recent_reading',return_value=('희귀',{'enhance':50,'breakthrough':3,'awaken':0})),patch.object(g,'breakthrough_allowed',return_value=True):
+            self.assertTrue(r.from_table(item))
+        g.wake(r.adapter);self.assertFalse(g.resting(r.adapter,'반지',g.AWAKEN))
+
+
 if __name__=='__main__':unittest.main()

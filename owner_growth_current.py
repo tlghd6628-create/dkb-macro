@@ -198,3 +198,18 @@ def invalidate_item(root,character,item_identity,*,grade=None):
    chosen=matches[0]
   del items[chosen];_save_display(root)
  return True
+
+def recent_reading(root,character,slot,max_seconds):
+ """(grade, values) of a worn part or blessing (가호N) read within max_seconds, else None. Only for skipping a re-read of
+ what is already at its goals; any press still reads its own screen."""
+ now=time.time()
+ with _LOCK:
+  scope=_load(root)
+  if slot.startswith('가호'):
+   row=_VALUES.get((scope,character,'blessings',slot[-1]+'번'),{})
+   if row and 0<=now-row.get('at_epoch',0)<=max_seconds:return row.get('grade'),dict(row.get('values',{}))
+   return None
+  rows=[r for r in _READINGS.get((scope,character),{}).values() if r.get('slot')==slot]
+ if not rows:return None
+ row=max(rows,key=lambda r:r['at_epoch'])
+ return (row.get('grade'),dict(row['values'])) if 0<=now-row['at_epoch']<=max_seconds else None

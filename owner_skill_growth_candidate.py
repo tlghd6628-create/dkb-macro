@@ -5,7 +5,7 @@ provide its verified current-character ledger/settings, open/close the growth
 tab with the existing menu navigation and respect cancellation. No entry into
 this module runs a game action. Real execution/receipt E2E remains untested.
 """
-import hashlib,re,time
+import hashlib,logging,re,time
 from decimal import Decimal,InvalidOperation
 from pathlib import Path
 import cv2,numpy as np
@@ -629,11 +629,16 @@ class StyleGrowth:
         # A positive breakthrough target requires reaching +50 first. This
         # does not insert another +50 cycle between consecutive breakthroughs.
         if breakthrough_target>0:target=50
-        self._select(name)
+        self._select(name);verified=None
         for _ in range(max_steps):
-            self._guard()
-            rows,_=self._style_rows(name);row,current=named_row(rows,name)
-            if not all(selected(f,row['y']) for f in self.ui._owner_last_rows_pair[0]):raise Pending('도술 대상 선택 확인 필요')
+            self._guard();step_started=time.monotonic()
+            if verified and time.monotonic()-verified[2]<=2 and all(selected(f,verified[0]['y']) for f in [self.ui.frame()]):
+                # The step before just proved this row at this level on two frames: no second read of the list (3 s a step).
+                row,current=verified[0],verified[1]
+            else:
+                rows,_=self._style_rows(name);row,current=named_row(rows,name)
+                if not all(selected(f,row['y']) for f in self.ui._owner_last_rows_pair[0]):raise Pending('도술 대상 선택 확인 필요')
+            rows_read=time.monotonic()
             self._observe('skills',name,{'enhance':current})
             intents=self.ledger.item.setdefault('style_growth_intents',{})
             if not isinstance(intents,dict) or any(not isinstance(v,dict) for v in intents.values()):
@@ -665,6 +670,7 @@ class StyleGrowth:
                     # below requires it lit, so an unread balance need not stop it.
                     if attempt>=1 and str(BALANCE) in str(exc):use_balance=False
                     self.ui.context.wait(.3);self._guard()
+            observed_at=time.monotonic()
             if obs['level']!=current or obs['have']<obs['need'] or (obs['funds'] is not None and obs['funds']<obs['price']):
                 raise Pending(name+' 도술 재료·엽전 부족 또는 변경')
             intents[name]={'status':'prepared','before':current,'target':target,'price':obs['price'],'at':time.time()}
@@ -707,10 +713,14 @@ class StyleGrowth:
             if isinstance(bindings,dict):bindings.pop(name,None)
             intents[name].update(status='confirmed',after=new)
             self.ledger.event('style_growth_verified',style=name,before=current,after=new)
-            self._observe('skills',name,{'enhance':new})
+            self._observe('skills',name,{'enhance':new});verified=(newrow,new,time.monotonic())
+            # Where the time goes, for speeding it up (user 11-06): list read, checks before the press, press and result.
+            now=time.monotonic()
+            logging.getLogger('project_gui.DKB').info('도술 %s %d→%d · 목록 %.1f초 · 확인 %.1f초 · 입력·결과 %.1f초',
+                name,current,new,rows_read-step_started,observed_at-rows_read,now-observed_at)
         return {'status':'partial','style':name,'level':new}
 
-def run_configured(ui,ledger,document,guard,*,max_steps=5,observe=None,include_individual=True):
+def run_configured(ui,ledger,document,guard,*,max_steps=10,observe=None,include_individual=True):
     """Run enabled style targets, continuing only past safely held rows.
 
     The outer caller must open the actual growth style tab, give a guard that
@@ -995,7 +1005,8 @@ def run_after_native(adapter,context,inputs):
     detector=RoiDetector(Path(root)/'profiles/DKB',list(names));ui=SkillUI(adapter,context,inputs)
     # Keep a return margin inside the existing180-second identity lifetime.
     # This visit limit never overrides Stop or reconciles an uncertain input.
-    ui._owner_growth_deadline=progress.observed+120
+    # The guard holds a reading 180 s; 165 of it are used (was 120: three levels a visit, pc1 16:04).
+    ui._owner_growth_deadline=progress.observed+165
     if styles_enabled:ui.prepare_batch_engines()
     if not ui.normal() or guard() is not True:raise Pending('도술 성장 시작 화면 확인 필요')
     entered=False

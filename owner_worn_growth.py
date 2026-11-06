@@ -206,7 +206,7 @@ class Route:
         if not isinstance(goal,dict) or goal.get('enabled') is not True:return None
         kinds=(ENHANCE,AWAKEN) if item.blessing else (ENHANCE,BREAK,AWAKEN) if breakthrough_allowed() else (ENHANCE,AWAKEN)
         for kind in kinds:
-            if kind in item.done:continue
+            if kind in item.done or resting(self.adapter,item.slot,kind):continue
             value=item.values.get(kind)
             if type(value) is int and type(goal.get(kind)) is int and value<goal[kind]:return kind
         return None
@@ -317,7 +317,7 @@ class Route:
         if kind==AWAKEN and not item.blessing and action['enough'] is False and self.choose_material(item):
             action=read_action(self.root,self.frame(),LABEL[kind]) or action
         if not action['active']:
-            LOG.info('착용 %s %s 불가 · 재료 부족 또는 버튼 꺼짐',item.slot,LABEL[kind]);item.done.add(kind);return
+            LOG.info('착용 %s %s 불가 · 재료 부족 또는 버튼 꺼짐',item.slot,LABEL[kind]);item.done.add(kind);rest(self.adapter,item.slot,kind);return
         field={BREAK:'breakthrough',AWAKEN:'awakening'}[kind]
         def seen(sequence,stamp):
             return Observation(sequence,stamp,self.identity,'worn-slot:'+item.slot,item.record,item.key,item.values.get(ENHANCE),
@@ -391,7 +391,7 @@ class Route:
         if shown is None:
             LOG.info('착용 %s 각성 재료 목록 수 미확인',item.slot);return False
         if shown<2:
-            LOG.info('착용 %s 각성 재료 없음 · 동일 장비 없음',item.slot);return False
+            LOG.info('착용 %s 각성 재료 없음 · 동일 장비 없음',item.slot);rest(self.adapter,item.slot,AWAKEN);return False
         self.service.click_hit(real_hit(*SECOND_TILE));self.context.wait(1)
         return True
     # ---- the visit
@@ -429,7 +429,7 @@ class Route:
         for turn in range(2):
             for item in items:
                 self.check()
-                if not item.values:self.read(item)
+                if not item.values and not self.from_table(item):self.read(item)
         known=[item for item in items if item.values and item.grade]
         missed=[item.slot for item in items if not item.values]
         if missed:LOG.info('착용 장비 현재값 못 읽음 · 이번 차례 제외 · %s',', '.join(missed))
@@ -457,13 +457,24 @@ class Route:
             for item in items:
                 self.check()
                 if time.monotonic()>=self.deadline:return
-                if not item.values:self.read(item)
+                if not item.values and not self.from_table(item):self.read(item)
         missed=[item.slot for item in items if not item.values]
         if missed:LOG.info('착용 가호 현재값 못 읽음 · 이번 차례 제외 · %s',', '.join(missed))
         for item in items:
             self.check()
             if time.monotonic()>=self.deadline:return
             if item.values and self.need(item):self.visit(item)
+    def from_table(self,item):
+        """A part read within TABLE_SECONDS that has nothing left to do (goals met, or its next step resting after a
+        shortage) is not opened again (user 11-06: read only what changed). Anything else is read as before."""
+        from owner_growth_current import recent_reading
+        try:found=recent_reading(self.root,self.profile,item.slot,TABLE_SECONDS)
+        except Exception:return False
+        if not found or found[0] not in ('일반','희귀','영웅','전설'):return False
+        item.grade,item.values=found
+        if self.need(item) is None:return True
+        item.grade=None;item.values=None
+        return False
     def to_field(self):
         self.leave_growth();worn.leave_blessing_screen(self.service,self.context)
         worn.close_bag(self.service,self.context)
@@ -555,6 +566,18 @@ def run(adapter,context,inputs):
 
 
 IDLE_MINUTES=20
+TABLE_SECONDS=1800
+
+
+def rest(adapter,slot,kind):
+    """A step that could not run for want of materials or coins is not tried again for IDLE_MINUTES."""
+    rests=getattr(adapter,'_owner_worn_short',None)
+    if rests is None:rests=adapter._owner_worn_short={}
+    rests[(slot,kind)]=time.monotonic()+IDLE_MINUTES*60
+
+
+def resting(adapter,slot,kind):
+    return time.monotonic()<(getattr(adapter,'_owner_worn_short',None) or {}).get((slot,kind),0)
 
 
 def idle_skip(adapter,revision):
@@ -565,4 +588,4 @@ def idle_skip(adapter,revision):
 
 def wake(adapter):
     """Something may have changed (a new item, a death, new materials): the next pass reads again."""
-    adapter._owner_worn_idle=None
+    adapter._owner_worn_idle=None;adapter._owner_worn_short={}
