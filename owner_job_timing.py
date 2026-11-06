@@ -49,8 +49,28 @@ def growing(adapter):
     try:
         from owner_progression import state
         level=state(adapter).level
-    except Exception:return False
+    except Exception:level=None
+    level=known_level(adapter,level)
     return type(level) is int and level<GROWING_LEVEL
+
+
+def known_level(adapter,level):
+    """The level read now is kept per character; before the first read of a run the kept one stands. At F1 the level
+    was still unread, so the start ran 가호 and 비경탐험 at level 12 (pc1 23:40)."""
+    import json
+    from pathlib import Path
+    try:
+        from owner_hunt_rules_candidate import configured_identity
+        root=adapter.project.root;who=configured_identity(root)
+        path=Path(root)/'settings/owner-growing.json'
+        try:data=json.loads(path.read_text(encoding='utf-8'))
+        except (OSError,ValueError):data={}
+        if type(level) is int:
+            if data.get(who)!=level:data[who]=level;path.write_text(json.dumps(data,ensure_ascii=False),encoding='utf-8')
+            return level
+        kept=data.get(who)
+        return kept if type(kept) is int else None
+    except Exception:return level
 
 
 def signalled(item):

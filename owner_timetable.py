@@ -1154,6 +1154,41 @@ def catch_up_overdue(adapter,context,inputs):
         finally:adapter.values=old_values
         context.checkpoint()
 
+PREP_KEYS=('inventory','gear_equip','blessing_equip','gear')
+PREP_SECONDS=600
+
+
+def prep_before_step(adapter,context,inputs):
+    """Before a main-quest step, as a person gets ready for its boss: boxes, then the better gear, then growth, each
+    only when a signal brought it forward (owner_job_timing.allowed). At pc1 23:33 the character walked into 사슴왕 at
+    10.5K and died twice; the equip came only after. At most every PREP_SECONDS."""
+    import time as clock
+    from owner_job_timing import allowed,boundary
+    from owner_chore_transition import ancillary_field_ready,ChoreYield
+    from owner_work_resume import ResumeWork
+    if clock.monotonic()-getattr(adapter,'_owner_prep_at',-1e9)<PREP_SECONDS:return []
+    if character_mismatch(adapter):return []
+    adapter._owner_prep_at=clock.monotonic()
+    plan=planner(adapter);at=now();ran=[]
+    for key in PREP_KEYS:
+        job=BY_KEY.get(key);item=plan.state.get(key,{})
+        if job is None or not enabled(job,plan.values) or item.get('status')!='pending':continue
+        if not allowed(adapter,job,item) or parse_at(item['at'])>at or plan.reason(key):continue
+        context.checkpoint();adapter.exit_sleep_mode(context,inputs)
+        if not ancillary_field_ready(adapter,context,inputs):break
+        LOG.info('임무 전 정비 · %s',job.label)
+        old_values=adapter.values;adapter.values=dict(plan.values)
+        try:
+            with boundary():scheduled_call(lambda:timed_invoke(adapter,job,context,inputs),job.label,(),{},adapter,timed_dispatch=True,run_context=context,run_inputs=inputs)
+        except (ResumeWork,ChoreYield):break
+        except Exception as exc:
+            from biol_base.session import Cancelled
+            if isinstance(exc,Cancelled):raise
+            LOG.warning('임무 전 정비 미완료 · %s · %s',job.label,str(exc)[:120])
+        finally:adapter.values=old_values
+        ran.append(key)
+    return ran
+
 def wrap_idle_wait(original_wait):
     @wraps(original_wait)
     def wait(adapter,context,inputs):

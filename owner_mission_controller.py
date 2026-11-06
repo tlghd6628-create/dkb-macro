@@ -422,6 +422,9 @@ def run(adapter,context,inputs):
      if ui.normal():
       try:guide_skill(ui)
       except Pending as exc:LOG.info('길잡이 도술 장착 보류 · %s',exc)
+      if requested=='main_quest':
+       from owner_timetable import prep_before_step
+       prep_before_step(adapter,context,inputs)
      key=ui.pick(book,requested,progress.power)
     if key is not None and book.item.get('story_full_hunt',{}).get('status')=='waiting':
      book.item['story_full_hunt'].update(status='resumed',resumed_at=time.time());book.commit()
@@ -443,7 +446,10 @@ def run(adapter,context,inputs):
      full_deferred=defer_full_queue(book,progress.power)
      if not full_deferred and book.refill_finished_batch(progress.power):continue
      # A partial/20-cap scan does not prove every suitable story was cleared.
-     if not full_deferred and book.item['batch'].get('scan_complete') is not True:
+     # While growing, a story list that took none hunts instead of being read again (pc1 23:41-23:50: four
+     # 2-minute reads, 0/20 each time, while the main quest waited for power).
+     from owner_job_timing import growing
+     if not full_deferred and book.item['batch'].get('scan_complete') is not True and not (growing(adapter) and not book.item['batch'].get('keys')):
       book.item['story_group_fill_pending']=True;book.commit()
       raise Pending('서사 전체 목록 확인 전에는 사냥 전환하지 않음')
      # Route only with a fresh, verified power. Unknown power is never zero.
