@@ -64,8 +64,34 @@ class QuotaMessage(logging.Filter):
   return True
 
 def settings(root):return read(Path(root)/'settings/owner-membership.json',{'version':1,'paid':False})
-def paid(root):return settings(root).get('paid') is True
+
+
+def _who(root):
+ try:
+  from owner_hunt_rules_candidate import configured_identity
+  return configured_identity(root)
+ except Exception:return None
+
+
+def paid(root):
+ """Membership is per character: a new character on this PC had none and the whole run stopped on the remote
+ shop (pc1 22:35, 짱군네). A character the shop showed grey is not a member until the setting is saved again."""
+ data=settings(root)
+ who=_who(root)
+ if who and who in (data.get('absent') or []):return False
+ return data.get('paid') is True
+
+
 def set_paid(root,value):save(Path(root)/'settings/owner-membership.json',{'version':1,'paid':bool(value)})
+
+
+def mark_absent(root):
+ data=dict(settings(root));who=_who(root)
+ if not who:return
+ absent=list(data.get('absent') or [])
+ if who not in absent:absent.append(who)
+ data['absent']=absent;save(Path(root)/'settings/owner-membership.json',data)
+ LOG.warning('멤버십 원격 상점 없음 · 이 캐릭터는 마을 상인으로 물약 구매')
 
 @lru_cache(maxsize=4)
 def asset(name):
@@ -159,6 +185,13 @@ def remote_purchase(adapter,context,inputs):
   LOG.info('원격 물약 구매 생략 · %s 1시간 안에 한도 가득 확인 · 상점 열지 않음',tier);return True
  try:ui=open_remote(adapter,context,inputs)
  except RemoteShopDeferred as exc:
+  LOG.warning('원격 물약 작업만 보류 · %s',exc);return False
+ except Pending as exc:
+  # The remote merchant is grey without a membership: this character buys in town from now on.
+  from owner_worn_stats import close_bag
+  try:close_bag(TownServices(adapter,context,inputs,[]),context)
+  except Exception:pass
+  if '원격 잡화상점 표시' in str(exc):mark_absent(adapter.project.root)
   LOG.warning('원격 물약 작업만 보류 · %s',exc);return False
  names=list(POTION_NAMES)+['버튼_물약상인_2단물약','버튼_물약상인_3단물약']
  service=TownServices(adapter,context,inputs,list(dict.fromkeys(names)))
