@@ -81,6 +81,12 @@ def dispatch(adapter,context,ordinary):
     # Favorite-hunt's normal receipt includes entering sleep mode. Wake before
     # opening menus, while preserving the game's AUTO mode and location.
     keys={key for key in item['keys'] if old.get(key) is True};milestone=None
+    # While growing, only the bag (boxes) runs here; the rest waits for its own red dot or level (pc1 00:18: 기운 발현,
+    # 화첩 and 가호 were tried at level 14, the menus not open yet).
+    from owner_job_timing import growing
+    if growing(adapter):
+        keys&={'auto_rewards.inventory_use.enabled'}
+        if not keys:adapter._owner_pending_services=None;return False
     if adapter.mode in ('main_quest','sub_quest'):
         from owner_progression import state,GROWTH
         milestone=state(adapter).due()
