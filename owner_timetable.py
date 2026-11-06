@@ -88,7 +88,9 @@ def parse_at(value):
     # Python3.10 accepts only3/6 fractional digits; other JSON writers may
     # round-trip the same instant with1/2/4/5 digits. Normalize, never guess.
     value=re.sub(r'(T\d{2}:\d{2}:\d{2})\.(\d{1,9})(?=[+-]|Z|$)',lambda m:m[1]+'.'+m[2][:6].ljust(6,'0'),value)
-    return datetime.fromisoformat(value.replace('Z','+00:00'))
+    parsed=datetime.fromisoformat(value.replace('Z','+00:00'))
+    # A time written without its zone is the game's KST: comparing it with an aware one stopped the run (pc1 23:21, 23:59).
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=KST)
 def read(path,default):
     try:return json.loads(Path(path).read_text(encoding='utf-8-sig'))
     except (OSError,ValueError):return default

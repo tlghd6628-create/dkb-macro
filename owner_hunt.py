@@ -63,7 +63,17 @@ def run(adapter,context,inputs):
     if time.monotonic()-progress.observed>120:raise RuntimeError('현재 전투력을 확인하지 못해 랜덤 사냥터 이동을 보류했습니다.')
     from owner_hunt_memory import guide_excluded,set_route
     candidate=choose(progress.power,guide_excluded(adapter,progress.power))
-    if candidate is None:raise RuntimeError('현재 전투력에서 검증된 안전 사냥터 후보를 확인할 수 없습니다.')
+    if candidate is None:
+        from owner_job_timing import growing
+        if growing(adapter):
+            # A growing character below every listed hunting ground (10.5K at pc1 00:00) fights where it stands: its
+            # quest area has monsters of its level. AUTO on, as a person would while waiting on power.
+            if favorite_hunt.ensure_auto_active(service.actions,context,LOG,post_click_wait=1,poll_seconds=.5) is False:
+                raise RuntimeError('성장기 제자리 사냥 AUTO 확인 실패')
+            LOG.info('성장기 · 맞는 사냥터 없음 · 전투력 %s · 현재 자리에서 자동사냥',format(progress.power,','))
+            adapter._owner_hunt_ready=True
+            return True
+        raise RuntimeError('현재 전투력에서 검증된 안전 사냥터 후보를 확인할 수 없습니다.')
     service.key(0x74);context.wait(.4)
     def wait_for(test,seconds=5):
         end=time.monotonic()+seconds
