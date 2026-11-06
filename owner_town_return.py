@@ -45,10 +45,33 @@ def require_hunting_location(adapter,context,inputs):
     context.checkpoint();adapter.enter_sleep_mode(context,inputs)
 
 
+SAVED_COUNT=(230,62,60,28)   # real: '2/10' beside 위치 on the world map's saved list
+
+
+def saved_count(actions):
+    """How many saved spots the open list says it holds, or None."""
+    import re
+    try:
+        capture=getattr(actions,'capture',None)
+        frame=capture() if callable(capture) else None
+        if getattr(frame,'hi',None) is None:return None
+        from owner_text import read,clean
+        for row in read(None,frame,SAVED_COUNT,scale=2,minimum=.6):
+            m=re.fullmatch(r'(\d{1,2})/(\d{1,2})',clean(row['text']))
+            if m and 0<int(m.group(1))<=int(m.group(2)):return int(m.group(1))
+    except Exception:return None
+    return None
+
+
 def wrap_slots(ordinary):
     @wraps(ordinary)
     def slots(*args,**kwargs):
         result=ordinary(*args,**kwargs)
+        # The native list check has pictures for rows 1 and 2 only at 1366: a third saved spot (pc2 23:23, 3/10 on the
+        # list) was not seen and the hunt stopped. The list's own count 'N/10' says how many rows there are.
+        actions=args[0] if args else kwargs.get('actions')
+        counted=saved_count(actions)
+        if counted:result=sorted(set(result or [])|set(range(counted)))
         if not result:raise MissingFavorite()
         LOG.info('사냥터 등록 확인 · 사용 가능한 저장 슬롯=%s · 임의 이동 사용 안 함',result)
         return result
