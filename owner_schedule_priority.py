@@ -38,6 +38,18 @@ def revive(stall):
         if isinstance(exc,Cancelled):raise
         LOG.warning('복구 전 사망 확인 실패 · %s',str(exc)[:120]);return False
 
+def skip_scene(stall):
+    """A quest dialogue that opened while a job ran (짱군네 03:28, 보스 레이드 after the 2-3 boss) hides the full menu
+    and every button the recovery looks for; it pressed its limit five times. A person presses ESC while 넘기기 shows."""
+    try:
+        from owner_mission_ui import MissionUI
+        from owner_worn_stats import skip_scene as skip
+        return skip(MissionUI(stall.adapter,stall.context,stall.inputs).service,stall.context,'복구 전')
+    except Exception as exc:
+        from biol_base.session import Cancelled
+        if isinstance(exc,Cancelled):raise
+        LOG.warning('복구 전 대화 확인 실패 · %s',str(exc)[:120]);return False
+
 def wake_before_recovery(ordinary):
     """Sleep hides every button the screen recovery looks for, so it can only fail there.
 
@@ -55,6 +67,7 @@ def wake_before_recovery(ordinary):
                 LOG.warning('복구 전 절전 해제 실패 · %s',str(exc)[:120])
             finally:LOCAL.waking=False
         if not verify_only:revive(stall)
+        if not verify_only and not passive_wait:skip_scene(stall)
         return ordinary(stall,verify_only=verify_only,wait_on_exhaustion=wait_on_exhaustion,passive_wait=passive_wait)
     recover._owner_wakes=True
     return recover

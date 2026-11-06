@@ -228,14 +228,17 @@ def close_bag(service,context):
 SKIP_WORD=(1230,10,136,80)   # real: 넘기기 ESC at the top right of a story scene, where the full menu button was
 
 
-def skip_scene(service,context):
- """A story scene (pc1 11-06 12:12, after 일괄 획득) hides the full menu: ESC while its 넘기기 shows, at most 8 times."""
+def skip_scene(service,context,label='가호 화면 열기 전'):
+ """A story scene (pc1 11-06 12:12, after 일괄 획득) hides the full menu: ESC while its 넘기기 shows, at most 8 times.
+ True when one was skipped."""
  from owner_text import clean,read
+ skipped=False
  for _ in range(8):
   context.checkpoint();service.check()
-  if not any('넘기기' in clean(row['text']) for row in read(None,service.capture(),SKIP_WORD,scale=2,minimum=.6)):return
-  LOG.info('가호 화면 열기 전 대화 넘기기 · ESC')
-  service.key(0x1b);settle(service,context,1.2)
+  if not any('넘기기' in clean(row['text']) for row in read(None,service.capture(),SKIP_WORD,scale=2,minimum=.6)):return skipped
+  LOG.info('%s 대화 넘기기 · ESC',label)
+  service.key(0x1b);settle(service,context,1.2);skipped=True
+ return skipped
 
 
 def open_blessing_screen(service,context):
