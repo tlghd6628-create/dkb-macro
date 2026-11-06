@@ -11,12 +11,16 @@ import numpy as np
 WHITE=170;GREY=50;MIN_HEIGHT=8
 
 
-def glyphs(area):
-    """White-ink glyphs, left to right: (x, y, w, h, mask)."""
+def glyphs(area,gold=False):
+    """White-ink glyphs, left to right: (x, y, w, h, mask). gold=True takes the panel's gold next-step digits too."""
     import cv2
     a=np.asarray(area).astype(np.int16)
     if a.ndim!=3 or a.shape[0]<MIN_HEIGHT or a.shape[1]<2:return []
-    mask=((a.min(2)>WHITE)&(a.max(2)-a.min(2)<GREY)).astype(np.uint8)
+    ink=(a.min(2)>WHITE)&(a.max(2)-a.min(2)<GREY)
+    if gold:
+        r,g,b=a[...,0],a[...,1],a[...,2]
+        ink|=(r>170)&(g>120)&(b<130)&(r-b>60)
+    mask=ink.astype(np.uint8)
     n,labels,stats,_=cv2.connectedComponentsWithStats(mask,connectivity=8)
     found=[(int(x),int(y),int(w),int(h),labels[y:y+h,x:x+w]==i) for i,(x,y,w,h,_) in enumerate(stats) if i and h>=MIN_HEIGHT]
     return sorted(found,key=lambda g:g[0])
@@ -68,3 +72,20 @@ def lone_one(area):
     tallest=max(g[3] for g in found)
     tall=[g for g in found if g[3]>=tallest*.75]
     return len(tall)==1 and one_or_seven(tall[0][4])=='1'
+
+
+def is_plus(mask):
+    """The + button beside the next step: a full middle row and a full middle column, about square."""
+    h,w=mask.shape
+    if h<MIN_HEIGHT or not .7<=w/h<=1.4:return False
+    row=mask[h//2-1:h//2+2].any(0).mean();column=mask[:,w//2-1:w//2+2].any(1).mean()
+    return row>=.85 and column>=.85 and mask.mean()<.5
+
+
+def digit_count(area,gold=True):
+    """How many digit glyphs stand in the area, the + left out. None when there are none."""
+    found=glyphs(area,gold=gold)
+    if not found:return None
+    tallest=max(g[3] for g in found)
+    tall=[g for g in found if g[3]>=tallest*.75 and not is_plus(g[4])]
+    return len(tall) or None

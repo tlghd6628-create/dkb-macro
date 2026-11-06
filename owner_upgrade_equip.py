@@ -206,8 +206,13 @@ def watch_power(service,context,seconds=3.0):
         context.wait(.25);context.checkpoint();service.check()
         real=np.asarray(service.capture().hi);x,y,w,h=TOAST
         words=[text.clean(row['text']) for row in text.read_area(None,real[y:y+h,x:x+w],scale=2,minimum=.5)]
+        if not any('전투력' in word for word in words):continue
+        # The number from the cleaned digits: as it stands, +3,771 read +371 (pc2 06:59).
+        digits=[re.sub(r'[^\d]','',str(row['text'])) for row in text.read_digits(None,real[y:y+h,x+110:x+w])]
+        digits=[value for value in digits if value]
+        if len(digits)==1:return '전투력 +'+digits[0]
         rise=[word for word in words if word.startswith('+')]
-        if any('전투력' in word for word in words) and rise:return '전투력 '+rise[0]
+        if rise:return '전투력 '+rise[0]
     return None
 
 

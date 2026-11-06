@@ -70,6 +70,17 @@ class Next(unittest.TestCase):
         self.assertIsNone(next_pair([],[]))
 
 
+PLUS=['.....##.....','.....##.....','.....##.....','.....##.....','.....##.....','############','############','.....##.....','.....##.....','.....##.....','.....##.....','.....##.....']
+
+
+class Count(unittest.TestCase):
+    def test_eleven_and_the_plus(self):
+        # pc2 07:01: 10 >> 11 stopped every +10 slot; the gold 11 is two narrow 1s beside the + button.
+        area=draw(ONE,ONE,PLUS);gold=area.copy();gold[(area==235).all(2)]=(240,190,60)
+        self.assertEqual(shape.digit_count(gold),2);self.assertEqual(shape.digit_count(draw(ZERO,PLUS)),1)
+        self.assertTrue(shape.is_plus(mask(PLUS)));self.assertFalse(shape.is_plus(mask(ZERO)))
+
+
 class Panel(unittest.TestCase):
     def test_one_to_two_reads_by_shape(self):
         from types import SimpleNamespace as NS

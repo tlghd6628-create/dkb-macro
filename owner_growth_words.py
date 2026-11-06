@@ -94,6 +94,21 @@ def clean_pair(frame,root=None):
     return level_pair(*sides)
 
 
+def left_pair(frame,root=None):
+    """(level, level+1) when the current level reads clearly and the next step shows as many digits as level+1 has.
+    The gold 11 of 10 >> 11 is two narrow 1s and read 1 or nothing, and every slot at +10 stopped there (pc2 07:01-07:11);
+    the 10 read well. The next step is always one more on this tab, so its digit count is enough proof."""
+    import owner_digit_shape as shape
+    real=getattr(frame,'hi',None)
+    if real is None or getattr(real,'ndim',np.ndim(real))!=3:return None
+    real=np.asarray(real);x,y,w,h=BLESSING_LEVEL
+    try:a=_one_number(text.read_digits(root,real[y:y+h,x:x+w]))
+    except (TypeError,OSError,RuntimeError,AttributeError):return None
+    if a is None:return None
+    x,y,w,h=BLESSING_NEXT
+    return (a,a+1) if shape.digit_count(real[y:y+h,x:x+w])==len(str(a+1)) else None
+
+
 def next_pair(left,right):
     """(next-1, next) when the next step reads clearly and the left side says nothing against it. The left digit sits on
     the moving forge light and its read came and went (4 at 1.0, nothing, .55, .63 on four looks, 05:53), so two looks
@@ -192,6 +207,7 @@ def read_blessing(root,frame):
     if pair is None:pair=level_pair(text.read(root,frame,BLESSING_LEVEL,scale=2),text.read(root,frame,BLESSING_NEXT,scale=2))
     if pair is None:pair=lone_one_pair(frame,text.read(root,frame,BLESSING_NEXT,scale=3))
     if pair is None:pair=next_pair(text.read(root,frame,BLESSING_LEVEL,scale=3),text.read(root,frame,BLESSING_NEXT,scale=3))
+    if pair is None:pair=left_pair(frame,root)
     if pair is None:return None,'가호 강화 수치 글자 미확인'
     pill=text.read(root,frame,BLESSING_PILL,scale=3)
     word=only_word(pill,('강화','개방'))

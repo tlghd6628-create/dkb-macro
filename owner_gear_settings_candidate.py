@@ -29,6 +29,22 @@ DEFAULT = {'version': 1, 'recheck_minutes': 20, 'grades': {
     # 가호 소환 (owner_blessing_summon): 10회 while ten tickets or more, 1회 for the rest.
     'blessing_summon': {'one': False, 'ten': False}}
 EQUIP_STEPS = (('normal_to_rare', '일반 → 희귀'), ('rare_to_hero', '희귀 → 영웅'))
+# A TEST result goes on its own line under its controls, as wide as they are and clipped there. Beside the button a
+# longer text moved 기능 사용 and TEST, and a click meant for the checkbox started a second TEST (pc2 11-06); a box of
+# fixed size beside them widened the page's columns instead.
+def controls_line(parent, **grid):
+    """(outer, line): grid the outer frame, pack the controls into line, and put the result under them."""
+    outer = ttk.Frame(parent); outer.grid(**grid)
+    line = ttk.Frame(outer); line.pack(side='top', anchor='w')
+    return outer, line
+
+
+def result_label(parent, variable):
+    box = ttk.Frame(parent, width=1, height=18)
+    box.pack_propagate(False)
+    ttk.Label(box, textvariable=variable, anchor='w').pack(fill='both', expand=True)
+    box.pack(side='top', fill='x')
+    return box
 
 
 def skill_catalog():
@@ -278,20 +294,22 @@ class GearSettings:
             self.blessing_rank.append(v)
             ttk.Label(ranks,text=str(index+1)).grid(row=0,column=index,padx=3)
             ttk.Combobox(ranks,textvariable=v,values=('',)+PATTERNS,state='readonly',width=7).grid(row=1,column=index,padx=3)
-        summon=ttk.Frame(blessings);summon.grid(row=11,column=0,columnspan=6,sticky='w',pady=(9,3))
+        # Row 11 is the settings console's 가호 일괄 획득 box (owner_settings_console), which hid this line there (pc2 11-06);
+        # it sits under the worn table on the right, where the page has room.
+        summon_box,summon=controls_line(blessings,row=8,column=6,rowspan=2,sticky='nw',padx=(24,0),pady=(9,3))
         ttk.Label(summon,text='가호 소환').pack(side='left')
         self.summon_vars={key:tk.BooleanVar(self.window,value=self.value['blessing_summon'].get(key) is True) for key in ('one','ten')}
         for key,label in (('one','1회'),('ten','10회')):
             ttk.Checkbutton(summon,text=label,variable=self.summon_vars[key]).pack(side='left',padx=(10,0))
         summon_result=tk.StringVar(self.window,value='')
         ttk.Button(summon,text='TEST',width=6,command=lambda:self.summon_test(summon_result)).pack(side='left',padx=(10,8))
-        ttk.Label(summon,textvariable=summon_result).pack(side='left')
+        result_label(summon_box,summon_result)
         # Beside the targets: below the reward box the page runs out of height.
         self.worn_heading(blessings,'착용 가호 · 최근 확인값',row=0,column=6,columnspan=1,padx=(24,0))
         worn_blessings=ttk.Treeview(blessings,columns=('slot','kind','grade','enhance','awaken'),show='headings',height=5)
         for key,text,width in zip(worn_blessings['columns'],('칸','종류','등급','강화','각성'),(44,62,52,46,46)):
             worn_blessings.heading(key,text=text);worn_blessings.column(key,width=width,anchor='center',stretch=False)
-        worn_blessings.grid(row=1,column=6,rowspan=6,sticky='n',padx=(24,0))
+        worn_blessings.grid(row=1,column=6,rowspan=6,sticky='nw',padx=(24,0))
         self._blessing_display=None
         energies=ttk.Frame(tabs,padding=8);tabs.add(energies,text='기운')
         self.feature_switch(energies,'energies')
@@ -345,24 +363,24 @@ class GearSettings:
         if self.switches is None:return
         value=tk.BooleanVar(self.window,value=self.switches.initial[section])
         self.feature_vars[section]=value
-        line=ttk.Frame(parent);line.grid(row=0,sticky='w',pady=(0,8),**dict({'column':0,'columnspan':6},**layout))
+        outer,line=controls_line(parent,row=0,sticky='w',pady=(0,8),**dict({'column':0,'columnspan':6},**layout))
         check=ttk.Checkbutton(line,text='기능 사용',variable=value);check.pack(side='left')
         if not self.switches.editable[section]:check.configure(state='disabled')
         result=tk.StringVar(self.window,value='')
         test=ttk.Button(line,text='TEST',width=6,command=lambda:self.test_request(section,result))
         test.pack(side='left',padx=(10,8))
-        ttk.Label(line,textvariable=result).pack(side='left')
+        result_label(outer,result)
 
     def test_request(self,section,result):
         """Set by the settings console; alone in a separate window it has no worker to run on."""
         result.set('세부설정 창에서 실행해 주세요')
 
     def worn_heading(self,parent,title,*,row,columnspan,column=0,padx=0):
-        line=ttk.Frame(parent);line.grid(row=row,column=column,columnspan=columnspan,sticky='w',pady=(9,3),padx=padx)
+        outer,line=controls_line(parent,row=row,column=column,columnspan=columnspan,sticky='w',pady=(9,3),padx=padx)
         ttk.Label(line,text=title).pack(side='left')
         result=tk.StringVar(self.window,value='')
         ttk.Button(line,text='TEST',width=6,command=lambda:self.worn_test(result)).pack(side='left',padx=(10,8))
-        ttk.Label(line,textvariable=result).pack(side='left')
+        result_label(outer,result)
 
     def worn_test(self,result):
         """Set by the settings console, like test_request."""
@@ -370,7 +388,7 @@ class GearSettings:
 
     def equip_line(self,parent,kind,section,*,row,columnspan):
         """높은 등급 우선 장착: one tick per grade step, and its TEST. The time is in the timetable."""
-        line=ttk.Frame(parent);line.grid(row=row,column=0,columnspan=columnspan,sticky='w',pady=(9,3))
+        outer,line=controls_line(parent,row=row,column=0,columnspan=columnspan,sticky='w',pady=(9,3))
         ttk.Label(line,text='높은 등급 우선 장착').pack(side='left')
         steps={}
         for key,text in EQUIP_STEPS:
@@ -378,7 +396,7 @@ class GearSettings:
             ttk.Checkbutton(line,text=text,variable=steps[key]).pack(side='left',padx=(10,0))
         result=tk.StringVar(self.window,value='')
         ttk.Button(line,text='TEST',width=6,command=lambda:self.equip_test(kind,result)).pack(side='left',padx=(10,8))
-        ttk.Label(line,textvariable=result).pack(side='left')
+        result_label(outer,result)
         return steps
 
     def equip_test(self,kind,result):

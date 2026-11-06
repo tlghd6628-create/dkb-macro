@@ -16,7 +16,7 @@ from owner_gear_intent_store_candidate import IntentStore
 from owner_gear_settings_candidate import Store
 from owner_gear_step_guard_candidate import Guard
 from owner_growth_reading import breakthrough_allowed,goal_state
-from owner_growth_words import (BLESSING_COUNT,BLESSING_LEVEL,BLESSING_NEXT,BLESSING_PILL,BLESSING_TITLE,clean_pair,counts,enough,level_pair,lit,lone_one_pair,next_pair,only_word,pill_price)
+from owner_growth_words import (BLESSING_COUNT,BLESSING_LEVEL,BLESSING_NEXT,BLESSING_PILL,BLESSING_TITLE,clean_pair,counts,enough,left_pair,level_pair,lit,lone_one_pair,next_pair,only_word,pill_price)
 from owner_hd import real_hit
 from owner_short_notice import shown as coins_short
 
@@ -93,6 +93,7 @@ def read_panel(root,frame):
         pair=level_pair(left,right) or font_pair(left,right)
     if pair is None:pair=lone_one_pair(frame,text.read(root,frame,BLESSING_NEXT,scale=3))
     if pair is None:pair=next_pair(text.read(root,frame,BLESSING_LEVEL,scale=3),text.read(root,frame,BLESSING_NEXT,scale=3))
+    if pair is None:pair=left_pair(frame,root)
     if pair is None:return None
     pill=text.read(root,frame,BLESSING_PILL,scale=3);word=only_word(pill,('강화','개방'))
     have=have_enough(root,frame)
