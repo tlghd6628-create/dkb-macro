@@ -118,10 +118,11 @@ class Gate(unittest.TestCase):
             try:Adapter._run_field_boss_entry(S(),context,None)
             except BaseException as exc:calls.append(type(exc).__name__)
         return calls
-    def test_order(self):self.assertEqual(self.entry(),['loosen','boss','restore'])
-    def test_restored_on_the_unwind_back_to_hunting(self):
+    # User 11-06: 제자리 comes back only at the hunting spot (owner_hunt.at_spot), never where the boss was.
+    def test_order(self):self.assertEqual(self.entry(),['loosen','boss'])
+    def test_left_open_on_the_unwind_back_to_hunting(self):
         class ResumeWork(BaseException):pass
-        self.assertEqual(self.entry(raises=ResumeWork()),['loosen','boss','restore','ResumeWork'])
+        self.assertEqual(self.entry(raises=ResumeWork()),['loosen','boss','ResumeWork'])
     def test_a_stop_leaves_it_for_the_next_start(self):self.assertEqual(self.entry(stop=True),['loosen','boss'])
 
 class Wake(unittest.TestCase):

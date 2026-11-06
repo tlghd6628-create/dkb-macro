@@ -144,6 +144,8 @@ def resume_dungeon(gui,adapter,context,inputs,service):
 def _resume_dungeon(gui,adapter,context,inputs,service,*,goal=None):
     from owner_camera import zoom_once
     zoom_once(adapter,context,inputs)
+    from owner_dungeon_reentry import dungeon_range
+    dungeon_range(adapter,context,inputs)
     from project_adapter.secret_exploration import ensure_auto_active
     from project_adapter.main_quest import StateROIs,BoundedMainQuestRunner,dependencies
     slots=StateROIs(adapter.project.root/'profiles'/adapter.project.code,mode='sub_quest')
@@ -402,9 +404,7 @@ def install(gui):
                     if kind=='field':
                         from owner_single_preset import resume as preset_return
                         preset_return(adapter,context,inputs)
-                        from owner_boss_range import pending,restore
-                        # A quest mode keeps it open: quests walk to their monsters.
-                        if adapter.mode=='auto_mode' and pending(adapter.project.root):restore(adapter,context,inputs)
+                        # An open boss range record is restored by the hunt itself once at the saved spot (owner_hunt).
                     if kind in ('field','dungeon'):
                         from owner_timetable import catch_up_overdue
                         catch_up_overdue(adapter,context,inputs)

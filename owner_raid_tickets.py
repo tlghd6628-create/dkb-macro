@@ -161,13 +161,12 @@ def install():
     fight=raid.RaidFlow.run
     @wraps(fight)
     def run(flow,stage,bulk):
-        from owner_boss_range import loosen,restore
+        from owner_boss_range import loosen
         # The entry count replaced the ticket mode, so an old saved "일괄소모" spends nothing extra.
         flow._owner_bulk=False
         loosen(flow.adapter,flow.context,flow.inputs)
-        try:return fight(flow,stage,False)
-        finally:
-            if not flow.context.stop.is_set():restore(flow.adapter,flow.context,flow.inputs)
+        # Restored at the saved hunting spot only (owner_hunt), not where the raid left the character.
+        return fight(flow,stage,False)
     raid.RaidFlow.run=run
     confirms=frozenset((raid.CONFIRM,raid.CONFIRM2))
     press_button=raid.RaidFlow.press;click_button=raid.RaidFlow.click

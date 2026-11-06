@@ -36,10 +36,9 @@ def install(gui=None):
         context.checkpoint()
         if not allowed(adapter,context,inputs):return True
         # Late import: tests and the gate itself stay usable without the panel module.
-        from owner_boss_range import loosen,restore
+        from owner_boss_range import loosen
         loosen(adapter,context,inputs)
-        try:return ordinary(adapter,context,inputs,*args,**kwargs)
-        finally:
-            # Also on the unwind back to hunting. A stop leaves the record for the next start.
-            if not context.stop.is_set():restore(adapter,context,inputs)
+        # The record stays open: 제자리 comes back on only at the saved hunting spot (owner_hunt), never where the boss
+        # was, which may have no monsters (user 11-06).
+        return ordinary(adapter,context,inputs,*args,**kwargs)
     entry._owner_boss_gate=True;Adapter._run_field_boss_entry=entry

@@ -101,6 +101,21 @@ def run(adapter,context,inputs):
     return True
 
 
+def at_spot(adapter,context,inputs):
+    """Back at the hunting spot after OFF·30m: 제자리 ON·5m set here, then AUTO made sure of so it holds this spot.
+    Turned on anywhere else it can stay where no monster comes (user 11-06)."""
+    from owner_boss_range import pending,restore
+    if adapter.mode!='auto_mode' or getattr(adapter,'_owner_temporary_work',None) or not pending(adapter.project.root):return False
+    if not restore(adapter,context,inputs):return False
+    from project_adapter.town_services import TownServices
+    from project_adapter import favorite_hunt
+    service=TownServices(adapter,context,inputs,[])
+    if favorite_hunt.ensure_auto_active(service.actions,context,LOG,post_click_wait=1,poll_seconds=.5) is False:
+        LOG.warning('제자리 복원 뒤 AUTO 확인 실패');return False
+    LOG.info('사냥터 도착 · 제자리 5m 설정 후 사냥 계속')
+    return True
+
+
 def install(gui):
     from project_adapter._entry import Adapter
     if getattr(Adapter.run_favorite_hunt,'_owner_guide_hunt',False):return
@@ -115,6 +130,7 @@ def install(gui):
             LOG.info('지정 사냥터 미등록 · 둘러보기 추천 후보를 전투력 기준으로 확인합니다.')
             result=run(adapter,context,inputs)
         if result is True:require_hunting_location(adapter,context,inputs)
+        if result is True or result in ('HUNTING_RESUMED','HUNTING_STARTED'):at_spot(adapter,context,inputs)
         if not getattr(adapter,'_owner_temporary_work',None) and (result is True or result in ('HUNTING_RESUMED','HUNTING_STARTED')):
             context.checkpoint();progress.begin_work('auto_mode')
             # Native preparation calls favorite hunt for side effects, so

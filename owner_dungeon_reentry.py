@@ -191,12 +191,22 @@ def wrap_select(original):
     select._owner_dungeon_reentry_select=True
     return select
 
+def dungeon_range(adapter,context,inputs):
+    """Inside a dungeon the character must walk to its monsters: 제자리 off and 30 m, as for a boss. The hunt's own
+    ON 5 m comes back at the next hunt (pc1 17:11: 비경 resumed with AUTO on, standing alone at the entrance)."""
+    try:
+        from owner_boss_range import pending,loosen
+        if pending(adapter.project.root) is None:loosen(adapter,context,inputs)
+    except Exception as exc:LOG.info('비경 이동 범위 설정 보류 · %s',exc)
+
+
 def wrap_enter(original):
     @wraps(original)
     def enter(flow,*args,**kwargs):
         result=original(flow,*args,**kwargs)
         if result is True:
             flow._owner_entry_seen=True;flow._owner_entered_at=time.monotonic()
+            dungeon_range(flow.adapter,flow.context,flow.inputs)
             save_record(flow.adapter,kind_of(flow),'inside',budget=remaining_goal(flow) if kind_of(flow) in GOAL_KINDS else None)
         return result
     enter._owner_dungeon_reentry_enter=True
