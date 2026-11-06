@@ -55,6 +55,11 @@ def run(adapter,context,inputs):
     from owner_progression import observe_inventory
     adapter.exit_sleep_mode(context,inputs)
     service=TownServices(adapter,context,inputs,list(dict.fromkeys(guide_rewards.NAMES+favorite_hunt.NAMES+market_inventory.INVENTORY_USE_NAMES)))
+    # Hunting in place while growing: the loop comes back every minute and opened the bag each time to read power
+    # (pc1 00:09, 00:10). Within ten minutes, with AUTO still lit, it just goes on.
+    from owner_hunt_here import auto_lit
+    if time.monotonic()-getattr(adapter,'_owner_growing_hunt_at',-1e9)<600 and auto_lit(service.capture()):
+        adapter._owner_hunt_ready=True;return True
     # Refresh level/power through the ordinary inventory entry, then close it.
     if market_inventory.open_inventory(service) is False:raise RuntimeError('사냥터 선택 전 인벤토리 확인 실패')
     observe_inventory(service)
@@ -71,6 +76,7 @@ def run(adapter,context,inputs):
             if favorite_hunt.ensure_auto_active(service.actions,context,LOG,post_click_wait=1,poll_seconds=.5) is False:
                 raise RuntimeError('성장기 제자리 사냥 AUTO 확인 실패')
             LOG.info('성장기 · 맞는 사냥터 없음 · 전투력 %s · 현재 자리에서 자동사냥',format(progress.power,','))
+            adapter._owner_growing_hunt_at=time.monotonic()
             adapter._owner_hunt_ready=True
             return True
         raise RuntimeError('현재 전투력에서 검증된 안전 사냥터 후보를 확인할 수 없습니다.')
