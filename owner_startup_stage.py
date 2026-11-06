@@ -43,6 +43,19 @@ def sleep_screen(service,adapter,frame):
     from owner_text import find,read
     return bool(find(read(adapter.project.root,frame,SLEEP_WORDS,bright=True),'절전 해제'))
 
+MENU_TITLE=(85,12,260,38)   # real: a full-screen menu's title right of the back arrow at (35,30)
+
+
+def menu_title(frame):
+    """The title of a full-screen menu, or ''. Only with the screen's own top-right exit icon dark area left alone."""
+    if getattr(frame,'hi',None) is None:return ''
+    from owner_text import read,clean
+    # A menu title sits at y 32 in large letters; the field's place name above the minimap sits at y 23 (pc1 frames).
+    rows=[r for r in read(None,frame,MENU_TITLE,scale=2,minimum=.7) if 28<=r['ry']<=36 and r['bounds'][3]-r['bounds'][1]>=29]
+    words=''.join(clean(r['text']) for r in rows)
+    return words if 2<=len(words)<=14 else ''
+
+
 def slide_awake(adapter,context,inputs):
     """Middle of the screen to the upper right, which is what wakes the game at 1366x768 (tried by hand, 16:40)."""
     from owner_skill_ui import SkillUI
@@ -378,6 +391,15 @@ def install(gui):
                     if unknown_since is None:
                         unknown_since=time.monotonic()
                         LOG.info('시작 화면 전환 대기 · 알려진 위치 확인 후 임무 준비 · 최대 40초')
+                    # A full-screen menu the start does not know (몽련 치료하기 after its reward, pc1 02:03) shows a title
+                    # beside the back arrow: back out, at most three times, before the 40 s limit.
+                    if time.monotonic()-unknown_since>=8 and menu_title(second_frame):
+                        back_key=(gui._owner_stage_epoch,'start-back')
+                        stage_attempts[back_key]=stage_attempts.get(back_key,0)+1
+                        if stage_attempts[back_key]<=3:
+                            import owner_hd as hd
+                            LOG.info('시작 화면 · 모르는 메뉴 %s · 뒤로가기',menu_title(second_frame))
+                            service.click_hit(hd.real_hit(35,30));context.wait(1.2);unknown_since=None;continue
                     if time.monotonic()-unknown_since>=40:
                         raise RuntimeError('시작 화면을 40초간 확인하지 못했습니다. 임무 준비 입력 없이 진단을 저장합니다.')
                     context.wait(.35)
