@@ -150,6 +150,15 @@ def defer_full_queue(book,power):
 def hunt_started(result):
  return result is True or result in ('HUNTING_RESUMED','HUNTING_STARTED')
 
+def fighting(frame):
+ """A target's red health bar under its name at the top centre (real y 72-80): 0.5-0.74 of the strip while fighting,
+ 0 on still or walking frames (pc1 11-06/07 shots)."""
+ import numpy as np
+ real=getattr(frame,'hi',None)
+ if real is None:return False
+ p=np.asarray(real)[72:80,620:765].astype(int)
+ return float(((p[...,0]>110)&(p[...,1]<50)&(p[...,2]<50)).mean())>=.3
+
 def restart_idle_quest(ui,idle):
  """Auto-move can drop after a boss fight, and the native runner then only clicks empty ground.
  A minimap unchanged for two minutes on the bare field presses the quest's own auto-progress again.
@@ -165,6 +174,10 @@ def restart_idle_quest(ui,idle):
    leave_menu(ui.service);idle.update(crop=None,at=time.monotonic());return True
  now=time.monotonic();crop=frame[18:100,12:95].mean(axis=2)
  if idle.get('crop') is None or float(np.abs(crop-idle['crop']).mean())>IDLE_MINIMAP_CHANGE:
+  idle.update(crop=crop,at=now);return False
+ if fighting(frame):
+  # Killing the quest's monsters keeps the minimap still; that is progress, not a stall (pc1 lv38 02:24-02:40: AUTO
+  # was pressed again every minute in the middle of 해골 8/20).
   idle.update(crop=crop,at=now);return False
  if now-idle['at']<IDLE_SECONDS or not ui.normal():return False
  LOG.info('임무 자리 정체 %d초 · 자동 진행 다시 누름 · %s',now-idle['at'],ui.adapter.mode)
