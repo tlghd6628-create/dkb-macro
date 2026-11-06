@@ -22,6 +22,7 @@ FACE_BUTTON=(316,688)              # real: the face under the chat lines, which 
 PANEL_TITLE=(420,485,220,30);PANEL_CARDS=(400,515,285,245);PANEL_CLOSE=(672,500)
 CARD_ABOVE_WORD=33                 # the card's face stands this far above its word
 SETTLE=(400,120,600,420)           # real: the middle of the field, still once the walk is over
+PANEL_WHEEL=(540,640);PANEL_SCROLLS=5  # real: inside the 감정 표현 panel's cards
 
 
 def words(frame,box,minimum=.6):
@@ -119,6 +120,12 @@ def run(ui,book,key):
     if not panel_open(frame):
         LOG.info('감정 임무 · 감정 표현 창 안 열림 · %s',target);close_all(ui);return False
     cards=[r for r in words(frame,PANEL_CARDS) if r['word']==target]
+    for _ in range(PANEL_SCROLLS):
+        # The panel shows two rows at 1366; 화남 and below sit further down (pc2 17:37: three wheel ticks found it).
+        if len(cards)==1 or not callable(getattr(ui,'wheel',None)):break
+        x,y=hd.logical_of(*PANEL_WHEEL)
+        ui.wheel(-1,1,at=(round(x),round(y)),scene=lambda f:panel_open(f),verify_cursor=True);ui.context.wait(.6)
+        frame=ui.frame();cards=[r for r in words(frame,PANEL_CARDS) if r['word']==target]
     if len(cards)!=1:
         LOG.info('감정 임무 · %s 카드 못 찾음 · 보이는 카드 %s',target,[r['word'] for r in words(frame,PANEL_CARDS)]);close_all(ui);return False
     rate.reserve(key,target)

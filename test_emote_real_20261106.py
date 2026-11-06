@@ -65,6 +65,14 @@ class Run(unittest.TestCase):
         self.assertEqual(self.clicks,[hd.real_hit(1168,153)[:2],hd.real_hit(*e.CHAT_PREVIEW)[:2],hd.real_hit(*e.FACE_BUTTON)[:2],
                                       hd.real_hit(449,594-e.CARD_ABOVE_WORD)[:2]])
         self.assertEqual(self.reserved,[('k','웃음')])
+    def test_a_card_lower_down_is_scrolled_to(self):
+        seen=iter([[row('웃음',449,594)],[row('웃음',449,560)],[row('화남',448,670)]])
+        wheels=[];self.ui.wheel=lambda *a,**k:wheels.append(a)
+        rate=NS(remaining=lambda:0.,reserve=lambda key,target:self.reserved.append((key,target)))
+        needs=iter([('화남',row('[외전]항아리를옮긴자8',1168,153)),None])
+        with patch.object(e,'requirement',side_effect=lambda f,t:next(needs)),patch.object(e,'settle',return_value=True),             patch.object(e,'chat_open',side_effect=lambda f:self.state['chat']),patch.object(e,'panel_open',side_effect=lambda f:self.state['panel']),             patch.object(e,'words',side_effect=lambda f,box,*a:next(seen)),patch.object(e,'close_all',return_value=True),             patch('owner_emote_cooldown.Rate',lambda *a:rate),patch('owner_progression.state',return_value=NS(character='c')),             patch('owner_hunt_rules_candidate.configured_identity',return_value='s'):
+            self.assertTrue(e.run(self.ui,self.book,'k'))
+        self.assertEqual(len(wheels),2);self.assertEqual(self.reserved,[('k','화남')])
     def test_no_card_presses_nothing_and_spends_no_attempt(self):
         self.assertFalse(self.run_it([row('부끄',542,593)]));self.assertEqual(self.reserved,[])
     def test_within_the_minute_waits(self):
