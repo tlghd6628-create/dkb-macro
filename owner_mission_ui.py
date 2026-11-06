@@ -65,6 +65,15 @@ def row_signature(frame,y):
 
 def required_power(rows):
  candidates=set()
+ # The goal itself can be the gate: 임무 목표 '전투력 44,500 달성' over a teal bar whose 37045/44500 reads weakly at
+ # 1366 (pc2 17:14, [첫걸음] 도술 구매 picked again on every F1).
+ for r in rows:
+  if r.get('score',0)<.85:continue
+  for v in re.findall(r'전투력([\d,]{4,})달성',re.sub(r'\s','',str(r.get('text','')))):
+   try:
+    v=int(v.replace(',',''))
+    if 1000<=v<=10000000:candidates.add(v)
+   except ValueError:pass
  for r in rows:
   if r['score']<.92:continue
   for a,b in re.findall(r'([\d,]+)\s*/\s*([\d,]+)',r['text']):
