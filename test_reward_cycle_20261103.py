@@ -65,7 +65,23 @@ class LedgerTests(unittest.TestCase):
      if expected:execute.assert_called_once();self.assertIs(execute.call_args.kwargs['manual'],False)
      else:execute.assert_not_called();prepare.assert_not_called()
   finally:priority.combat=previous
-
+ def test_a_hold_in_the_entry_waits_and_an_unrun_step_is_recorded(self):
+  # 20:36-20:37: 도사 수행록 was skipped as 미구현 every 7 s, then a boss-window hold stopped the whole program.
+  c=Context(threading.Event(),threading.Event());adapter=S(values={GUIDE:True},project=S(root=self.root),exit_sleep_mode=Mock(),_owner_initial_context=c)
+  from owner_schedule_priority import LOCAL as priority
+  previous=getattr(priority,'combat',None);priority.combat='비경·던전'
+  try:
+   book=cycle.Ledger(self.root,'a')
+   with patch('owner_schedule_priority.reservation_hold',return_value=None),patch.object(cycle,'ledger',return_value=book),patch.object(cycle,'admit',return_value=decision(True,1800)),patch('owner_reward_action_test.prepare'),        patch('owner_reward_action_test.execute',side_effect=RuntimeError('TEST 보류 · 필드 보스 예약 보호 (20:52)')):
+    self.assertIs(cycle.tick(adapter,c,S(held=())),False)
+   adapter._owner_reward_cycle_recheck=0
+   with patch('owner_schedule_priority.reservation_hold',return_value=None),patch.object(cycle,'ledger',return_value=book),patch.object(cycle,'admit',return_value=decision(True,1800)),patch('owner_reward_action_test.prepare'),        patch('owner_reward_action_test.execute'),patch.object(cycle.time,'time',return_value=5000):
+    self.assertIs(cycle.tick(adapter,c,S(held=())),True)
+   self.assertEqual(book.rows[GUIDE]['state'],'skipped');self.assertFalse(book.due(GUIDE,5001))
+   from biol_base.session import Cancelled
+   with patch('owner_schedule_priority.reservation_hold',return_value=None),patch.object(cycle,'ledger',return_value=cycle.Ledger(self.root,'b')),patch.object(cycle,'admit',return_value=decision(True,1800)),patch('owner_reward_action_test.prepare'),        patch('owner_reward_action_test.execute',side_effect=Cancelled()):
+    with self.assertRaises(Cancelled):cycle.tick(adapter,c,S(held=()))
+  finally:priority.combat=previous
 
 class AdmissionTests(unittest.TestCase):
  def context(self):

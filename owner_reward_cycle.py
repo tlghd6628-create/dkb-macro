@@ -140,7 +140,17 @@ def tick(adapter,context,inputs):
         adapter._owner_reward_cycle_last_hold=None
         prepare(adapter,context,inputs)
         visible('보상·정리 3시간 주기 시작 · '+TARGETS[key][1])
-        execute(adapter,context,inputs,key,manual=False)
+        before=copy.deepcopy(book.rows.get(key))
+        try:execute(adapter,context,inputs,key,manual=False)
+        except RuntimeError as exc:
+            from biol_base.session import Cancelled
+            if isinstance(exc,Cancelled):raise
+            # A hold (a boss window at 20:37) stopped the whole program from here; it only waits now.
+            LOG.info('보상·정리 보류 · %s · %s',TARGETS[key][1],str(exc)[:120])
+            adapter._owner_reward_cycle_recheck=time.monotonic()+60;return False
+        if book.rows.get(key)==before:
+            # Not run at all (the native step said 미구현): without a record it came back every 7 s (20:36).
+            book.record(key,'skipped',time.time())
         return True
     finally:LOCAL.running=previous
 
