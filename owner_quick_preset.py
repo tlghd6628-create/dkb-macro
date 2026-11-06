@@ -97,8 +97,14 @@ def run_skill_preset(adapter,context,inputs,*,enabled_key=COMMON+'.enabled',choi
     ensure(adapter,context,inputs,letter)
     service=TownServices(adapter,context,inputs,[])
     context.checkpoint()
+    # Any letter but A is noted first, so the next field start goes back to A (owner_single_preset.resume). Only the
+    # raid noted it; after the 21:00 field boss the hunt went on with B (user 11-06).
+    from owner_single_preset import mark
+    if letter!='A':mark(adapter,True)
     done=select(service,letter)
-    if done:LOG.info('스킬 프리셋 %s 적용',letter)
+    if done:
+        LOG.info('스킬 프리셋 %s 적용',letter)
+        if letter=='A':mark(adapter,False)
     return done
 
 
