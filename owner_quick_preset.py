@@ -92,6 +92,9 @@ def run_skill_preset(adapter,context,inputs,*,enabled_key=COMMON+'.enabled',choi
     if values.get(enabled_key) is not True:return False
     letter=values.get(choice_key)
     from project_adapter.town_services import TownServices
+    # A new character's B also swaps gear to an empty preset 2; set it to skills only the first time (user 11-06).
+    from owner_preset_compose import ensure
+    ensure(adapter,context,inputs,letter)
     service=TownServices(adapter,context,inputs,[])
     context.checkpoint()
     done=select(service,letter)
