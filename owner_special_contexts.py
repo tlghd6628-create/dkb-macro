@@ -97,6 +97,14 @@ def native_resume(kind,adapter,context,inputs):
         return FolktaleRunner(slots,**runner_kwargs(dependencies(adapter,context,inputs))).run_main_quest()
     raise ValueError('No entry-free native continuation for '+kind)
 
+def scene_words(frame):
+    """넘기기 (with ESC) at the top right: a story scene is showing."""
+    if getattr(frame,'hi',None) is None:return False
+    from owner_text import read,clean
+    from owner_worn_stats import SKIP_WORD
+    return any('넘기기' in clean(r['text']) for r in read(None,frame,SKIP_WORD,scale=2,minimum=.6))
+
+
 def continue_special(gui,adapter,context,inputs,service,kind,publish,scene,recheck):
     from project_adapter.main_quest import StateROIs,BoundedMainQuestRunner,dependencies
     from project_adapter.secret_exploration import ensure_auto_active
@@ -121,7 +129,7 @@ def continue_special(gui,adapter,context,inputs,service,kind,publish,scene,reche
             service.button('버튼_나가기',wait_before_click=.2,required=False)
         raise recheck()
     slots=StateROIs(adapter.project.root/'profiles'/adapter.project.code,mode='sub_quest')
-    runner=None;outside=0;sent=False;death_at=None;next_auto=0
+    runner=None;outside=0;sent=False;death_at=None;next_auto=0;next_scene=0
     while True:
         context.checkpoint();frame=service.capture();current=scene(service.detector,frame)
         if current=='unknown':
@@ -142,6 +150,12 @@ def continue_special(gui,adapter,context,inputs,service,kind,publish,scene,reche
                 runner=BoundedMainQuestRunner(slots,**runner_kwargs(dependencies(adapter,context,inputs,notifications=False)))
             runner.handle_death(slots.by_key['death'],death,frame);context.wait(.25);continue
         death_at=None
+        if kind in ('boss_combat','boss_complete') and current!=kind and time.monotonic()>=next_scene:
+            # A won boss ends in a story scene (넘기기 at the top right). This loop saw neither a field nor a boss and
+            # waited out its 30 minutes (pc1 01:23-01:51); the quest runner owns scenes, so it takes over.
+            next_scene=time.monotonic()+5
+            if scene_words(frame):
+                LOG.info('%s 종료 후 대화 장면 · 퀘스트 진행으로 넘김',family);raise recheck()
         if current=='field':
             outside+=1
             if outside>=3:publish(gui,adapter,'field','특수환경 종료 확인 · 선택 모드 재개');return
