@@ -28,6 +28,10 @@ def special_area():
 def long_ok(adapter):
     """Long jobs: outside quests and special areas, in the hunt, or at a quest's boundary."""
     if special_area():return False
+    # Hunting in place while a quest waits for power is hunting, not walking a quest: the green-arrow equip was due for
+    # five minutes and never ran (pc1 00:26-00:31, main_quest mode).
+    import time
+    if time.monotonic()-getattr(adapter,'_owner_growing_hunt_at',-1e9)<600:return True
     return getattr(adapter,'mode',None) not in QUEST_MODES or getattr(LOCAL,'boundary',False)
 
 
