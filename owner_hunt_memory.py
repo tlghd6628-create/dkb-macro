@@ -103,7 +103,12 @@ def signals(adapter,context,inputs):
  try:
   from project_adapter.town_services import TownServices
   from owner_growth_signals import look
-  return look(adapter,TownServices(adapter,context,inputs,[]).capture())
+  moved=look(adapter,TownServices(adapter,context,inputs,[]).capture())
+  # The bag's green arrows mean a better spare: pc1 lv14 hunted with five of them for half an hour (00:20), the check
+  # having run only at a quest's end. While hunting it looks every few minutes too.
+  from owner_job_timing import arrow_check
+  if arrow_check(adapter,context,inputs):moved=list(moved)+['장비 높은 등급 장착']
+  return moved
  except Exception as exc:
   from biol_base.session import Cancelled
   if isinstance(exc,Cancelled):raise

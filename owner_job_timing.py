@@ -160,7 +160,8 @@ def arrow_check(adapter,context,inputs):
         finally:worn.close_bag(service,context)
         if count<25:return False
         from owner_timetable import now as kst_now
-        item.update(status="pending",at=kst_now().isoformat(),attempts=0,equip_recheck=True);plan.commit()
+        import time as clock
+        item.update(status="pending",at=kst_now().isoformat(),attempts=0,equip_recheck=True,signal_at=clock.time());plan.commit()
         LOG.info('임무 경계 · 가방에 더 좋은 장비 표시 · 높은 등급 장착 앞당김');return True
     except Exception as exc:
         LOG.info('임무 경계 가방 확인 보류 · %s',exc);return False
