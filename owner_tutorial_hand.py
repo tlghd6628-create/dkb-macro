@@ -6,7 +6,7 @@ of the glove on its row. The click lands just inside the fingertip.
 """
 import logging,time
 LOG=logging.getLogger('project_gui.DKB')
-ARROW_REACH=320;MAX_STEPS=8
+ARROW_REACH=320;MAX_STEPS=12
 
 
 def hand(real):
@@ -41,9 +41,12 @@ def follow(service,context,steps=MAX_STEPS):
         if real is None:break
         tip=hand(real)
         if tip is None:
+            # The next step's hand comes after a short fade (가호 select, then '자동 장착' at Auto, pc1 02:51): look
+            # again first; a centre tap only for a text-only hint, then stop.
             miss+=1
-            if miss>=2 or not clicks:break
-            service.click_hit(hd.real_hit(683,383));context.wait(1.5);continue
+            if miss>=3 or not clicks:break
+            if miss==2:service.click_hit(hd.real_hit(683,383))
+            context.wait(1.2);continue
         miss=0
         service.click_hit(hd.real_hit(*tip));clicks+=1
         LOG.info('튜토리얼 손가락 따라 누름 · %d,%d',*tip)

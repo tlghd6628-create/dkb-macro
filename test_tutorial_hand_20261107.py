@@ -19,7 +19,7 @@ class Hand(unittest.TestCase):
     def test_glove_with_its_arrow(self):self.assertEqual(h.hand(scene()),(1204,502))
     def test_white_piece_without_an_arrow_is_not_a_hand(self):self.assertIsNone(h.hand(scene(False)))
     def test_follow_clicks_then_stops(self):
-        shots=[NS(hi=scene()),NS(hi=scene(False)),NS(hi=scene(False))];clicks=[]
+        shots=[NS(hi=scene()),NS(hi=scene(False)),NS(hi=scene(False)),NS(hi=scene(False))];clicks=[]
         n=h.follow(NS(capture=lambda:shots.pop(0),click_hit=lambda hit:clicks.append(hit[:2])),NS(checkpoint=lambda:None,wait=lambda s:None))
         self.assertEqual(n,1);self.assertEqual(len(clicks),2)
 
