@@ -110,7 +110,9 @@ def aoe_matches_request(item):
     return (receipt.get('verified') is True and receipt.get('complete') is True
             and receipt.get('slots')==list(SLOTS) and receipt.get('order')==list(ORDER))
 
-PURCHASE_STYLES=('파멸','강타','절명','저격')  # the user's rule. Ultimates are not bought: the deck's slots switch them on.
+# The user's rule (11-06): 저격, 파멸 and 강타 only. No 절명 merchant is known, so 절명 waits until a source is found.
+# Ultimates are not bought: the deck's slots switch them on.
+PURCHASE_STYLES=('저격','파멸','강타')
 
 def desired_learning_ids():
     data=catalog()

@@ -13,9 +13,10 @@ CATALOG = {'all_skill_names': {
 
 
 class Styles(unittest.TestCase):
-    def test_all_four_styles_without_ultimates(self):
+    def test_three_styles_without_ultimates(self):
+        # User 11-06: 절명 has no merchant; 저격, 파멸 and 강타 are bought.
         with patch.object(g, 'catalog', return_value=CATALOG):
-            self.assertEqual(g.desired_learning_ids(), {1, 3, 4, 6})
+            self.assertEqual(g.desired_learning_ids(), {1, 3, 6})
 
 
 class LearnAll(unittest.TestCase):
