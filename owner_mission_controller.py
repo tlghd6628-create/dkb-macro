@@ -177,7 +177,11 @@ def restart_idle_quest(ui,idle):
   # Only this quest's own row: another title there would walk off to another quest, past its purchase or emote
   # handling (pc2 17:07, 메마른 늪 walked to while 도술 구매 was selected).
   head=tracker_title(ui.frame(),ui.adapter.mode,getattr(ui.adapter,'_owner_active_title',None))
-  if guide_skill(ui):return True
+  try:
+   if guide_skill(ui):return True
+  except Pending as exc:
+   # A scene over the field kept the skill window from opening and the run stopped (pc1 01:16): it waits a turn.
+   LOG.info('길잡이 도술 장착 보류 · %s',str(exc)[:80])
   if head:
    click(ui,(round(head['rx']),round(head['ry'])),1.)
    LOG.info('임무 자리 정체 · 추적창 제목 누름 · %s',head['word'])
@@ -210,8 +214,10 @@ def guide_skill(ui):
  rows=words(ui.frame(),TRACKER,.5)
  if not any('도술장착' in r['word'] for r in rows):return False
  key=tuple(r['word'] for r in rows if '도술장착' in r['word'] or '장착하기' in r['word'])
- if getattr(ui.adapter,'_owner_guide_skill',None)==key:return False
- ui.adapter._owner_guide_skill=key
+ # Once per tracker row, and at most every 10 minutes: the same row read with other letters ran it again (01:16).
+ if getattr(ui.adapter,'_owner_guide_skill',None)==key or time.monotonic()-getattr(ui.adapter,'_owner_guide_skill_at',-1e9)<600:return False
+ if not ui.normal():return False
+ ui.adapter._owner_guide_skill=key;ui.adapter._owner_guide_skill_at=time.monotonic()
  from owner_skill_ui import SkillUI
  skills=SkillUI(ui.adapter,ui.context,ui.inputs)
  try:
