@@ -316,6 +316,9 @@ class MissionUI(SkillUI):
    if current==previous:return
    previous=current
  def _pick_legacy(self,book,requested,power,*,fill=False,reconcile_depth=0):
+  def same_title(a,b):
+   from difflib import SequenceMatcher
+   return SequenceMatcher(None,a,b).ratio()>=.8
   active=book.item.get('active');modes=('main_quest','sub_quest') if requested=='main_quest' else ('sub_quest',)
   if requested=='sub_quest' and active and book.item['quests'][active]['mode']=='main_quest':book.item['active']=None;book.commit();active=None
   if fill:
@@ -398,7 +401,16 @@ class MissionUI(SkillUI):
      # Except a main step whose condition just cleared: the story was only ever filling that wait.
      reopened=choice and mode=='main_quest' and book.item['quests'][choice].get('condition_recovered')
      over_story=main_first and choice and mode=='main_quest' and waiting and book.item['quests'].get(waiting,{}).get('mode')=='sub_quest'
-     if choice and (not waiting or choice==waiting or reopened or over_story):
+     # The main chain has one current step. After a death the game put the boss step back to the step before it
+     # (pc2 11-06 20:07, [4장] 산신의 영역으로 -> 산군대호의 거처로); the saved step was then never seen, and the
+     # second sweep for it read nothing and fell back to a side story. The current row the list shows is the step.
+     main_moved=(choice==key and mode=='main_quest' and waiting and waiting!=choice
+                 and book.item['quests'].get(waiting,{}).get('mode')=='main_quest'
+                 and not same_title(book.item['quests'][waiting]['title'],book.item['quests'][key]['title']))
+     if main_moved:
+      book.defer(waiting,'condition',detail='본편 현재 행이 바뀜 · 완료로 단정하지 않음')
+      LOG.info('본편 현재 행 변경 · %s → %s · 이전 임무 완료 처리 없이 보류',book.item['quests'][waiting]['title'],book.item['quests'][key]['title'])
+     if choice and (not waiting or choice==waiting or reopened or over_story or main_moved):
       if over_story and choice==key:LOG.info('메인퀘 모드 · 본편 임무 우선 · 저장된 서사 %s 뒤로',book.item['quests'][waiting]['title'])
       if choice!=key:continue
       book.item['quests'][key].pop('condition_recovered',None)

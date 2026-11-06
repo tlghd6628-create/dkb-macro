@@ -67,6 +67,17 @@ class Reading(unittest.TestCase):
    with patch.object(m,'markers',side_effect=lambda f,n,**kw:[] if n=='group-closed' else [156]),patch.object(m,'row_signature',return_value='row'),patch.object(m,'quest_screen',return_value=True):
     picked=ui._pick_legacy(b,'sub_quest',100000)
    self.assertIsNotNone(picked);self.assertNotEqual(picked,old);self.assertFalse(b.item['quests'][old]['completed']);self.assertEqual(b.item['quests'][old]['block']['reason'],'condition')
+ def test_main_step_put_back_after_a_death_runs_the_lists_current_row(self):
+  # pc2 11-06 20:07: the saved boss step vanished from the main list after a death; the step before it was current.
+  with tempfile.TemporaryDirectory() as directory:
+   b=QuestBook(directory,'a');old=b.observe('main_quest','[4장] 산신의 영역으로',suitable=True,actionable=True,accepted=True,completed=False);b.activate(old)
+   f=np.asarray(Image.open(T/'live/story-list.png'))
+   ui=object.__new__(m.MissionUI);ui.context=NS(checkpoint=lambda:None,wait=lambda s:None);ui.frame=lambda:f;ui.open=lambda mode:None;ui.wheel=lambda *a:None
+   ui.selected=lambda mode,y,book,power:book.observe(mode,'[4장] 산군대호의 거처로',suitable=True,actionable=True,accepted=True,completed=False)
+   with patch.object(m,'markers',side_effect=lambda f,n,**kw:[] if n=='group-closed' else [156]),patch.object(m,'row_signature',return_value='row'),patch.object(m,'quest_screen',return_value=True):
+    picked=ui._pick_legacy(b,'main_quest',100000)
+   self.assertEqual(b.item['quests'][picked]['title'],'[4장] 산군대호의 거처로')
+   self.assertFalse(b.item['quests'][old]['completed']);self.assertEqual(b.item['quests'][old]['block']['reason'],'condition')
  def test_unseen_old_batch_cannot_block_refill_forever(self):
   with tempfile.TemporaryDirectory() as directory:
    b=QuestBook(directory,'a');old=b.observe('sub_quest','[외전] 이전 묶음1',suitable=True,actionable=True,accepted=True,completed=False)
