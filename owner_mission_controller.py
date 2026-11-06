@@ -572,6 +572,8 @@ def run(adapter,context,inputs):
      if not ui.normal():raise Pending('임무 경계 후 일반 필드 확인 필요')
     from owner_job_timing import boundary as quest_boundary,arrow_check
     with quest_boundary():
+     from owner_hunt_memory import signals
+     signals(adapter,context,inputs)
      arrow_check(adapter,context,inputs)
      safe_jobs(adapter,context,inputs,boundary=False)
    except ResumeWork:

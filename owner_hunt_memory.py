@@ -98,6 +98,17 @@ def clan_help(adapter,context,inputs):
   if isinstance(exc,Cancelled):raise
   __import__('logging').getLogger('project_gui.DKB').info('문파도움 확인 보류 · %s',str(exc)[:80]);return False
 
+def signals(adapter,context,inputs):
+ """The top bar's red dots bring the bag and reward jobs forward while hunting (issue #24)."""
+ try:
+  from project_adapter.town_services import TownServices
+  from owner_growth_signals import look
+  return look(adapter,TownServices(adapter,context,inputs,[]).capture())
+ except Exception as exc:
+  from biol_base.session import Cancelled
+  if isinstance(exc,Cancelled):raise
+  __import__('logging').getLogger('project_gui.DKB').info('빨간 점 확인 보류 · %s',str(exc)[:80]);return []
+
 @contextmanager
 def active_hunt(adapter,context,inputs):
  old=getattr(LOCAL,'owner',None);LOCAL.owner=(adapter,context,inputs)
@@ -116,6 +127,7 @@ def install(gui):
    context.checkpoint()
    apply_fallback(adapter,context,inputs)
    clan_help(adapter,context,inputs)
+   signals(adapter,context,inputs)
    return periodic(*args,**kwargs) if periodic else True
   with active_hunt(adapter,context,inputs):return original(adapter,context,periodic=tick,inputs=inputs)
  reservations.wait_reservations=waiting
