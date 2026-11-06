@@ -90,10 +90,10 @@ def after_death(adapter):
         from owner_timetable import planner,EQUIP_JOBS,BY_KEY,enabled
         from owner_timetable import now as kst_now
         plan=planner(adapter);now=kst_now();moved=[]
-        for key in ('gear_equip','blessing_equip','gear'):
+        for key in ('inventory','gear_equip','blessing_equip','gear'):  # boxes first: what they hold is then worn and grown
             job=BY_KEY.get(key);item=plan.state.get(key)
             if job is None or item is None or not enabled(job,plan.values):continue
-            flag='equip_recheck' if key in EQUIP_JOBS else 'growth_recheck'
+            flag='equip_recheck' if key in EQUIP_JOBS else ('growth_recheck' if key=='gear' else 'death_recheck')
             import time
             item.update(status='pending',at=now.isoformat(),attempts=0,signal_at=time.time(),**{flag:True})
             moved.append(job.label)
