@@ -155,6 +155,10 @@ def _open(ui):
     frame=ui.frame()
     if panel_open(frame):return
     peak=cog(frame)
+    if peak is None:
+        # The power read just before a boss left the info window and the bag open over the cog (20:53).
+        from owner_worn_stats import close_bag
+        close_bag(ui.service,ui.context);frame=ui.frame();peak=cog(frame)
     if peak is None:raise RangeError('자동 전투 설정 톱니바퀴 미확인')
     h,w=asset('cog').shape[:2]
     ui.click(peak[1]+w//2,peak[2]+h//2,lambda f:cog(f) is not None)
