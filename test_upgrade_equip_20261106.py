@@ -200,9 +200,9 @@ class Floor(unittest.TestCase):
         for (x,y),shade in zip(places,((51,102,139),(120,60,130),(150,120,40),(70,66,60))):real[y-26:y+26,x-26:x+26]=shade
         self.assertEqual([up.tile_grade(real,p) for p in places],['희귀','영웅','전설',None])
     def test_floor_needs_every_part(self):
-        with patch('owner_progression.state',return_value=NS(character='c')),patch('owner_growth_current.equipped_rows',return_value=[('무기','희귀'),('반지','영웅')]):
+        with patch('owner_hunt_rules_candidate.configured_identity',return_value='c'),patch('owner_growth_current.equipped_rows',return_value=[('무기','희귀'),('반지','영웅')]):
             self.assertEqual(up.worn_floor(NS(project=NS(root='x'))),'희귀')
-        with patch('owner_progression.state',return_value=NS(character='c')),patch('owner_growth_current.equipped_rows',return_value=[('무기','희귀'),('반지','미확인')]):
+        with patch('owner_hunt_rules_candidate.configured_identity',return_value='c'),patch('owner_growth_current.equipped_rows',return_value=[('무기','희귀'),('반지','미확인')]):
             self.assertIsNone(up.worn_floor(NS(project=NS(root='x'))))
     def bag(self,tiles):
         real=np.zeros((768,1366,3),np.uint8)

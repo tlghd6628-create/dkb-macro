@@ -98,9 +98,10 @@ def blessing_shade(real,place):
 def worn_floor(adapter):
     """The lowest grade worn, from the program's own table of worn gear, or None when any part is unread."""
     try:
-        from owner_progression import state
+        # The table is kept under the configured identity (configured-v1:...), as the settings window shows it.
+        from owner_hunt_rules_candidate import configured_identity
         from owner_growth_current import equipped_rows
-        grades=[row[1] for row in equipped_rows(adapter.project.root,state(adapter).character)]
+        grades=[row[1] for row in equipped_rows(adapter.project.root,configured_identity(adapter.project.root))]
     except Exception:return None
     if not grades or any(grade not in ORDER for grade in grades):return None
     return min(grades,key=ORDER.index)

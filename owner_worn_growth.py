@@ -25,7 +25,7 @@ SIDE_TABS=(0,100,170,240)      # real pixels of 강화 돌파 각성
 GROWTH_BUTTON=(570,560,120,46) # real pixels of the details window's 성장
 LIST_COUNT=(1066,78,105,24);SECOND_TILE=(1150,146)  # the growth list: how many it shows, and the tile after the selected one
 RESULT_CLOSE=(400,640,560,100);RESULT_SECONDS=20
-HOLD_WORDS=(520,555,330,45);HOLD_BUTTON=(683,648);HOLD_SECONDS=6  # real: 돌파 asks 길게 터치하여 돌파 over its button (pc1 11-06 13:02)
+HOLD_WORDS=(500,585,370,160);HOLD_BUTTON=(683,682);HOLD_SECONDS=6  # real: 길게 터치하여 돌파 at y 606, its button 682, 버튼을 눌러 주세요! 724 (pc1 11-06 13:30)
 SKIP_BOXES=((1180,8,186,90),(1180,660,186,108))  # real: its 넘기기, which the user says does the 돌파 (top right on pc1 13:02)
 BACK=(35,30)                   # real place of the growth screen's back arrow
 ACTION_PILL=(470,700,325,42)   # real pixels of the 돌파 or 각성 button and its price
