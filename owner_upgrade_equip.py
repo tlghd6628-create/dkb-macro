@@ -223,7 +223,10 @@ def equip_chosen(service,context,row):
     if row.get('empty'):
         again=empty_part_spare(service) if kind=='worn' else None
         same=lambda t:re.sub(r'[\d\]\[|lI()]','',t or '')
-        if not again or (again['slot'],again['spare'],same(again['title']))!=(row['slot'],row['spare'],same(row['title'])):
+        from difflib import SequenceMatcher
+        # One letter read differently is the same piece (매듭허리띠 / 두매듭허리띠, pc1 00:48).
+        alike=lambda a,b:SequenceMatcher(None,same(a),same(b)).ratio()>=.8
+        if not again or (again['slot'],again['spare'])!=(row['slot'],row['spare']) or not alike(again['title'],row['title']):
             if kind:bound.close_window(service,context,kind)
             return '다시 연 창이 다름 · 빈 칸'
         if not press_equip(service,context):

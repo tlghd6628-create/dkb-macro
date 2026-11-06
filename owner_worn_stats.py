@@ -53,6 +53,16 @@ def real_table(real):
  # 개방 only keeps the spacing: it follows from 강화 and is never read or needed (user, 11-06).
  return {field:(REAL_NUMBER[0],hits['enhance']+index*REAL_ROW_GAP-REAL_NUMBER[2]//2,REAL_NUMBER[1],REAL_NUMBER[2]) for index,field in enumerate(names) if field!='opening'}
 
+def never_grown(service,context):
+ """A part never grown shows no 강화 or 각성 rows at all, only 전투력 and its stats (pc1 lv14 00:48: every new piece
+ came back unread, so none was ever grown). Two looks with 전투력 and no growth row read as 0, 0, 0."""
+ looks=[]
+ for _ in range(2):
+  words=[w for w,_ in row_words(np.asarray(service.capture().hi))]
+  looks.append(any('전투력' in w for w in words) and not any(k in w for w in words for k in ('강화','각성','돌파')))
+  context.wait(.2)
+ return {'enhance':0,'breakthrough':0,'awaken':0} if all(looks) else None
+
 def row_words(real):
  """What the rows area reads, with each word's height, for the log when no table was found."""
  from owner_text import clean,read_area
@@ -327,6 +337,7 @@ def inspect_real(service,context,inputs,profile,character,slot,*,decide=None):
   context.wait(.25)
   values=settled_read(service,context)
   if values:values=corrected(values,blessing)
+  if not values and not blessing:values=never_grown(service,context)
   if not values:
    LOG.info('착용 %s 현재값 미확인 · 재시도 대기 · 줄 글자 %s',slot,row_words(np.asarray(service.capture().hi)));return False
   if grade is None:
