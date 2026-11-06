@@ -335,6 +335,12 @@ def tracked(key,function,adapter,args,kwargs):
         return result
     except Cancelled:
         stopped=True;raise
+    except Exception as exc:
+        # pc1 17:08: the event action ended on a mask size mismatch with no trace of where. Name the place.
+        import traceback
+        rows=traceback.extract_tb(exc.__traceback__)
+        LOG.warning('보상 흐름 오류 위치 · %s · %s · %s',key,type(exc).__name__,' > '.join('%s:%s'%(Path(r.filename).stem,r.lineno) for r in rows[-6:]))
+        raise
     finally:
         state=flow.finish(result,failed=failed)
         if adapter is not None:adapter._owner_reward_last_outcome=state
