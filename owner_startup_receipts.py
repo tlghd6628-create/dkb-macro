@@ -23,8 +23,27 @@ class Preparation:
    if row.get('completed') is True:self.item['coupons'][code]={'completed':True,'status':row.get('status'),'at':row.get('at'),'proof':'existing_native_coupon_receipt'}
   self.commit()
 
+def coupon_scope(root,identity):
+ """The native coupon record is keyed by the PC number only, so a new character on this PC took the old one's codes
+ as done (user 11-06: 짱군네 after 홍짱군). The record is swapped per server·character: the old one is kept aside and
+ the new one starts from its own copy, or empty."""
+ import hashlib,shutil
+ root=Path(root);settings=root/'settings';main=settings/'coupon_results.json';marker=settings/'owner-coupon-owner.json'
+ who='%s|%s'%(identity.get('server_name') or '',identity.get('character_name') or '')
+ if who=='|':return
+ def kept(owner):return settings/('owner-coupon-'+hashlib.sha256(owner.encode('utf-8')).hexdigest()[:24]+'.json')
+ try:owner=json.loads(marker.read_text(encoding='utf-8')).get('owner')
+ except (OSError,ValueError,AttributeError):owner=None
+ if owner==who:return
+ if owner and main.exists():shutil.copy2(main,kept(owner))
+ if kept(who).exists():shutil.copy2(kept(who),main)
+ elif owner and main.exists():main.unlink()
+ marker.write_text(json.dumps({'owner':who},ensure_ascii=False),encoding='utf-8')
+ LOG.info('쿠폰 기록 캐릭터 전환 · %s → %s',owner or '미기록',who)
+
 def terminal_coupons(root,identity):
  """Use the exact existing native identity scope; never another account."""
+ coupon_scope(root,identity)
  root=Path(root);config=json.loads((root/'profiles/DKB/config/coupons.json').read_text(encoding='utf-8-sig'))
  codes={row['code'] for row in config.get('coupons',[]) if row.get('enabled',True) and row.get('code')}
  path=root/'settings/coupon_results.json';record=json.loads(path.read_text(encoding='utf-8-sig')) if path.exists() else {}
