@@ -29,7 +29,7 @@ TITLE=(85,12,160,38)
 TAB_UNSEAL=(20,68,145,34);TAB_SHOP=(162,68,145,34)
 SKIP_BOX=(24,723,22,22);SKIP_WORD=(48,720,100,28)
 ORB_ROW=(300,598,770,44);ORB_Y=548
-AMOUNT=(610,646,150,28);BUTTON_COUNT=(570,689,90,28);UNSEAL_BUTTON=(640,688,140,32);RESULT=(590,700,190,46)
+AMOUNT=(610,646,150,28);AMOUNT_MAX=(793,661);BUTTON_COUNT=(570,689,90,28);UNSEAL_BUTTON=(640,688,140,32);RESULT=(590,700,190,46)
 BALANCE=(595,14,60,30)
 LIST=(15,112,290,636);LIST_X=160;LIST_DRAG=(660,180)
 POPUP_TITLE=(590,255,190,32);POPUP_COUNT=(630,384,80,28);POPUP_MAX=(777,397);POPUP_PLUS=(747,397)
@@ -145,6 +145,15 @@ def dan_counts(frame):
     return found
 
 
+def dan_heads(frame):
+    """{name: x} for every orb name read, its count read or not."""
+    rows=words(frame,ORB_ROW,.5);found={}
+    for name in DANS:
+        heads=[r for r in rows if name in r['word']]
+        if len(heads)==1:found[name]=round(heads[0]['rx'])
+    return found
+
+
 def balance(frame):
     rows=sorted([r for r in words(frame,BALANCE,.5) if re.fullmatch(r'[\d,]+',r['word'])],key=lambda r:r['rx'])
     return number(rows[0]['word']) if rows else None
@@ -245,22 +254,30 @@ class Run:
         for name in DANS:
             for _ in range(MAX_PASSES):
                 counts=self.counts(name)
-                if name not in counts:
-                    # A lone red 0 is the read OCR misses most (19:20); not unsealing is the safe side.
-                    LOG.info('단 봉인해제 · %s 수량 판독 안 됨 · 건너뜀',name);break
-                count,x=counts[name]
-                if count<=0:break
+                if name in counts:count,x=counts[name]
+                else:
+                    # A lone 1 under 영기단 went unread (pc2 08:27). Its orb is still pressed and ▶| fills what is
+                    # held; a red 0 leaves the amount empty and the pass is skipped (a lone 0 is OCR's usual miss).
+                    x=dan_heads(self.frame()).get(name)
+                    if x is None:
+                        LOG.info('단 봉인해제 · %s 수량 판독 안 됨 · 건너뜀',name);break
+                    count=None
+                if count is not None and count<=0:break
                 self.tap(x,ORB_Y,1.)
-                # The game fills the amount itself (all held, at most 100); that figure is the pass, since an 8
-                # under the orb read as 7 here (19:27) and all of it goes anyway.
+                # The amount the game shows is not always all held: 6 of 492 정기단 (pc2 08:27), 45 of 71 here. ▶| sets
+                # it to all held, at most 100; that figure is the pass, since an 8 under the orb read as 7 (19:27).
+                self.tap(*AMOUNT_MAX,.6)
                 # A lone digit can go unread in one place (영기단 5, 19:43): the button repeats the amount, and the
                 # count under the orb is the last word.
                 frame=self.frame();amount=None
                 for box in (AMOUNT,BUTTON_COUNT):
                     read=[number(r['word']) for r in words(frame,box,.4) if number(r['word'])]
                     if len(read)==1 and 1<=read[0]<=100:amount=read[0];break
-                if amount is None and count<100:amount=count
-                if amount is None:raise RuntimeError('%s 수량 판독 실패'%name)
+                if amount is None and count is not None and count<100:amount=count
+                if amount is None:
+                    if count is None:
+                        LOG.info('단 봉인해제 · %s 수량 판독 안 됨 · 건너뜀',name);break
+                    raise RuntimeError('%s 수량 판독 실패'%name)
                 count=amount
                 button=self.word_at(frame,UNSEAL_BUTTON,'봉인해제')
                 if button is None:raise RuntimeError('봉인 해제 버튼 미확인')

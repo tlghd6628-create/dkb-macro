@@ -52,6 +52,33 @@ class Reading(unittest.TestCase):
         hi[y+6:y+16,x+6:x+10]=170;self.assertTrue(s.skip_ticked(NS(hi=hi)))
 
 
+class Unseal(unittest.TestCase):
+    """pc2 홍짱군 08:27: the box held 6 with 492 정기단, one pass of 6 and stop; the lone 1 under 영기단 unread."""
+    def run_it(self,held,unread=()):
+        held=dict(held);taps=[];state={'orb':None,'amount':6}
+        r=s.Run.__new__(s.Run);r.context=NS(wait=lambda x:None)
+        r.tab=lambda box,word:None;r.tick_skip=lambda:True;r.frame=lambda:'f'
+        r.counts=lambda name,tries=3:{n:(c,100+i) for i,(n,c) in enumerate(held.items()) if n not in unread}
+        def tap(x,y,wait=1.):
+            taps.append((x,y))
+            if y==s.ORB_Y:state['orb']=[n for i,n in enumerate(held) if 100+i==x][0]
+            if (x,y)==s.AMOUNT_MAX:state['amount']=min(held[state['orb']],100);state['armed']=True
+            if (x,y)==(700,700) and state.pop('armed',False):held[state['orb']]-=state['amount']
+        r.tap=tap
+        r.word_at=lambda f,box,want:{'word':want,'rx':700,'ry':700}
+        r.until=lambda test,seconds=8.:'f'
+        def fake_words(frame,box,minimum=.55):
+            return [{'word':str(state['amount']),'rx':0,'ry':0}] if box==s.AMOUNT else []
+        with patch.object(s,'words',fake_words),patch.object(s,'dan_heads',lambda f:{n:100+i for i,n in enumerate(held)}):
+            return r.unseal(),held
+    def test_max_is_pressed_and_every_pass_runs(self):
+        done,held=self.run_it({'정기단':492,'영기단':0})
+        self.assertEqual(done,{'정기단':492});self.assertEqual(held['정기단'],0)
+    def test_an_unread_count_is_taken_from_the_filled_amount(self):
+        done,held=self.run_it({'정기단':0,'영기단':1},unread=('영기단',))
+        self.assertEqual(done,{'영기단':1})
+
+
 class Wanted(unittest.TestCase):
     seen=dict(price=10,used=3,limit=10)
     def test_max_is_the_room_and_the_coins(self):
