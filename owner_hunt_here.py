@@ -16,6 +16,19 @@ DISTANCE=(1012,672,110,26)      # real: the walk distance, 84m
 CLOSE=(1332,31)
 
 
+AUTO_BOX=(1188,700,44,42)          # real: the AUTO button, orange while on
+
+
+def auto_lit(frame):
+    """AUTO's orange ring: 2.4-2.7% of the button on six shots with it on, 0 on four with it off (pc1 11-06).
+    The native AUTO picture missed it for 30 s in a fight at the spot and a teleport was paid for nothing (20:27)."""
+    import numpy as np
+    hi=getattr(frame,'hi',None)
+    if getattr(hi,'shape',None) is None or len(hi.shape)!=3:return False
+    x,y,w,h=AUTO_BOX;p=np.asarray(hi)[y:y+h,x:x+w].astype(int);r,g,b=p[...,0],p[...,1],p[...,2]
+    return float(((r>200)&(g>120)&(g<210)&(b<90)).mean())>=.01
+
+
 def words(frame,box):return [text.clean(r['text']) for r in text.read(None,frame,box,scale=2,minimum=.6)]
 
 
@@ -58,6 +71,8 @@ def already_there(adapter,context,inputs):
     if metres is None or metres>NEAR:
         if metres is not None:LOG.info('저장위치 %d번까지 %dm · 축지술 이동',slot,metres)
         return False
-    if favorite_hunt.ensure_auto_active(service.actions,context,LOG,post_click_wait=1,poll_seconds=.5) is False:return False
+    lit=auto_lit(service.capture())
+    if lit:context.wait(.5);lit=auto_lit(service.capture())
+    if not lit and favorite_hunt.ensure_auto_active(service.actions,context,LOG,post_click_wait=1,poll_seconds=.5) is False:return False
     LOG.info('저장위치 %d번에 이미 있음 · %dm · 축지술 없이 사냥 계속',slot,metres)
     return True

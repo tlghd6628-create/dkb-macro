@@ -148,12 +148,15 @@ def open_remote(adapter,context,inputs):
 def remote_purchase(adapter,context,inputs):
  from project_adapter.town_services import TownServices,_close_potion_screen,POTION_NAMES
  from owner_skill_goal import Pending
- from owner_remote_potion_limit_candidate import cached_full,observed_full,remember_full
+ from owner_remote_potion_limit_candidate import cached_full,observed_full,remember_full,recall_full,note_full
  tier=str(adapter.values.get('common.potion_and_favorite.potion_tier','1단물약'))
  if tier not in ('1단물약','2단물약','3단물약'):raise Pending('물약 단계 설정 확인 필요')
  context.checkpoint()
  if cached_full(adapter,tier):
   LOG.info('원격 물약 구매 생략 · %s 직전 확인 한도 대기 · 구매 없음',tier);return True
+ root=getattr(getattr(adapter,'project',None),'root',None)
+ if root is not None and recall_full(root,tier):
+  LOG.info('원격 물약 구매 생략 · %s 1시간 안에 한도 가득 확인 · 상점 열지 않음',tier);return True
  try:ui=open_remote(adapter,context,inputs)
  except RemoteShopDeferred as exc:
   LOG.warning('원격 물약 작업만 보류 · %s',exc);return False
@@ -164,6 +167,7 @@ def remote_purchase(adapter,context,inputs):
   limit=observed_full(ui,tier)
   if limit is not None:
    context.checkpoint();remember_full(adapter,tier)
+   if root is not None:note_full(root,tier)
    LOG.info('원격 물약 한도 확인 · %s %d/%d · 구매 없음',tier,limit,limit);return True
   if service.button('버튼_물약상인_'+tier,wait_before_click=.3,required=False) is False:
    LOG.info('원격 물약 구매 보류 · %s 구매 가능 표시 없음',tier);return False

@@ -117,6 +117,38 @@ def cached_full(adapter,tier):
         if not 0<=age<TTL:_CACHE.pop(key,None);return False
         _CACHE.move_to_end(key);return True
 
+# Kept on disk for an hour: every F1 opened the remote shop again only to read 754/754 (user 11-06 20:27), and the
+# 30-second cache above does not outlive a restart. The same hour the shop-trip path rests (owner_membership).
+FULL_SECONDS=3600
+
+
+def _full_file(root):return Path(root)/'settings'/'owner-potion-full.json'
+
+
+def _scope(root,tier):
+    from owner_hunt_rules_candidate import configured_identity
+    return '%s|%s'%(configured_identity(root),tier)
+
+
+def recall_full(root,tier,now=None):
+    import json
+    try:seen=json.loads(_full_file(root).read_text(encoding='utf-8')).get(_scope(root,tier))
+    except (OSError,ValueError,TypeError,AttributeError):return False
+    now=time.time() if now is None else now
+    return isinstance(seen,(int,float)) and 0<=now-seen<FULL_SECONDS
+
+
+def note_full(root,tier,now=None):
+    import json
+    path=_full_file(root)
+    try:value=json.loads(path.read_text(encoding='utf-8'))
+    except (OSError,ValueError):value={}
+    try:
+        value[_scope(root,tier)]=time.time() if now is None else now
+        path.write_text(json.dumps(value,ensure_ascii=False),encoding='utf-8');return True
+    except (OSError,ValueError,TypeError):return False
+
+
 def remember_full(adapter,tier):
     key=_identity(adapter,tier)
     if key is None:return False
