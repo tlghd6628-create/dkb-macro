@@ -47,7 +47,8 @@ class Reading(unittest.TestCase):
     def test_skip_box_tick(self):
         hi=np.zeros((768,1366,3),np.uint8);x,y,w,h=s.SKIP_BOX
         self.assertFalse(s.skip_ticked(NS(hi=hi)))
-        hi[y+8:y+12,x+7:x+15]=255;self.assertTrue(s.skip_ticked(NS(hi=hi)))
+        hi[y+8:y+11,x+7:x+10]=170;self.assertFalse(s.skip_ticked(NS(hi=hi)))
+        hi[y+6:y+16,x+6:x+10]=170;self.assertTrue(s.skip_ticked(NS(hi=hi)))
 
 
 class Wanted(unittest.TestCase):

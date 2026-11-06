@@ -168,10 +168,11 @@ def shop_rows(frame):
 
 
 def skip_ticked(frame):
-    """The tick inside the 연출 건너뛰기 box is near-white; an empty box is only its grey frame."""
+    """The tick inside the 연출 건너뛰기 box is light grey (56 of 144 inner pixels above 150, pc1 18:59); an empty
+    box is dark inside (none above 120, 19:14)."""
     import numpy as np
     x,y,w,h=SKIP_BOX;patch=np.asarray(frame.hi)[y+5:y+h-5,x+5:x+w-5].astype(int)
-    return int(((patch.min(axis=2)>200)).sum())>=6
+    return int(((patch.min(axis=2)>150)).sum())>=20
 
 
 def wanted(row,seen,coins):
