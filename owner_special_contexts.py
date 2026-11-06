@@ -128,6 +128,12 @@ def continue_special(gui,adapter,context,inputs,service,kind,publish,scene,reche
             from owner_scene_archive import unknown_observed
             unknown_observed(gui,adapter,context,frame,'special_environment_unrecognized')
         death=slots.match('death',frame)
+        if not death.get('hit') and getattr(frame,'hi',None) is not None:
+            # At 1366 the death picture does not match (pc1 13:54: the death screen was taken for a running boss
+            # fight). Its own words count, and 나가기 is pressed.
+            from owner_death_real import recover as real_death
+            from types import SimpleNamespace
+            if real_death(SimpleNamespace(frame=service.capture,context=context,service=service)):death_at=None;continue
         if death.get('hit'):
             if death_at is None:death_at=time.monotonic()
             if time.monotonic()-death_at>60:raise RuntimeError(f'{family} 사망 복구를 60초간 확인하지 못했습니다.')
