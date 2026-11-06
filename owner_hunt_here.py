@@ -65,6 +65,7 @@ def already_there(adapter,context,inputs):
     if getattr(service.capture(),'hi',None) is None:return False
     from owner_town_return import town_pair
     if town_pair(adapter,context,inputs):return False
+    if still_hunting(adapter,context,service):return True
     try:metres=distance(service,context,slot)
     except Exception as exc:
         LOG.info('저장위치 거리 확인 보류 · %s',type(exc).__name__);return False
@@ -75,4 +76,28 @@ def already_there(adapter,context,inputs):
     if lit:context.wait(.5);lit=auto_lit(service.capture())
     if not lit and favorite_hunt.ensure_auto_active(service.actions,context,LOG,post_click_wait=1,poll_seconds=.5) is False:return False
     LOG.info('저장위치 %d번에 이미 있음 · %dm · 축지술 없이 사냥 계속',slot,metres)
+    seen_at_spot(adapter)
+    return True
+
+
+SPOT_SECONDS=600
+
+
+def seen_at_spot(adapter):
+    import time
+    adapter._owner_at_spot=time.monotonic()
+
+
+def still_hunting(adapter,context,service):
+    """Proved at the spot within ten minutes, out of town, no boss range left open and AUTO lit on two looks.
+    With sleep off the hunt loop comes back every minute and opened the map each time (user 11-06 20:35-20:40)."""
+    import time
+    from owner_boss_range import pending
+    if not 0<=time.monotonic()-getattr(adapter,'_owner_at_spot',-1e9)<SPOT_SECONDS:return False
+    if pending(adapter.project.root):return False
+    if not auto_lit(service.capture()):return False
+    context.wait(.5)
+    if not auto_lit(service.capture()):return False
+    if time.monotonic()-getattr(adapter,'_owner_spot_noted',-1e9)>=SPOT_SECONDS:
+        adapter._owner_spot_noted=time.monotonic();LOG.info('사냥터에서 사냥 중 · 10분 안에 확인됨 · 지도 확인 생략')
     return True

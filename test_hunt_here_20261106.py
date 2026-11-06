@@ -42,4 +42,22 @@ class Here(unittest.TestCase):
         self.assertFalse(self.run_it(40));self.assertFalse(self.run_it(None));self.assertFalse(self.run_it(0,auto=False))
 
 
+
+class StillHunting(unittest.TestCase):
+    def run_it(self,age,pending=None,lit=(True,True)):
+        import time
+        adapter=NS(project=NS(root='r'),_owner_at_spot=time.monotonic()-age);looks=list(lit)
+        service=NS(capture=lambda:NS(hi=1))
+        with patch('owner_boss_range.pending',return_value=pending),patch.object(h,'auto_lit',side_effect=lambda f:looks.pop(0)):
+            return h.still_hunting(adapter,NS(wait=lambda s:None),service)
+    def test_recent_spot_with_auto_lit_skips_the_map(self):
+        self.assertTrue(self.run_it(60))
+    def test_old_proof_open_boss_range_or_auto_off_reads_the_map(self):
+        self.assertFalse(self.run_it(601))
+        self.assertFalse(self.run_it(60,pending={'fixed':True}))
+        self.assertFalse(self.run_it(60,lit=(True,False)))
+        self.assertFalse(self.run_it(60,lit=(False,)))
+    def test_never_seen(self):
+        self.assertFalse(h.still_hunting(NS(project=NS(root='r')),NS(wait=lambda s:None),NS(capture=lambda:NS(hi=1))))
+
 if __name__=='__main__':unittest.main()

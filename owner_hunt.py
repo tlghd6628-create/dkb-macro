@@ -130,7 +130,10 @@ def install(gui):
             LOG.info('지정 사냥터 미등록 · 둘러보기 추천 후보를 전투력 기준으로 확인합니다.')
             result=run(adapter,context,inputs)
         if result is True:require_hunting_location(adapter,context,inputs)
-        if result is True or result in ('HUNTING_RESUMED','HUNTING_STARTED'):at_spot(adapter,context,inputs)
+        if result is True or result in ('HUNTING_RESUMED','HUNTING_STARTED'):
+            at_spot(adapter,context,inputs)
+            from owner_hunt_here import seen_at_spot
+            seen_at_spot(adapter)
         if not getattr(adapter,'_owner_temporary_work',None) and (result is True or result in ('HUNTING_RESUMED','HUNTING_STARTED')):
             context.checkpoint();progress.begin_work('auto_mode')
             # Native preparation calls favorite hunt for side effects, so
