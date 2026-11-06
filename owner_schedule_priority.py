@@ -24,6 +24,20 @@ class HeldEnd(logging.Filter):
             record.msg='자동 기능 종료 · '+text[len('자동 기능 완료 · '):]+' · 위 보류 항목은 실행 안 함';record.args=()
         return True
 
+def revive(stall):
+    """A death screen first: at 1366 the native 체크_사망상태 picture scores below its floor (0.868, pc1 11-06 18:22), so
+    the recovery took it for a stuck 낙화 screen and waited six minutes. Its own words (owner_death_real) decide."""
+    try:
+        from owner_mission_ui import MissionUI
+        from owner_death_real import recover
+        if not recover(MissionUI(stall.adapter,stall.context,stall.inputs)):return False
+        from owner_job_timing import after_death
+        after_death(stall.adapter);return True
+    except Exception as exc:
+        from biol_base.session import Cancelled
+        if isinstance(exc,Cancelled):raise
+        LOG.warning('복구 전 사망 확인 실패 · %s',str(exc)[:120]);return False
+
 def wake_before_recovery(ordinary):
     """Sleep hides every button the screen recovery looks for, so it can only fail there.
 
@@ -40,6 +54,7 @@ def wake_before_recovery(ordinary):
             except Exception as exc:
                 LOG.warning('복구 전 절전 해제 실패 · %s',str(exc)[:120])
             finally:LOCAL.waking=False
+        if not verify_only:revive(stall)
         return ordinary(stall,verify_only=verify_only,wait_on_exhaustion=wait_on_exhaustion,passive_wait=passive_wait)
     recover._owner_wakes=True
     return recover
