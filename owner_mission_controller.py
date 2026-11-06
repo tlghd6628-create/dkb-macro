@@ -246,6 +246,19 @@ def prepare(adapter,context,inputs):
   defer(adapter,context,inputs);adapter._owner_initial_context=context
  return state(adapter)
 
+NOTHING_SECONDS=1800
+
+
+def recent_nothing(adapter,book,power,now=None):
+ """Once per F1: the last full check found nothing runnable within NOTHING_SECONDS, at no more power than now has."""
+ if getattr(adapter,'_owner_nothing_used',None)==getattr(adapter,'_owner_nothing_run',None):return False
+ adapter._owner_nothing_used=getattr(adapter,'_owner_nothing_run',None)
+ row=book.item.get('nothing_runnable') or {}
+ at,then=row.get('at'),row.get('power')
+ if type(at) not in (int,float) or type(then) is not int or type(power) is not int:return False
+ return 0<=(now or time.time())-at<=NOTHING_SECONDS and power<=then
+
+
 def safe_jobs(adapter,context,inputs,*,boundary=False):
  from owner_task_flow import dispatch,pending,defer,LOCAL as task
  if getattr(task,'servicing',False):return False
@@ -312,6 +325,7 @@ def run(adapter,context,inputs):
  from owner_task_flow import LOCAL as task
  from owner_story_groups import StorySelectionPending
  requested=adapter._owner_requested_quest_mode
+ adapter._owner_nothing_run=object()   # this start: the recent-nothing shortcut may answer once in it
  prepared_after=time.monotonic();progress=prepare(adapter,context,inputs);book=QuestBook(adapter.project.root,progress.character)
  character=progress.character
  establish_death_baselines(book,progress,character,prepared_after)
@@ -345,6 +359,11 @@ def run(adapter,context,inputs):
     if restored:
      key=previous_active;adapter._owner_restore_story_once=False
      LOG.info('임시 콘텐츠 복귀 · 현재 필드의 진행 임무 이어가기 · 목록 재탐색 없음')
+    elif recent_nothing(adapter,book,progress.power):
+     # A full check just found nothing to run, at this power: the lists are not read again on F1 (user 11-06: 3 min of
+     # list reading before every hunt). The hunt's own rechecks (power growth, the story timer) are unchanged.
+     key=None
+     LOG.info('최근 임무 확인에서 진행 가능 임무 없음 · 같은 전투력 · 목록 재확인 없이 사냥')
     else:key=ui.pick(book,requested,progress.power)
     if key is not None and book.item.get('story_full_hunt',{}).get('status')=='waiting':
      book.item['story_full_hunt'].update(status='resumed',resumed_at=time.time());book.commit()
@@ -384,6 +403,7 @@ def run(adapter,context,inputs):
      adapter.mode='auto_mode';progress.begin_work('auto_mode')
      book.item['work']='auto_mode';book.commit()
      LOG.info('현재 가능한 임무 없음 · 전투력 기준 사냥터 선택')
+     book.item['nothing_runnable']={'at':time.time(),'power':progress.power};book.commit()
      last_power=progress.power
      next_full_recheck=time.monotonic()+STORY_RECHECK_SECONDS if full_deferred else None
      # Existing native idle wait preserves reservations, periodic chores and

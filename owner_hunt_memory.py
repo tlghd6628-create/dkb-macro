@@ -5,6 +5,7 @@ from functools import wraps
 import hashlib,json,logging,threading,time
 
 LOG=logging.getLogger('project_gui.DKB')
+SLEEP_OFF=True   # user 11-06: hunting needs no sleep mode
 LOCAL=threading.local()
 
 class HuntMemory:
@@ -121,6 +122,17 @@ def install(gui):
  @wraps(old_enter)
  def enter_sleep(actions,*args,**kwargs):
   owner=getattr(LOCAL,'owner',None)
+  if SLEEP_OFF:
+   # User 11-06: no sleep mode while hunting. The hunt goes on as after a failed entry, death watch included.
+   import time
+   if time.monotonic()-getattr(enter_sleep,'noted',-1e9)>=600:
+    enter_sleep.noted=time.monotonic();__import__('logging').getLogger('project_gui.DKB').info('절전모드 사용 안 함 · 필드에서 사냥 계속')
+   if owner:
+    from owner_boss_range import pending,restore
+    if pending(owner[0].project.root):restore(*owner)
+    from owner_camera import zoom_once
+    zoom_once(*owner)
+   return False
   # The last normal screen before sleeping: finish a boss range restore left undone.
   if owner:
    from owner_boss_range import pending,restore
