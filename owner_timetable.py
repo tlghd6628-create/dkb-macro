@@ -1140,6 +1140,8 @@ def catch_up_overdue(adapter,context,inputs):
         if not due:return ran
         job=due[0];ran.append(job.key)
         if plan.reason(job.key):continue
+        from owner_job_timing import allowed
+        if not allowed(adapter,job,plan.state.get(job.key,{})):continue
         context.checkpoint();adapter.exit_sleep_mode(context,inputs)
         if not ancillary_field_ready(adapter,context,inputs):return ran
         LOG.info('시작 일정 우선 처리 · %s · 예약 시간이 지나 먼저 실행',job.label)

@@ -37,9 +37,49 @@ class boundary:
     def __exit__(self,*exc):LOCAL.boundary=self.previous
 
 
+GROWING_LEVEL=40
+SIGNAL_JOBS=frozenset(('gear','growth','gear_equip','blessing_equip','inventory'))
+SIGNAL_SECONDS=1800
+
+
+def growing(adapter):
+    """Below GROWING_LEVEL a character only pushes its quests, as a person would (user 11-06). Most timed content is
+    not open yet: at level 1 the start ran 9 overdue jobs (daily missions, a clan request with no clan, the album,
+    blessings, growth on empty parts) for minutes."""
+    try:
+        from owner_progression import state
+        level=state(adapter).level
+    except Exception:return False
+    return type(level) is int and level<GROWING_LEVEL
+
+
+def signalled(item):
+    import time
+    at=item.get('signal_at')
+    return isinstance(at,(int,float)) and 0<=time.time()-at<SIGNAL_SECONDS
+
+
+def allowed(adapter,job,item):
+    """While growing, only the bag and growth jobs, and only when a signal (a red dot, a quest's end, a level-up, a
+    death) brought them forward."""
+    if not growing(adapter):return True
+    ok=job.key in SIGNAL_JOBS and signalled(item)
+    if not ok:
+        import time
+        if time.monotonic()-getattr(adapter,'_owner_growing_noted',-1e9)>=600:
+            adapter._owner_growing_noted=time.monotonic()
+            LOG.info('성장기 · 레벨 %d 미만 · 시간표 콘텐츠 대기 · 퀘스트 우선',GROWING_LEVEL)
+    return ok
+
+
 def pick(adapter,due):
     """The first due job this moment allows; long ones stay due for the next boundary or hunt."""
+    try:
+        from owner_timetable import planner
+        state=planner(adapter).state
+    except Exception:state={}
     for job in due:
+        if not allowed(adapter,job,state.get(job.key,{})):continue
         if job.key not in LONG_TIMETABLE or long_ok(adapter):return job
     return None
 
@@ -53,7 +93,8 @@ def after_death(adapter):
             job=BY_KEY.get(key);item=plan.state.get(key)
             if job is None or item is None or not enabled(job,plan.values):continue
             flag='equip_recheck' if key in EQUIP_JOBS else 'growth_recheck'
-            item.update(status='pending',at=now.isoformat(),attempts=0,**{flag:True})
+            import time
+            item.update(status='pending',at=now.isoformat(),attempts=0,signal_at=time.time(),**{flag:True})
             moved.append(job.label)
         from owner_worn_growth import wake
         wake(adapter)

@@ -59,4 +59,23 @@ class Rewards(unittest.TestCase):
         self.assertNotIn('auto_rewards.mail.enabled',t.LONG_REWARDS)
 
 
+
+class Growing(unittest.TestCase):
+    """Below level 40 only signalled bag and growth jobs run (user 11-06: like a person)."""
+    def run_it(self,level,key,item):
+        import owner_job_timing as t
+        from types import SimpleNamespace as N
+        with patch('owner_progression.state',return_value=N(level=level)):
+            return t.allowed(N(),N(key=key),item)
+    def test_growing_holds_timed_content(self):
+        import time
+        self.assertFalse(self.run_it(1,'daily_missions',{}))
+        self.assertFalse(self.run_it(1,'gear',{}))
+        self.assertTrue(self.run_it(1,'gear',{'signal_at':time.time()}))
+        self.assertFalse(self.run_it(1,'gear',{'signal_at':time.time()-4000}))
+    def test_grown_runs_as_before(self):
+        self.assertTrue(self.run_it(40,'daily_missions',{}))
+        self.assertTrue(self.run_it(None,'daily_missions',{}))
+
+
 if __name__=='__main__':unittest.main()

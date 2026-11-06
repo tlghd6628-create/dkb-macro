@@ -42,7 +42,7 @@ def bring_bag(adapter):
         job=BY_KEY.get(key);item=plan.state.get(key)
         if job is None or item is None or not enabled(job,plan.values):continue
         extra={'equip_recheck':True} if key in EQUIP_JOBS else ({'growth_recheck':True} if key=='gear' else {})
-        item.update(status='pending',at=now,attempts=0,**extra);moved.append(job.label)
+        item.update(status='pending',at=now,attempts=0,signal_at=time.time(),**extra);moved.append(job.label)
     if moved:plan.commit()
     from owner_worn_growth import wake
     wake(adapter)
