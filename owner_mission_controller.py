@@ -477,7 +477,10 @@ def run(adapter,context,inputs):
          LOCAL.active=(adapter,context,key,time.monotonic()+6)
          continue
      require_cleanup_closed(ui)
-     try:result=step(runner,context,scene_changes)
+     # At 1366 the native death picture does not match; the death screen's own words count instead (owner_death_real).
+     from owner_death_real import recover as real_death
+     died=real_death(ui)
+     try:result='DEATH_RECOVERED' if died else step(runner,context,scene_changes)
      except QuestBoundary:
       position_reason=getattr(runner,'_owner_position_reset_reason',None)
       if not position_reason and getattr(LOCAL,'stalled',None)==key:position_reason='서브퀘 움직임 정체 3분 · 진행중2로 전환'
