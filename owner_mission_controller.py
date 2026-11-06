@@ -156,8 +156,9 @@ def fighting(frame):
  import numpy as np
  real=getattr(frame,'hi',None)
  if real is None:return False
- p=np.asarray(real)[72:80,620:765].astype(int)
- return float(((p[...,0]>110)&(p[...,1]<50)&(p[...,2]<50)).mean())>=.3
+ # Red-dominant, both the lost part (132,56,51) and the left part (199,124,125): 0.62-0.85 fighting, 0-0.08 not.
+ p=np.asarray(real)[73:80,620:765].astype(int)
+ return float(((p[...,0]>110)&(p[...,0]-p[...,1]>50)&(p[...,0]-p[...,2]>50)).mean())>=.3
 
 def restart_idle_quest(ui,idle):
  """Auto-move can drop after a boss fight, and the native runner then only clicks empty ground.
