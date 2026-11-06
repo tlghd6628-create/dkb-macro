@@ -6,6 +6,7 @@ that item selected. Nothing picks from the growth screen's list, so a spare can 
 The durable input record and its guard are the ordinary ones. What the details window reads is the truth: a record left
 from an earlier press settles against it when the same item is read again, and the value decides what happens next.
 """
+from owner_settle import settle
 import logging,re,time
 from pathlib import Path
 import numpy as np
@@ -178,7 +179,7 @@ class Route:
     def leave_growth(self):
         for _ in range(3):
             if not self.in_growth():return True
-            self.service.click_hit(real_hit(*BACK));self.context.wait(1.2)
+            self.service.click_hit(real_hit(*BACK));settle(self.service,self.context,1.2)
         return not self.in_growth()
     def into_growth(self,item):
         """From the open details window, by its own button."""
@@ -251,7 +252,7 @@ class Route:
     def side_tab(self,kind):
         row=only_word(text.read(None,self.frame(),SIDE_TABS,scale=2),(LABEL[kind],),.7)
         if row is None:return False
-        self.service.click_hit(real_place(row));self.context.wait(1.5);return True
+        self.service.click_hit(real_place(row));settle(self.service,self.context,1.5);return True
     def press_enhance(self,item,cap=None):
         """강화 until the goal, this turn's cap, or something stops it."""
         observer=EnhanceObserver(self.service,self.context,self.identity,item)
@@ -361,7 +362,7 @@ class Route:
                 continue
             row=only_word(text.read(None,frame,RESULT_CLOSE,scale=2),('클릭하여닫기',),.7)
             if row:
-                self.service.click_hit(real_place(row));self.context.wait(1);return
+                self.service.click_hit(real_place(row));settle(self.service,self.context,1);return
             # 각성 stays on its tab; 돌파 plays first, and the screen has no title while it does.
             if text.shows_title(frame,'성장') is True:
                 quiet+=1
@@ -392,7 +393,7 @@ class Route:
             LOG.info('착용 %s 각성 재료 목록 수 미확인',item.slot);return False
         if shown<2:
             LOG.info('착용 %s 각성 재료 없음 · 동일 장비 없음',item.slot);rest(self.adapter,item.slot,AWAKEN);return False
-        self.service.click_hit(real_hit(*SECOND_TILE));self.context.wait(1)
+        self.service.click_hit(real_hit(*SECOND_TILE));settle(self.service,self.context,1)
         return True
     # ---- the visit
     def work(self,item,cap=None):

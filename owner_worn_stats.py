@@ -1,4 +1,5 @@
 """Display-only equipped-tooltip readings; never resource/action authority."""
+from owner_settle import settle
 from pathlib import Path
 from functools import lru_cache
 import hashlib,logging,re,time,threading
@@ -224,7 +225,7 @@ def skip_scene(service,context):
   context.checkpoint();service.check()
   if not any('넘기기' in clean(row['text']) for row in read(None,service.capture(),SKIP_WORD,scale=2,minimum=.6)):return
   LOG.info('가호 화면 열기 전 대화 넘기기 · ESC')
-  service.key(0x1b);context.wait(1.2)
+  service.key(0x1b);settle(service,context,1.2)
 
 
 def open_blessing_screen(service,context):
@@ -233,7 +234,7 @@ def open_blessing_screen(service,context):
  if on_blessing_screen(service):return True
  skip_scene(service,context)
  close_bag(service,context)
- service.click_hit(hd.real_hit(*REAL_MENU));context.wait(1.5)
+ service.click_hit(hd.real_hit(*REAL_MENU));settle(service,context,1.5)
  service.click_hit(hd.real_hit(*REAL_MENU_BLESSING))
  for _ in range(20):
   context.wait(.3);context.checkpoint();service.check()
@@ -246,7 +247,7 @@ def leave_blessing_screen(service,context):
  for _ in range(3):
   context.checkpoint();service.check()
   if not on_blessing_screen(service):return True
-  service.click_hit(hd.real_hit(*REAL_BACK));context.wait(1.2)
+  service.click_hit(hd.real_hit(*REAL_BACK));settle(service,context,1.2)
  return not on_blessing_screen(service)
 
 def offers_unequip(frame):
@@ -261,7 +262,7 @@ def open_tile(service,context,slot):
  if slot in BLESSING_SLOTS:
   if not open_blessing_screen(service,context):
    LOG.info('착용 %s 건너뜀 · 가호 화면 안 열림',slot);return False
-  service.click_hit(hd.real_hit(REAL_FILTER_X,REAL_FILTER_Y[int(slot[-1])]));context.wait(1.2)
+  service.click_hit(hd.real_hit(REAL_FILTER_X,REAL_FILTER_Y[int(slot[-1])]));settle(service,context,1.2)
   place=REAL_FIRST_TILE
  else:
   # The bag can close by itself (a quest, a map change), and these places would then land on the field.

@@ -9,6 +9,7 @@ names both grades. Blessings: every spare of a slot (all but its first tile, the
 Each tile is clicked once and its window closed with X before the next: a second click on a selected tile equips it.
 Nothing is spent. Equipping is pressed only with both grades read and the step ticked.
 """
+from owner_settle import settle
 import logging,re,time
 import numpy as np
 import owner_hd as hd
@@ -290,7 +291,7 @@ def plain_grid(service,context):
     """Turn the sorted view off. True when it was on (so it goes back on after), False when already off, None unread."""
     state=grouping(service)
     if state is not True:return state if state is False else None
-    service.click_hit(hd.real_hit(*GROUPING_HIT));context.wait(1.2)
+    service.click_hit(hd.real_hit(*GROUPING_HIT));settle(service,context,1.2)
     return True if grouping(service) is False else None
 
 
@@ -306,7 +307,7 @@ def gear(adapter,service,context,choice,inputs=None):
     swaps=[];unread=0
     if open_inventory_by_key(service) is False or inventory_parts(service.capture())[1] is not True:
         LOG.info('장비 높은 등급 장착 생략 · 가방 안 열림');return swaps
-    service.click_hit(hd.real_hit(*BAG_FILTER));context.wait(1.2)
+    service.click_hit(hd.real_hit(*BAG_FILTER));settle(service,context,1.2)
     changed=plain_grid(service,context)
     if changed is None:
         LOG.info('장비 높은 등급 장착 생략 · 가방 정렬 보기 상태 미확인');return swaps
@@ -448,7 +449,7 @@ def blessings(adapter,service,context,choice,priorities=()):
     swaps=[];unread=0
     if not worn.open_blessing_screen(service,context):
         LOG.info('가호 높은 등급 장착 생략 · 가호 화면 안 열림');return swaps
-    service.click_hit(hd.real_hit(*bound.ALL_TAB));context.wait(1.2)
+    service.click_hit(hd.real_hit(*bound.ALL_TAB));settle(service,context,1.2)
     real=np.asarray(service.capture().hi);count=bound.tile_count(service.capture())
     fingerprint=(tuple(signature(real,place) for place in bound.places(count)),tuple(sorted(choice.items())))
     if seen_before(adapter,'blessing',fingerprint):
@@ -458,7 +459,7 @@ def blessings(adapter,service,context,choice,priorities=()):
         acquired=0
         for _ in range(3+MAX_ACQUIRE):
             context.checkpoint();service.check()
-            service.click_hit(hd.real_hit(worn.REAL_FILTER_X,worn.REAL_FILTER_Y[slot]));context.wait(1.2)
+            service.click_hit(hd.real_hit(worn.REAL_FILTER_X,worn.REAL_FILTER_Y[slot]));settle(service,context,1.2)
             count=bound.tile_count(service.capture())
             if count>=len(bound.TILE_X)*len(bound.TILE_Y):
                 LOG.info('가호%d 높은 등급 장착 생략 · 목록이 한 화면을 넘을 수 있음',slot);break
@@ -480,7 +481,7 @@ def blessings(adapter,service,context,choice,priorities=()):
                         # since the list moves; else it is left with 취소.
                         tradeable=bound.acquire_popup(service.capture())
                         if tradeable==0 and acquired<MAX_ACQUIRE and bound.press_acquire(service,context):
-                            acquired+=1;made=True;LOG.info('가호%d 획득 · 거래 가능 조각 0개',slot);context.wait(1.2)
+                            acquired+=1;made=True;LOG.info('가호%d 획득 · 거래 가능 조각 0개',slot);settle(service,context,1.2)
                             if bound.window_kind(service.capture()):bound.close_window(service,context,bound.window_kind(service.capture()))
                             break
                         bound.close_acquire(service,context)
@@ -505,7 +506,7 @@ def blessings(adapter,service,context,choice,priorities=()):
             why=equip_chosen(service,context,row)
             if why:
                 LOG.info('가호%d 높은 등급 장착 안 함 · %s · %s',slot,why,row['title']);unread+=1;break
-            context.wait(1.2)
+            settle(service,context,1.2)
             if bound.window_kind(service.capture()):bound.close_window(service,context,bound.window_kind(service.capture()))
             after=np.asarray(service.capture().hi)[128:176,1068:1116].astype(int)
             changed=float(np.abs(after-before).mean())>12
