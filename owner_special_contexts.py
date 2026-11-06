@@ -191,7 +191,11 @@ def continue_special(gui,adapter,context,inputs,service,kind,publish,scene,reche
             from project_adapter.town_services import TownServices
             boss_service=TownServices(adapter,context,inputs,field_boss.NAMES)
             def no_entry(*a,**k):raise RuntimeError('이미 진행 중인 보스 처리에서 새 입장이 요청되어 중단했습니다.')
-            field_boss.run_field_boss_entry(detector=boss_service.detector,capture=boss_service.capture,inputs=inputs,context=context,status=adapter.status,
+            # At 1366 the result handler only rechecked every minute and never left (21:05-21:07); the exit is
+            # pressed by its words once it has waited 90 s (owner_boss_exit).
+            from owner_boss_exit import Leaving
+            context_for_boss=Leaving(context,boss_service)
+            field_boss.run_field_boss_entry(detector=boss_service.detector,capture=boss_service.capture,inputs=inputs,context=context_for_boss,status=adapter.status,
                 user_log=lambda s:LOG.info('%s',s),adapter=adapter,prepare_entry=no_entry,recover_entry=no_entry,resume_monitor=True)
             raise recheck()
         if time.monotonic()>deadline:raise RuntimeError(f'{family} 현재 단계 처리 시간 초과 · 진행 위치를 저장했습니다.')
