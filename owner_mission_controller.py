@@ -109,7 +109,7 @@ def release_functional_hold(book,key):
 
 STORY_RECHECK_SECONDS=300
 # Real minimap change at level 17: about 4 while standing with monsters around, 22 while walking.
-IDLE_MINIMAP_CHANGE=10;IDLE_SECONDS=120;PREPARE_SECONDS=180
+IDLE_MINIMAP_CHANGE=10;IDLE_SECONDS=45;PREPARE_SECONDS=180  # 120 s of standing still before the tracker click (user 11-07: move on like a person)
 
 def pending_death_baselines(book):
  return [row for row in book.item.get('quests',{}).values() if row.get('block',{}).get('reason')=='death' and row['block'].get('baseline') is None and row.get('completed') is not True]
