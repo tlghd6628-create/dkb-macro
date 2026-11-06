@@ -85,7 +85,9 @@ def dispatch(adapter,context,ordinary):
     # 화첩 and 가호 were tried at level 14, the menus not open yet).
     from owner_job_timing import growing
     if growing(adapter):
-        keys&={'auto_rewards.inventory_use.enabled','auto_growth.equipment.enabled','auto_growth.energy.enabled','auto_rewards.blessing.enabled','auto_rewards.album.enabled'}
+        # The timetable's spec-up jobs grow energy, blessings and the album; the native menus fail while still shut and
+        # three failures stop the whole run (pc1 00:41 at level 14).
+        keys&={'auto_rewards.inventory_use.enabled','auto_growth.equipment.enabled'}
         if not keys:adapter._owner_pending_services=None;return False
     if adapter.mode in ('main_quest','sub_quest'):
         from owner_progression import state,GROWTH

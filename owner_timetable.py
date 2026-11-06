@@ -641,7 +641,12 @@ class Planner:
             item['at']=safe.isoformat();item['deferred_for']='보스 출발 시간';self.commit()
             return '보스 일정 뒤 '+safe.strftime('%m/%d %H:%M:%S')
         due=self.due(at)
-        if due and due[0].key!=key:return '앞 일정 '+due[0].label+' 종료 후'
+        # Spec-up jobs do not queue behind each other, and nothing queues behind a job the growing gate holds: 기운 발현
+        # failed at level 14 again and again, and the green-arrow equip waited behind it (pc1 00:39-00:41).
+        from owner_job_timing import SPEC_JOBS,allowed
+        live=[job for job in due if allowed(getattr(self,'_adapter',None),job,self.state.get(job.key,{}))] if getattr(self,'_adapter',None) is not None else due
+        if key in SPEC_JOBS:live=[job for job in live if job.key not in SPEC_JOBS or job.key==key]
+        if live and live[0].key!=key:return '앞 일정 '+live[0].label+' 종료 후'
         return None
 
     def begin(self,key,at=None):
@@ -763,6 +768,7 @@ def planner(adapter):
     value=getattr(adapter,'_owner_timetable',None)
     if value is None:
         value=Planner(adapter.project.root,adapter.values);adapter._owner_timetable=value
+    value._adapter=adapter
     import weakref
     try:LIVE['adapter']=weakref.ref(adapter)
     except TypeError:pass
