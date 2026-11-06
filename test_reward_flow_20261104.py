@@ -82,6 +82,18 @@ class Inputs(unittest.TestCase):
     def test_blank_click_needs_a_receipt(self):
         f,i,cur,log=make('mail',load('mail_after'));i.click(286,19)
         self.assertEqual(clicks(log),[]);self.assertEqual(f.counts['blank_skipped'],1)
+    def test_a_run_of_blank_clicks_lets_one_through(self):
+        """짱군네 03:14 (11-07): 20 blanks skipped and the mail never found 나가기. With 나가기 hidden, every fifth goes."""
+        f,i,cur,log=make('mail',load('event_claimed'))
+        for _ in range(10):i.click(286,19)
+        self.assertEqual(clicks(log),[(286,19),(286,19)]);self.assertEqual(f.counts['blank_skipped'],8)
+        i.click(836,455);f.pending=None
+        for _ in range(4):i.click(286,19)
+        self.assertEqual(len(clicks(log)),3)
+    def test_blank_clicks_stay_skipped_while_the_exit_shows(self):
+        f,i,cur,log=make('mail',load('mail_after'))
+        for _ in range(10):i.click(286,19)
+        self.assertEqual(clicks(log),[])
     def test_blank_click_goes_when_the_receipt_is_up(self):
         f,i,cur,log=make('mail',load('mail_popup'));i.click(286,19);self.assertEqual(clicks(log),[(286,19)])
     def test_claim_with_banner_counts_as_received(self):

@@ -11,7 +11,7 @@ POPUPS=('체크_보상받기','체크_메인퀘_보상받기','체크_보물찾�
 RECEIPT_WORDS=('보상받기','아이템획득');RECEIPT_AREAS=((600,150,170,30),(600,85,170,30))  # real pixels
 BLANKS=((288,93),(286,19),(286,19))
 LIST_BOX=(165,125,130,265)
-BODY_TOP=204;BANNER_WAIT=1.5
+BODY_TOP=204;BANNER_WAIT=1.5;BLANK_EVERY=5;EXIT='버튼_나가기'
 ATTENDANCE_GRID=(450,330,680,290)   # real pixels: the day tiles of an attendance tab (특별 출석)
 
 
@@ -51,6 +51,15 @@ def receipt_words(frame):
         if any(word in clean(row['text']) for row in rows for word in RECEIPT_WORDS):return True
     return False
 
+def exit_visible(profile,frame):
+    """The window's own 나가기 shows: nothing covers it, so a blank tap has nothing to dismiss."""
+    reader=getattr(exit_visible,'reader',None)
+    if reader is None or reader[0]!=str(profile):
+        from roi_runtime import RoiDetector
+        reader=exit_visible.reader=(str(profile),RoiDetector(Path(profile),[EXIT]))
+    try:return bool(reader[1].find(EXIT,frame,threshold=.9))
+    except Exception:return True
+
 def popup(profile,frame):
     reader=_popup_reader(profile)
     return any(reader.find(name,frame,threshold=.9) for name in POPUPS) or receipt_words(frame)
@@ -75,7 +84,7 @@ class Flow:
         self.counts=dict(clicks=0,claims=0,blank_sent=0,blank_skipped=0,repeat_skipped=0,no_change=0,scroll_skipped=0,captures=0)
         self.baseline=None;self.pending=None;self.skip_wait=False;self.spots={}
         self.list_before=None;self.list_end=False;self.dragging=False;self.unconfirmed=False;self.saved=0
-        self.banner=False;self.rose=False
+        self.banner=False;self.rose=False;self.blank_run=0
     def note_banner(self,frame):
         """One receipt on screen is one claim, whenever it was seen."""
         now=popup(self.profile,frame)
@@ -233,9 +242,15 @@ class FlowInputs:
         blank=any(abs(x-u)<=4 and abs(y-v)<=4 for u,v in BLANKS);leaving=closing(x,y)
         if (blank or leaving) and flow.pending is not None:frame=flow.await_banner(frame)
         flow.settle_click(frame)
-        # Blank clicks only dismiss a receipt. An open list underneath is not one.
+        # Blank clicks only dismiss a receipt. An open list underneath is not one. But a run of them means the native
+        # sees something in the way that no cut here names: 짱군네's first mail at 03:14 skipped 20 and never found
+        # 나가기 (11-07). With 나가기 hidden, every BLANK_EVERY-th in a row goes, as a person would tap once more.
         if blank and not flow.note_banner(frame):
-            flow.counts['blank_skipped']+=1;flow.skip_wait=True;return None
+            flow.blank_run+=1
+            if flow.blank_run%BLANK_EVERY or exit_visible(flow.profile,frame):
+                flow.counts['blank_skipped']+=1;flow.skip_wait=True;return None
+            LOG.info('보상 공백 클릭 · 연속 %d회 생략 뒤 한 번 누름',flow.blank_run-1)
+        elif not blank:flow.blank_run=0
         seen=None if leaving else flow.spots.get((x//8,y//8))
         # The button alone is not enough: 모두 받기 looks the same on every mail tab, and after an empty 서신 tab it
         # was skipped on 시스템 with five mails waiting (pc1 11-06). Another tab changes the whole screen (46 against 0.4).
@@ -340,6 +355,12 @@ def tracked(key,function,adapter,args,kwargs):
         import traceback
         rows=traceback.extract_tb(exc.__traceback__)
         LOG.warning('보상 흐름 오류 위치 · %s · %s · %s',key,type(exc).__name__,' > '.join('%s:%s'%(Path(r.filename).stem,r.lineno) for r in rows[-6:]))
+        # Keep what the screen showed when it gave up; the 03:14 mail failure left nothing to look at.
+        try:
+            real=getattr(flow.frame(),'hi',None)
+            if real is not None:
+                import numpy as np;real=np.asarray(real);flow.evidence('실패 · %s'%exc,real,real,0,0)
+        except Exception:pass
         raise
     finally:
         state=flow.finish(result,failed=failed)
