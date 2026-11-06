@@ -163,6 +163,9 @@ def normalize(service):
   service.context.checkpoint();service.check()
   from owner_worn_stats import popup as worn_popup
   initial=service.capture()
+  # A tutorial inside a menu blocks leaving it (가호 '획득한 가호를 선택해 보세요', pc1 02:47): its hand goes first.
+  from owner_tutorial_hand import hand,follow
+  if getattr(initial,'hi',None) is not None and hand(initial.hi) and follow(service,service.context):continue
   window=word_window(initial)
   if window:
    service.context.wait(.12)
