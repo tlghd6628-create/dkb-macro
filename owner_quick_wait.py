@@ -17,7 +17,7 @@ FLOOR=.4;FIRST=.2;STEP=.08;WINDOW=3.;CHANGED=1.;STILL=1.;REPORT=120
 # presses seen, not one wait matched). Only one run drives the game at a time.
 class _Shared:pass
 LOCAL=_Shared()
-STATS=dict(same=0,moving=0,motion=[],loose=0,cut=0,saved=0.,waited=0,said=time.monotonic(),presses=0,blind=0,long=0,released=0,ages=[])
+STATS=dict(held=0,same=0,moving=0,motion=[],loose=0,cut=0,saved=0.,waited=0,said=time.monotonic(),presses=0,blind=0,long=0,released=0,ages=[])
 
 
 def diff(a,b):
@@ -45,7 +45,24 @@ def settled(before,frames):
     if diff(c,before)>CHANGED and diff(c,b)<STILL and diff(b,a)<STILL:return True
     if moved(c,before)>NEW and max(moved(c,b),moved(b,a),moved(c,a))<MOVED:
         STATS['loose']+=1;return True
+    # Field combat keeps 2-12% of the cells moving (pc2 11-07 23:58-00:06: 29-100 waits ran out, medians .02-.12).
+    # What the click brought (a window, a new screen) holds still while the world behind it moves: the cells that
+    # left the pre-click picture and have not moved since cover more than NEW, and covered as much a look before.
+    if len(frames)>=4 and held(before,*frames[-4:])>NEW and abs(held(before,*frames[-4:])-held(before,*frames[-5:-1] if len(frames)>=5 else frames[-4:]))<HELD_GROW:
+        STATS['held']+=1;return True
     return False
+
+
+HELD_GROW=.01
+
+
+def held(before,*looks):
+    """The share of cells that differ from the pre-click picture in the last look and did not move across the looks."""
+    import numpy as np
+    if before is None or any(f is None or f.shape!=before.shape for f in looks):return 0.
+    last=looks[-1];keep=np.abs(last-before)>CELL
+    for x,y in zip(looks,looks[1:]):keep&=np.abs(y-x)<=CELL
+    return float(keep.mean())
 
 
 class Look:
@@ -119,8 +136,8 @@ def why(before,frames):
 def report(clock=time.monotonic):
     if clock()-STATS['said']<REPORT:return
     STATS['said']=clock()
-    LOG.info('빠른 대기 · %d회 단축(작은 움직임 무시 %d) · %.0f초 절약 · 그대로 기다림 %d회 · 누름 %d(화면 못 봄 %d) · 긴 대기 %d',
-             STATS['cut'],STATS['loose'],STATS['saved'],STATS['waited'],STATS['presses'],STATS['blind'],STATS['long'])
+    LOG.info('빠른 대기 · %d회 단축(작은 움직임 무시 %d · 바뀐 부분 멈춤 %d) · %.0f초 절약 · 그대로 기다림 %d회 · 누름 %d(화면 못 봄 %d) · 긴 대기 %d',
+             STATS['cut'],STATS['loose'],STATS['held'],STATS['saved'],STATS['waited'],STATS['presses'],STATS['blind'],STATS['long'])
     LOG.info('빠른 대기 진단 · 손 뗌 %d · 긴 대기(클릭 뒤 초, 대기 초, 기록) %s',STATS['released'],STATS['ages'])
     LOG.info('빠른 대기 진단 · 끝까지 기다린 이유 · 화면 그대로 %d · 계속 움직임 %d(움직인 칸 비율 중앙값 %s)',
              STATS['same'],STATS['moving'],STATS['motion'])

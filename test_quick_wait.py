@@ -38,6 +38,27 @@ class QuickWait(unittest.TestCase):
         for i in range(20):
             f=B.copy();f[0,0]=(i%2)*200.;frames.append(f)
         self.assertLess(run(1.,[A]+frames),.6)
+    def test_a_window_over_a_moving_field_ends_the_wait(self):
+        rng=np.random.default_rng(1);frames=[]
+        for i in range(20):
+            f=np.zeros((20,20));f[:10,:10]=150.          # the window the click opened, still
+            f[15:,:]=rng.integers(0,255,(5,20))          # a quarter of the screen: the fight behind it
+            frames.append(f)
+        before=np.zeros((20,20));before[15:,:]=rng.integers(0,255,(5,20))
+        clock=Clock();waited=[];seq=iter(frames)
+        def ordinary(self,s):waited.append(s);clock.t+=s
+        wait=q.quick(ordinary,lambda:next(seq,frames[-1]),clock)
+        q.LOCAL.before=before;q.LOCAL.click_at=clock.t;wait(None,1.)
+        self.assertLess(clock.t-100.,.7)
+    def test_only_a_moving_field_keeps_the_wait(self):
+        rng=np.random.default_rng(2);frames=[]
+        for i in range(20):
+            f=np.zeros((20,20));f[15:,:]=rng.integers(0,255,(5,20));frames.append(f)
+        clock=Clock();seq=iter(frames)
+        def ordinary(self,s):clock.t+=s
+        wait=q.quick(ordinary,lambda:next(seq,frames[-1]),clock)
+        q.LOCAL.before=np.zeros((20,20));q.LOCAL.click_at=clock.t;wait(None,1.)
+        self.assertAlmostEqual(clock.t-100.,1.,places=3)
     def test_a_fade_keeps_the_wait(self):
         frames=[np.full((10,10),float(v)) for v in range(0,200,10)]
         self.assertAlmostEqual(run(1.,frames),1.,places=3)
