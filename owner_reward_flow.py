@@ -167,9 +167,16 @@ class Flow:
             real=self.attendance_grid()
             if real is None:break
         return True
+    def settle_tab(self):
+        """After a tab press, until two looks match (at least 0.25 s, at most TAB_SETTLE). It was a fixed 0.8 s, twice
+        per tab (짱군네 11-07 13:24 trace: 3.5 s of follow-up on each of 10 tabs)."""
+        start=time.monotonic();self.context.wait(.25);last=self.frame()
+        while time.monotonic()-start<TAB_SETTLE:
+            self.context.wait(.1);now=self.frame()
+            if diff(now[::4,::4],last[::4,::4])<1:break
+            last=now
     def missions_to_top(self,inputs):
         """Pull the open tab's mission list down to its top. A press that moves is a drag, so no row takes it."""
-        self.context.wait(TAB_SETTLE)
         (x,y0),(_,y1)=MISSION_DRAG
         # Six-step drags, again only while the list still moves (at most three): two fixed drags of twelve steps each
         # moved through the guarded input 24 times a tab, also on a list already at its top.
@@ -180,8 +187,8 @@ class Flow:
                 pressed=False
                 try:
                     inputs.down('mouse','left');pressed=True;self.context.wait(.08)
-                    for n in range(1,7):
-                        inputs.move(x,round(y0+(y1-y0)*n/6));self.context.wait(.03)
+                    for n in range(1,4):
+                        inputs.move(x,round(y0+(y1-y0)*n/3));self.context.wait(.03)
                     self.context.wait(.15)
                 finally:
                     if pressed:inputs.up('mouse','left')
@@ -290,7 +297,7 @@ class FlowInputs:
         # the top are never seen (2일차 hid 30/30 and 200/200, 11-06). The native search reads only what shows.
         if flow.key=='event' and not blank and not leaving and (x<LIST_BOX[0]+LIST_BOX[2] or y<BODY_TOP):
             # An attendance tab is a day grid, not a list: its dotted tile is pressed and nothing is dragged.
-            flow.context.wait(TAB_SETTLE)
+            flow.settle_tab()
             if not flow.claim_attendance(self._real):flow.missions_to_top(self._real)
         return result
     def transaction(self,*a,**k):
