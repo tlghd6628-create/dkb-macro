@@ -84,7 +84,17 @@ class Flow:
         self.counts=dict(clicks=0,claims=0,blank_sent=0,blank_skipped=0,repeat_skipped=0,no_change=0,scroll_skipped=0,captures=0)
         self.baseline=None;self.pending=None;self.skip_wait=False;self.spots={}
         self.list_before=None;self.list_end=False;self.dragging=False;self.unconfirmed=False;self.saved=0
-        self.banner=False;self.rose=False;self.blank_run=0
+        self.banner=False;self.rose=False;self.blank_run=0;self.trace=[]
+    def mark(self,*parts):
+        """A line of the step trace (user 11-07: find where 이벤트 spends 68 s)."""
+        if len(self.trace)<600:self.trace.append('%7.2f %s'%(time.monotonic()-self.started,' '.join(str(p) for p in parts)))
+    def write_trace(self):
+        try:
+            folder=Path(self.root)/'logs/reward-trace';folder.mkdir(parents=True,exist_ok=True)
+            files=sorted(folder.glob('*.txt'))
+            for old in files[:-20]:old.unlink()
+            (folder/(time.strftime('%Y%m%dT%H%M%S')+'-'+self.key+'.txt')).write_text(chr(10).join(self.trace),encoding='utf-8')
+        except OSError:pass
     def note_banner(self,frame):
         """One receipt on screen is one claim, whenever it was seen."""
         now=popup(self.profile,frame)
@@ -175,6 +185,7 @@ class Flow:
     def finish(self,result,failed=False):
         try:self.settle_click(self.frame())
         except Exception:pass
+        self.mark('끝',result);self.write_trace()
         c=self.counts;status=result.get('status') if isinstance(result,dict) else None
         if failed or (result is False and not c['claims']):state=FAILED
         elif c['no_change'] or self.unconfirmed or result is False or status=='PARTIAL':state=PARTIAL
@@ -191,6 +202,7 @@ class FlowContext:
     def __setattr__(self,name,value):setattr(self._flow.context,name,value)
     def wait(self,seconds):
         flow=self._flow;real=flow.context;started=time.monotonic()
+        if seconds>=.3:flow.mark('대기',round(seconds,2))
         if flow.skip_wait and seconds>=.3:
             flow.skip_wait=False;real.checkpoint();flow.seconds['saved']+=seconds;return
         if seconds<.5 or flow.baseline is None:
@@ -224,6 +236,7 @@ class FlowDetector:
     def find(self,*a,**k):
         started=time.monotonic();hit=self._real.find(*a,**k)
         self._flow.seconds['read']+=time.monotonic()-started
+        self._flow.mark('찾기',a[0] if a else k.get('name'),'있음' if hit else '없음')
         return hit
 
 class FlowCapture:
@@ -260,6 +273,7 @@ class FlowInputs:
             if flow.reward_target(x,y):flow.unconfirmed=True
             LOG.info('보상 클릭 생략 · 같은 대상 무변화 · (%d,%d)',x,y)
             return None
+        flow.mark('클릭',x,y,'공백' if blank else '')
         flow.counts['blank_sent' if blank else 'clicks']+=1
         flow.baseline=frame
         if not blank and not leaving:flow.pending=(x,y,patch(frame,x,y),frame,time.monotonic())

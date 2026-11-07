@@ -720,6 +720,34 @@ class StyleGrowth:
                 name,current,new,rows_read-step_started,observed_at-rows_read,now-observed_at)
         return {'status':'partial','style':name,'level':new}
 
+def _style_key(name):return '도술:'+name
+
+
+def style_resting(ui,name):
+    """A style found short of materials rests like a worn part until something changes (a bag red dot, a death, a
+    quest's end): 짱군네 11-07 12:34-12:35 spent 68 s opening 강타, 파멸, 강인 one by one for '재료 부족'."""
+    try:
+        from owner_worn_growth import resting,ENHANCE
+        return resting(ui.adapter,_style_key(name),ENHANCE)
+    except Exception:return False
+
+
+def rest_style(ui,name):
+    try:
+        from owner_worn_growth import rest,ENHANCE
+        rest(ui.adapter,_style_key(name),ENHANCE)
+    except Exception:pass
+
+
+def all_styles_resting(adapter,document):
+    names=[name for name,row in document['skills'].items() if row.get('enabled')]
+    if not names:return False
+    try:
+        from owner_worn_growth import resting,ENHANCE
+        return all(resting(adapter,_style_key(name),ENHANCE) for name in names)
+    except Exception:return False
+
+
 def run_configured(ui,ledger,document,guard,*,max_steps=10,observe=None,include_individual=True):
     """Run enabled style targets, continuing only past safely held rows.
 
@@ -746,6 +774,8 @@ def run_configured(ui,ledger,document,guard,*,max_steps=10,observe=None,include_
         except Pending as exc:return statuses+[{'status':'held','style':name,'reason':str(exc)}]
     for name,row in document['skills'].items():
         if not row['enabled']:continue
+        if style_resting(ui,name):
+            statuses.append({'status':'held','style':name,'reason':'재료 부족 쉼 · 가방 변화 뒤 다시 확인'});continue
         worker._guard()
         for attempt in range(STYLE_READ_TRIES):
             try:
@@ -765,6 +795,7 @@ def run_configured(ui,ledger,document,guard,*,max_steps=10,observe=None,include_
                 if not sent and attempt<STYLE_READ_TRIES-1 and any(word in str(exc) for word in STYLE_READ_MISSES):
                     ui.context.wait(.4);continue
                 statuses.append({'status':'held','style':name,'reason':str(exc)})
+                if '재료 부족' in str(exc) and not sent:rest_style(ui,name)
                 break
         if ledger.item.get('style_growth_intents',{}).get(name,{}).get('status') in ('intent','sent') or has_pending(ledger):break
     for name,row in document.get('individual',{}).items():
@@ -988,6 +1019,9 @@ def run_after_native(adapter,context,inputs):
     character=progress.character;ledger=runtime_ledger(adapter,character)
     from owner_skill_upgrade_candidate import has_pending
     if not styles_enabled and not individuals and not has_pending(ledger):return []
+    # Every style is resting short of materials: the 도술 screen is not opened at all.
+    if styles_enabled and not individuals and not has_pending(ledger) and all_styles_resting(adapter,document):
+        __import__('logging').getLogger('project_gui.DKB').info('도술 성장 · 모든 계열 재료 부족 쉼 · 화면 열지 않음');return []
     def guard():
         try:
             current=state(adapter);age=time.monotonic()-current.observed
