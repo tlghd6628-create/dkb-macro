@@ -278,6 +278,19 @@ def install(gui):
                 hint=getattr(adapter,'_owner_activity_hint',None)
                 if hint and hint['context'] is context and hint['epoch']==gui._owner_stage_epoch:service.detector._owner_activity_hint=hint['kind']
                 first=service.capture();initial=scene(service.detector,first)
+                # A death screen first, whatever the scene reads: at 15:41 the start took it for something else and
+                # ran the overdue mail on it ('우편함 확인 실패'). Its own words decide, as in the quest loop.
+                if initial not in ('field','dungeon'):
+                    try:
+                        from owner_death_real import recover as real_death
+                        from owner_mission_ui import MissionUI
+                        if real_death(MissionUI(adapter,context,inputs)):
+                            from owner_job_timing import after_death
+                            after_death(adapter);LOG.info('시작 화면 · 사망 상태 · 나가기 후 위치 다시 판독');context.wait(2);continue
+                    except Exception as exc:
+                        from biol_base.session import Cancelled
+                        if isinstance(exc,Cancelled):raise
+                        LOG.info('시작 화면 사망 확인 생략 · %s',str(exc)[:80])
                 context.wait(.15);second_frame=service.capture();second=scene(service.detector,second_frame)
                 # Reuse startup's two frames; unrelated field/dungeon/title/
                 # transitional screens continue through the existing router.
