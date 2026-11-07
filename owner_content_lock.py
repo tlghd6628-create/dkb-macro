@@ -132,6 +132,8 @@ def look(adapter,context,inputs):
 
 def gate(adapter,job,context,inputs):
     """True when this job's content is not open for the character (the job is passed over), else None."""
+    from owner_dungeon_death import gate as death_gate
+    if death_gate(adapter,job):return True
     if job.key not in GATED:return None
     closed=kept(adapter)
     if closed is None:

@@ -31,14 +31,26 @@ def watching(flow):
             and not getattr(flow,'_owner_native_busy',0) and not getattr(flow,'death_resupply_pending',False)
             and not getattr(flow.context,'input_depth',0))
 
+def alive_check(flow):
+    """Whether the death screen may be looked for now: inside, settled, and no native step or input running."""
+    entered=getattr(flow,'_owner_entered_at',None)
+    return (entered is not None and time.monotonic()-entered>=LEAVE_SETTLE_SECONDS
+            and not getattr(flow,'_owner_native_busy',0) and not getattr(flow.context,'input_depth',0))
+
 def watch_leaving(flow,call):
     """Read only, through the native sleeps. Sends no input of its own."""
     from owner_startup_stage import scene
-    context=flow.context;original=context.wait;fields=[0];last=[time.monotonic()];reader=[None]
+    context=flow.context;original=context.wait;fields=[0];last=[time.monotonic()];reader=[None];looked=[time.monotonic()]
     def tick(seconds):
         end=time.monotonic()+max(0,seconds)
         while True:
             original(min(1,max(0,end-time.monotonic())))
+            if alive_check(flow) and time.monotonic()-looked[0]>=LEAVE_READ_SECONDS:
+                # The native loop sat on the death screen for minutes (짱군네 11-07 15:51).
+                looked[0]=time.monotonic()
+                if reader[0] is None:reader[0]=leave_reader(flow)
+                from owner_dungeon_death import dead_now,DungeonDied
+                if dead_now(reader[0].capture()):raise DungeonDied()
             if watching(flow):
                 if time.monotonic()-last[0]>=LEAVE_READ_SECONDS:
                     last[0]=time.monotonic()
@@ -217,6 +229,7 @@ def wrap_run(original):
     def run(flow):
         if getattr(LOCAL,'active',False):return original(flow)
         LOCAL.active=True;current=flow;recent=[];flow.adapter._owner_dungeon_cycle_outcome=None
+        from owner_dungeon_death import DungeonDied,recover as died_recover
         try:
             while True:
                 adapter,context,inputs=current.adapter,current.context,current.inputs
@@ -226,6 +239,9 @@ def wrap_run(original):
                     return True
                 try:result=watch_leaving(current,lambda:original(current))
                 except DungeonLeft:LOG.info('비경 이탈 감지 · 맵 이름 없음·일반 필드 %d회 확인 · %s',LEAVE_READS,kind)
+                except DungeonDied:
+                    died_recover(current);save_record(adapter,kind,'death');completed(adapter,kind,'death')
+                    return True
                 except BaseException:
                     # Stop/Pause/errors never trigger an extra input or erase
                     # the last successfully entered character-scoped record.
