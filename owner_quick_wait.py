@@ -12,7 +12,7 @@ native polls) are left alone. settings/owner-quick-wait.json {"enabled": false} 
 import json,logging,threading,time
 from pathlib import Path
 LOG=logging.getLogger('project_gui.DKB')
-FLOOR=.4;FIRST=.2;STEP=.08;WINDOW=3.;CHANGED=1.5;STILL=.8;REPORT=120
+FLOOR=.4;FIRST=.2;STEP=.08;WINDOW=3.;CHANGED=1.;STILL=1.;REPORT=120
 # One shared note, not per thread: presses run on the input worker's thread and waits on the session's (09:53: 102
 # presses seen, not one wait matched). Only one run drives the game at a time.
 class _Shared:pass
@@ -70,7 +70,7 @@ def quick(ordinary,look,clock=time.monotonic):
             STATS['ages']=STATS['ages'][-12:];report(clock)
         if seconds<FLOOR or before is None or at is None or clock()-at>WINDOW or getattr(LOCAL,'off',False):
             return ordinary(self,seconds,*args,**kwargs)
-        LOCAL.before=None   # one quick wait per click
+        # Every long wait within WINDOW of the press may end early (10:10: second waits after the same press were not).
         start=clock();end=start+seconds;frames=[]
         ordinary(self,min(FIRST,seconds))
         while True:

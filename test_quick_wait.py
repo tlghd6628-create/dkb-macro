@@ -36,8 +36,8 @@ class QuickWait(unittest.TestCase):
     def test_short_polls_and_waits_without_a_click_are_untouched(self):
         self.assertAlmostEqual(run(.1,[A,B,B,B]),.1,places=3)
         self.assertAlmostEqual(run(1.,[A,B,B,B],clicked=False),1.,places=3)
-    def test_one_quick_wait_per_click(self):
-        run(1.,[A,B,B,B]);self.assertIsNone(q.LOCAL.before)
+    def test_later_waits_after_the_same_press_may_end_early_too(self):
+        run(1.,[A,B,B,B]);self.assertIs(q.LOCAL.before,A)
     def test_a_press_through_down_and_up_arms_the_wait(self):
         calls=[];down=lambda self,k,v:calls.append(('down',k));up=lambda self,k,v:calls.append(('up',k))
         q.LOCAL.before=None
