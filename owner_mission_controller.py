@@ -809,15 +809,19 @@ def install(gui):
    configured=ConfiguredHuntRules(adapter.project.root);routes=configured.destinations()
    if not routes:raise RuntimeError('사냥터 탭에서 고정 또는 전투력별 사냥터를 켜 주세요')
    adapter._owner_stationary_mode=True
+   chosen=[routes]
    def stationary_hunt(ctx,inp):
-    if configured.destinations()!=routes:raise RuntimeError('서버·캐릭터 또는 사냥 위치가 변경되어 복귀를 보류합니다')
+    # Settings may change while paused (user rule): a new slot is taken as it is, not a reason to stop (pc2 11-07 07:45).
+    now=configured.destinations()
+    if not now:raise RuntimeError('사냥터 탭에서 고정 또는 전투력별 사냥터를 켜 주세요')
+    if now!=chosen[0]:LOG.info('사냥 위치 변경 반영 · 새 사냥터로 이동');chosen[0]=now
     from owner_progression import state
     from owner_quest_preflight import read_power
     from owner_hunt import run as guide_hunt
     current=state(adapter)
     if not current.character or type(current.power) is not int or time.monotonic()-current.observed>=300:
      if not read_power(adapter,ctx,inp) or type(current.power) is not int:raise RuntimeError('제자리 사냥 시작 전 캐릭터·전투력 확인 필요')
-    return route_hunt(adapter,ctx,inp,current.power,routes,guide_hunt,favorite_hunt,hunt=prior_hunt)
+    return route_hunt(adapter,ctx,inp,current.power,chosen[0],guide_hunt,favorite_hunt,hunt=prior_hunt)
    adapter.run_favorite_hunt=stationary_hunt
   previous=getattr(adapter,'get_due_schedules');had='get_due_schedules' in vars(adapter)
   def due():

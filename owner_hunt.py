@@ -119,6 +119,9 @@ def run(adapter,context,inputs):
     return True
 
 
+AUTO_PROOF=6.
+
+
 def at_spot(adapter,context,inputs):
     """Back at the hunting spot after OFF·30m: 제자리 ON·5m set here, then AUTO made sure of so it holds this spot.
     Turned on anywhere else it can stay where no monster comes (user 11-06)."""
@@ -128,8 +131,10 @@ def at_spot(adapter,context,inputs):
     from project_adapter.town_services import TownServices
     from project_adapter import favorite_hunt
     service=TownServices(adapter,context,inputs,[])
-    if favorite_hunt.ensure_auto_active(service.actions,context,LOG,post_click_wait=1,poll_seconds=.5) is False:
-        LOG.warning('제자리 복원 뒤 AUTO 확인 실패');return False
+    # Bounded: with 이동 고정 on, the AUTO button is drawn otherwise and its picture is never proved, so every restore
+    # waited the full 30 s while AUTO was lit (pc2 11-07 18:05, 18:19, 18:31, 18:50).
+    if favorite_hunt.ensure_auto_active(service.actions,context,LOG,post_click_wait=1,poll_seconds=.5,deadline=time.monotonic()+AUTO_PROOF) is False:
+        LOG.info('제자리 복원 뒤 AUTO 그림 확인 못 함 · 사냥 계속');return False
     LOG.info('사냥터 도착 · 제자리 5m 설정 후 사냥 계속')
     return True
 
