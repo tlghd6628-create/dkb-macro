@@ -714,6 +714,25 @@ def _trace_click(logical,real):
         except OSError:pass
 
 
+STEADY=2.0;_steady={}
+
+
+def steady_point(logical):
+    """One logical place maps to one real place for STEADY seconds. The input guard asks for the place when it moves the
+    cursor and again before it presses; a fresh capture between the two (a popup counting down, a hit growing old) could
+    answer another map, and the guard took that for a moved window and stopped the run (pc2 11-07 18:28:40, the second
+    매칭 입장 확인; pc1 11-05 21:07)."""
+    now=time.monotonic()
+    with _lock:
+        seen=_steady.get(logical)
+        if seen and now-seen[0]<=STEADY:return seen[1]
+    real=to_real_point(logical[0],logical[1],_click_layout())
+    with _lock:
+        for key in [k for k,(t,_) in _steady.items() if now-t>STEADY]:del _steady[key]
+        _steady[logical]=(now,real)
+    return real
+
+
 def install_window():
     """Safe to call again. The rest of the program keeps seeing 897x479."""
     import win32gui,window_resolution,mdt_owned_capture
@@ -737,7 +756,7 @@ def install_window():
     def client_to_screen(hwnd,point):
         point=tuple(point)
         if point!=(0,0) and _is_game(hwnd) and _physical(hwnd)==REAL:
-            logical=point;point=to_real_point(point[0],point[1],_click_layout())
+            logical=point;point=steady_point(logical)
             _trace_click(logical,point)
         return plain_point(hwnd,point)
     win32gui.ClientToScreen=client_to_screen
