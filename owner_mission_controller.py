@@ -177,7 +177,9 @@ def still_bar(idle,frame,now):
  bar=bar_strip(frame)
  if bar is None:return False
  old=idle.get('bar')
- if old is None or old.shape!=bar.shape or float(np.abs(bar-old).mean())>=2:
+ # A slow fight moves the bar a column or two at a time, under 2 on the mean (13:16-13:17: a 51K 여우 fought and
+ # the stall check pressed AUTO twice). Any few clearly changed pixels count as a moving bar.
+ if old is None or old.shape!=bar.shape or int((np.abs(bar-old).max(axis=2)>40).sum())>=4:
   idle.update(bar=bar,bar_at=now);return False
  return now-idle.get('bar_at',now)>=BAR_STILL
 

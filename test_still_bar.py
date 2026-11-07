@@ -16,6 +16,9 @@ class StillBar(unittest.TestCase):
         idle={};f=frame(140)
         self.assertFalse(mc.still_bar(idle,f,0.));self.assertFalse(mc.still_bar(idle,f,10.))
         self.assertTrue(mc.still_bar(idle,f,21.))
+    def test_a_slow_fight_moving_one_column_is_a_fight(self):
+        idle={}
+        for t,level in ((0,140),(8,139),(16,138),(24,137),(32,136)):self.assertFalse(mc.still_bar(idle,frame(level),float(t)))
     def test_a_bar_that_drops_is_a_fight(self):
         idle={}
         for t,level in ((0,140),(8,120),(16,100),(24,80),(32,60)):self.assertFalse(mc.still_bar(idle,frame(level),float(t)))
