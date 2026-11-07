@@ -160,6 +160,28 @@ def fighting(frame):
  p=np.asarray(real)[73:80,620:765].astype(int)
  return float(((p[...,0]>110)&(p[...,0]-p[...,1]>50)&(p[...,0]-p[...,2]>50)).mean())>=.3
 
+BAR_STILL=20   # a target bar that has not changed in this many seconds is not a fight
+
+
+def bar_strip(frame):
+ import numpy as np
+ real=getattr(frame,'hi',None)
+ return None if real is None else np.asarray(real)[73:80,620:765].astype('int16')
+
+
+def still_bar(idle,frame,now):
+ """True when the red bar at the top has stayed exactly as it was for BAR_STILL seconds: a banner, not a fight.
+ 짱군네 sub quest (11-07 10:19-10:26): a 150K 황무지 토벌 정수 bar stood full and unchanged for six minutes, so the
+ stall check took it for fighting and only the native 3-minute check moved on, three times."""
+ import numpy as np
+ bar=bar_strip(frame)
+ if bar is None:return False
+ old=idle.get('bar')
+ if old is None or old.shape!=bar.shape or float(np.abs(bar-old).mean())>=2:
+  idle.update(bar=bar,bar_at=now);return False
+ return now-idle.get('bar_at',now)>=BAR_STILL
+
+
 def restart_idle_quest(ui,idle):
  """Auto-move can drop after a boss fight, and the native runner then only clicks empty ground.
  A minimap unchanged for two minutes on the bare field presses the quest's own auto-progress again.
@@ -176,7 +198,7 @@ def restart_idle_quest(ui,idle):
  now=time.monotonic();crop=frame[18:100,12:95].mean(axis=2)
  if idle.get('crop') is None or float(np.abs(crop-idle['crop']).mean())>IDLE_MINIMAP_CHANGE:
   idle.update(crop=crop,at=now);return False
- if fighting(frame):
+ if fighting(frame) and not still_bar(idle,frame,now):
   # Killing the quest's monsters keeps the minimap still; that is progress, not a stall (pc1 lv38 02:24-02:40: AUTO
   # was pressed again every minute in the middle of 해골 8/20).
   idle.update(crop=crop,at=now);return False
