@@ -9,7 +9,7 @@ The top bar is read from the frame alone, with no input: a red dot at the top ri
   forward on the timetable the same way a death does it.
 - 길라잡이, 이벤트, 우편: their reward-cycle rows are made due now.
 A dot that is still on after its work (boxes the program does not open, pc2 20:50) waits MUTE seconds before it
-brings anything forward again. Only jobs the user switched on are moved; combat content is not touched here.
+brings anything forward again; a dot that goes out and comes back is new and is handled at once (user 11-07). Only jobs the user switched on are moved; combat content is not touched here.
 """
 import logging,time
 LOG=logging.getLogger('project_gui.DKB')
@@ -18,7 +18,8 @@ DOTS={'guide':1019,'event':1073,'mail':1237,'bag':1292}   # real x of each icon'
 LABELS={'guide':'길라잡이','event':'이벤트','mail':'우편','bag':'가방'}
 from owner_job_timing import SPEC_JOBS as BAG_JOBS
 REWARD_KEYS={'guide':'auto_rewards.guide.enabled','event':'auto_rewards.event.enabled','mail':'auto_rewards.mail.enabled'}
-LOOK_EVERY=60;MUTE=1800
+LOOK_EVERY=20;MUTE=1800
+QUEST_LOOK_EVERY=20   # mid-quest, during auto-walk (user 11-07: the menu's dots at once, not at the quest's end)
 QUEST_GROWTH_SECONDS=900   # a quest's end brings growth forward at most every 15 minutes (user 11-06)
 
 
@@ -99,7 +100,10 @@ def menu_dots(adapter,context,inputs,real):
     every red dot at once)."""
     now=time.monotonic();muted=getattr(adapter,'_owner_signal_muted',None)
     if muted is None:muted=adapter._owner_signal_muted={}
-    if now<muted.get('menu',0) or not menu_dot(real):return []
+    if not menu_dot(real):
+        # The dot went out: the next one is new and is read at once, whatever the mute said.
+        muted.pop('menu',None);return []
+    if now<muted.get('menu',0):return []
     muted['menu']=now+MUTE
     import numpy as np,owner_hd as hd
     from owner_mission_ui import MissionUI
@@ -159,8 +163,10 @@ def look(adapter,frame):
     if real is None:return []
     muted=getattr(adapter,'_owner_signal_muted',None)
     if muted is None:muted=adapter._owner_signal_muted={}
-    moved=[]
-    for name in sorted(dots(real)):
+    moved=[];lit=dots(real)
+    # A dot that went out is forgotten, so one that comes back is handled at once.
+    for name in [n for n in tuple(muted) if n in LABELS and n not in lit]:muted.pop(name,None)
+    for name in sorted(lit):
         if now<muted.get(name,0):continue
         try:done=bring_bag(adapter) if name=='bag' else bring_reward(adapter,name)
         except Exception as exc:

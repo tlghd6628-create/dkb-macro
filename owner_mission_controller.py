@@ -396,6 +396,19 @@ def recent_nothing(adapter,book,power,now=None):
  return 0<=(now or time.time())-at<=NOTHING_SECONDS and power<=then
 
 
+def quest_signals(adapter,context,inputs):
+ """The red dots, the full menu's included, read during a quest's auto-walk every QUEST_LOOK_EVERY seconds, so their
+ work is brought forward now and run by the safe_jobs that follows, not at the quest's end (user 11-07)."""
+ from owner_growth_signals import QUEST_LOOK_EVERY
+ now=time.monotonic()
+ if now-getattr(adapter,'_owner_quest_signal_at',-1e30)<QUEST_LOOK_EVERY:return []
+ if context.input_depth or getattr(inputs,'held',()):return []
+ from owner_task_flow import LOCAL as task
+ if getattr(task,'servicing',False):return []
+ adapter._owner_quest_signal_at=now
+ from owner_hunt_memory import signals
+ return signals(adapter,context,inputs)
+
 def safe_jobs(adapter,context,inputs,*,boundary=False):
  from owner_task_flow import dispatch,pending,defer,LOCAL as task
  if getattr(task,'servicing',False):return False
@@ -707,6 +720,7 @@ def run(adapter,context,inputs):
       # A reward/equipment chore during auto-walk does not complete this
       # mission. Keep its runner so arrival/dialogue can finish; actual
       # activity handoffs still unwind through ResumeWork/QuestBoundary.
+      quest_signals(adapter,context,inputs)
       safe_jobs(adapter,context,inputs)
      context.wait(.1)
     LOCAL.active=None
