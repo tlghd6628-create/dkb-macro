@@ -17,7 +17,7 @@ FLOOR=.4;FIRST=.2;STEP=.08;WINDOW=3.;CHANGED=1.;STILL=1.;REPORT=120
 # presses seen, not one wait matched). Only one run drives the game at a time.
 class _Shared:pass
 LOCAL=_Shared()
-STATS=dict(loose=0,cut=0,saved=0.,waited=0,said=time.monotonic(),presses=0,blind=0,long=0,released=0,ages=[])
+STATS=dict(same=0,moving=0,motion=[],loose=0,cut=0,saved=0.,waited=0,said=time.monotonic(),presses=0,blind=0,long=0,released=0,ages=[])
 
 
 def diff(a,b):
@@ -101,9 +101,19 @@ def quick(ordinary,look,clock=time.monotonic):
             if settled(before,frames):
                 STATS['cut']+=1;STATS['saved']+=max(0.,left);report(clock);return
             ordinary(self,STEP)
-        STATS['waited']+=1;report(clock)
+        STATS['waited']+=1;why(before,frames);report(clock)
     wait._owner_quick=True
     return wait
+
+
+def why(before,frames):
+    """Why a long wait ran out (pc2 11-07 23:49: 168 ran out, the small-motion rule never fired): the screen never
+    left the pre-click one, or it kept moving; for the moving ones, the share of cells that moved between looks."""
+    if len(frames)<2 or before is None:return
+    if all(diff(f,before)<=CHANGED and moved(f,before)<=NEW for f in frames):STATS['same']+=1;return
+    STATS['moving']+=1
+    step=sorted(moved(b,a) for a,b in zip(frames,frames[1:]))
+    STATS['motion']=(STATS['motion']+[round(step[len(step)//2],3)])[-12:]
 
 
 def report(clock=time.monotonic):
@@ -112,6 +122,8 @@ def report(clock=time.monotonic):
     LOG.info('빠른 대기 · %d회 단축(작은 움직임 무시 %d) · %.0f초 절약 · 그대로 기다림 %d회 · 누름 %d(화면 못 봄 %d) · 긴 대기 %d',
              STATS['cut'],STATS['loose'],STATS['saved'],STATS['waited'],STATS['presses'],STATS['blind'],STATS['long'])
     LOG.info('빠른 대기 진단 · 손 뗌 %d · 긴 대기(클릭 뒤 초, 대기 초, 기록) %s',STATS['released'],STATS['ages'])
+    LOG.info('빠른 대기 진단 · 끝까지 기다린 이유 · 화면 그대로 %d · 계속 움직임 %d(움직인 칸 비율 중앙값 %s)',
+             STATS['same'],STATS['moving'],STATS['motion'])
 
 
 def watch_press(down,up,look,clock=time.monotonic):
