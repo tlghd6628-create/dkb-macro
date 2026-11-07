@@ -218,7 +218,9 @@ def read_blessing(root,frame):
 
 def parse_energy(rows):
     """{'name','stage','level'} from 생명의 기운 발현 2단계 and 레벨 9. Exactly one of each."""
-    words=''.join(text.clean(r['text']) for r in rows if r['score']>=WORD_FLOOR and text.clean(r['text']))
+    # '레벨0' read at .86 on 몽환 (짱군네 15:14, 15:38): the level row's own pattern checks it, at the number floor.
+    words=''.join(text.clean(r['text']) for r in rows if text.clean(r['text']) and
+                  (r['score']>=WORD_FLOOR or (r['score']>=NUMBER_FLOOR and re.fullmatch(r'레벨[0-9]{1,3}',text.clean(r['text'])))))
     titles=ENERGY_NAME.findall(words);levels=re.findall(r'레벨([0-9]{1,3})',words)
     if len(titles)!=1 or len(levels)!=1:return None
     return {'name':titles[0][0],'stage':int(titles[0][1]),'level':int(levels[0])}
@@ -244,6 +246,9 @@ def read_energy_title(root,frame):
     info=parse_energy(text.read(root,frame,ENERGY_TITLE,scale=2))
     if info is None:return None
     rows=text.read(root,frame,ENERGY_DIAMONDS,scale=3)
+    # A first stage shows a single diamond whose digit went unread (몽환 1단계, 15:14): with no digit at all there is
+    # no other stage to be on.
+    if info['stage']==1 and not any(str(r['text']).strip().isdigit() for r in rows):return info
     if selected_stage(rows,lambda r:gold_at(frame.hi,r))!=info['stage']:return None
     return info
 

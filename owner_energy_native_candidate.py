@@ -188,11 +188,15 @@ def run_energy(service,context,identity,targets,*,text_reader=read_text,settings
             else:service.button(native.ENERGY_TABS[index],wait_before_click=.1,required=True)
             context.wait(.15)
             # Reading takes longer than the tab takes to draw at this size, but the panel slides in first.
+            shown=None
             for _ in range(6 if real else 0):
                 context.checkpoint();service.check()
                 shown=text_reader(Path(service.adapter.project.root),service.capture())
                 if isinstance(shown,dict) and shown.get('name')==name:break
                 context.wait(.25)
+            # 15:38: after 여명, 몽환 (85 materials) was passed with no line at all. Say what the tab showed.
+            if real and not(isinstance(shown,dict) and shown.get('name')==name):
+                logging.getLogger('project_gui.DKB').info('기운 탭 판독 안 됨 · %s · 읽은 값 %s',name,shown)
         observer=EnergyObserver(service,context,identity,name,target['stage'],text_reader=text_reader)
         if pending:
             if not settle_pending(observer,intents,context):return False
