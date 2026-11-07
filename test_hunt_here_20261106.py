@@ -55,7 +55,9 @@ class Here(unittest.TestCase):
              patch.object(h,'distance',return_value=metres),patch('project_adapter.favorite_hunt.ensure_auto_active',return_value=auto):
             return h.already_there(adapter,NS(),NS())
     def test_near_skips_far_or_unread_moves(self):
-        self.assertTrue(self.run_it(0));self.assertTrue(self.run_it(15))
+        self.assertTrue(self.run_it(0));self.assertTrue(self.run_it(5))
+        # pc2 11-07 08:58: 10m off is moved back by 축지술, not walked.
+        self.assertFalse(self.run_it(10));self.assertFalse(self.run_it(15))
         self.assertFalse(self.run_it(40));self.assertFalse(self.run_it(None));self.assertFalse(self.run_it(0,auto=False))
 
 

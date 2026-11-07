@@ -81,10 +81,12 @@ def already_there(adapter,context,inputs):
     from owner_town_return import town_pair
     if town_pair(adapter,context,inputs):return False
     if still_hunting(adapter,context,service):return True
-    try:metres=distance(service,context,slot,walk=True)
+    try:metres=distance(service,context,slot)
     except Exception as exc:
         LOG.info('저장위치 거리 확인 보류 · %s',type(exc).__name__);return False
-    if metres is None or metres>NEAR:
+    # Drifted past the 5m range: back by 축지술, not on foot. A walk turned AUTO off and a pack of mobs held the
+    # character for 55 s before the 축지술 anyway (pc2 홍짱군 slot 2, 11-07 08:58); after the 축지술 it stayed at 0m.
+    if metres is None or metres>RANGE:
         if metres is not None:LOG.info('저장위치 %d번까지 %dm · 축지술 이동',slot,metres)
         return False
     lit=auto_lit(service.capture())
