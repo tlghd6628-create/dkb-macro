@@ -12,7 +12,7 @@ RECEIPT_WORDS=('보상받기','아이템획득');RECEIPT_AREAS=((600,150,170,30)
 BLANKS=((288,93),(286,19),(286,19))
 LIST_BOX=(165,125,130,265)
 BODY_TOP=204;BANNER_WAIT=1.5;BLANK_EVERY=5;EXIT='버튼_나가기'
-ATTENDANCE_GRID=(450,330,680,290)   # real pixels: the day tiles of an attendance tab (특별 출석)
+ATTENDANCE_GRID=(450,330,680,290);ATTENDANCE_ROW=48   # real pixels: the day tiles of an attendance tab (특별 출석); its top label row
 
 
 def attendance_dots(real):
@@ -145,7 +145,10 @@ class Flow:
         real=getattr(self.frame(),'hi',None)
         if real is None:return None
         x,y,w,h=ATTENDANCE_GRID;import numpy as np;real=np.asarray(real)
-        days=[t for t in (text.clean(r['text']) for r in text.read_area(None,real[y:y+h,x:x+w],scale=2,minimum=.6)) if t.endswith('일차')]
+        # The top row of day labels at scale 1 says as much (7 found) in 0.56 s against 2.1 s for the whole grid at
+        # scale 2, and this ran on every tab (짱군네 11-07 12:48 trace: 8-14 s after each tab press).
+        days=[t for t in (text.clean(r['text']) for r in text.read_area(None,real[y:y+ATTENDANCE_ROW,x:x+w],scale=1,minimum=.6)) if t.endswith('일차')]
+        self.mark('출석판 확인',len(days))
         return real if len(days)>=3 else None
     def claim_attendance(self,inputs):
         """Today's attendance tile carries a small red dot on its icon's top-right (pc1 7일차, pc2 4일차, 11-06). The
@@ -168,18 +171,23 @@ class Flow:
         """Pull the open tab's mission list down to its top. A press that moves is a drag, so no row takes it."""
         self.context.wait(TAB_SETTLE)
         (x,y0),(_,y1)=MISSION_DRAG
-        for _ in range(2):
+        # Six-step drags, again only while the list still moves (at most three): two fixed drags of twelve steps each
+        # moved through the guarded input 24 times a tab, also on a list already at its top.
+        for turn in range(3):
+            x0,y_0,w0,h0=LIST_BOX;before=self.frame()[y_0:y_0+h0,x0:x0+w0].copy()
             with inputs.transaction():
                 inputs.move(x,y0);self.context.wait(.05)
                 pressed=False
                 try:
                     inputs.down('mouse','left');pressed=True;self.context.wait(.08)
-                    for n in range(1,13):
-                        inputs.move(x,round(y0+(y1-y0)*n/12));self.context.wait(.025)
+                    for n in range(1,7):
+                        inputs.move(x,round(y0+(y1-y0)*n/6));self.context.wait(.03)
                     self.context.wait(.15)
                 finally:
                     if pressed:inputs.up('mouse','left')
             self.context.wait(.25)
+            moved=diff(self.frame()[y_0:y_0+h0,x0:x0+w0],before);self.mark('목록 끌기',turn+1,round(moved,1))
+            if moved<3:break
         self.baseline=None
         LOG.info('이벤트 미션 목록 맨 위로')
     def finish(self,result,failed=False):
