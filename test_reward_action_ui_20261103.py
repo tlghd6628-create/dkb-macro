@@ -25,8 +25,10 @@ class UI(Base):
   console=SettingsConsole(self.gui,{});console.window.withdraw();self.addCleanup(console.window.destroy)
   self.assertEqual(category('auto_rewards.blessing.enabled'),'가호')
   self.assertEqual(category('auto_rewards.seal_release.enabled'),'단 봉인해제')
-  self.assertEqual(category('auto_rewards.inventory_use.enabled'),'아이템 사용')
-  for key in ('auto_rewards.blessing.enabled','auto_rewards.seal_release.enabled','auto_rewards.inventory_use.enabled'):
+  # The item-use master follows its box switches and is not shown (user 11-07).
+  self.assertIsNone(category('auto_rewards.inventory_use.enabled'))
+  self.assertEqual(category('auto_rewards.inventory_use.boxes.skill_choice'),'아이템 사용')
+  for key in ('auto_rewards.blessing.enabled','auto_rewards.seal_release.enabled'):
    self.assertIn(key,console.native.vars)
    self.assertEqual(sum(item['id']==key for item,_ in console.native.controls),1)
   self.assertFalse(set(TARGETS)&self.visible('가호'))

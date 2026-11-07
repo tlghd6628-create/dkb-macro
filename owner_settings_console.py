@@ -15,7 +15,8 @@ def category(key):
  if key.startswith(('common.skill_preset.','auto_schedule.field_boss.skill_preset.','auto_schedule.boss_raid.skill_preset.')):return '기본 설정'
  if key.startswith(('auto_schedule.clan_boss_request.','auto_rewards.clan_help.','auto_growth.clan_cooperative_training.')):return '문파'
  if key=='auto_rewards.seal_release.enabled':return '단 봉인해제'
- if key=='auto_rewards.inventory_use.enabled' or key.startswith('auto_rewards.inventory_use.boxes.'):return '아이템 사용'
+ if key=='auto_rewards.inventory_use.enabled':return None  # follows the box switches (owner_item_boxes.sync_master)
+ if key.startswith('auto_rewards.inventory_use.boxes.'):return '아이템 사용'
  if key=='auto_rewards.blessing.enabled':return '가호'
  if key.startswith('auto_growth.spirit_training.') or key=='inner_path.enabled':return '수련'
  if key.startswith(('auto_schedule.','auto_challenge.')):return '비경·보스'
@@ -160,6 +161,9 @@ class NativeFields:
    if value!=self.baseline[key]:
     if latest.values[key]!=self.baseline[key]:raise ValueError('다른 창에서 설정이 변경되었습니다. 다시 열어 주세요.')
     changes[key]=value
+  from owner_item_boxes import MASTER,sync_master
+  synced=sync_master(dict(latest.values,**changes))
+  if synced is not None:changes[MASTER]=synced[MASTER]
   if changes:
    latest.save(latest.mode,dict(latest.values,**changes));self.gui.settings_model=latest;self.gui.refresh_summary()
    if paused:

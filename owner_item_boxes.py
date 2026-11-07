@@ -1,4 +1,7 @@
-"""One switch per box under 아이템 사용 (user 11-06). All on by default; the master switch still decides first.
+"""One switch per box under 아이템 사용 (user 11-06). All on by default.
+
+The master switch is no longer shown (user 11-07: "없애고 개별 체크로"). Its saved value follows the boxes: on while any
+box is on, so the inventory paths that still read it run exactly when a box asks for it.
 
 Boxes are opened from level 30: the rare fan and accessory boxes to put on what is missing (팔찌·반지 first), the
 skill choice box for 생명의 흐름 · 방패 밀기 · 공간 결계, the skill manual box and the energy choice box.
@@ -14,8 +17,19 @@ def key(code):return 'auto_rewards.inventory_use.boxes.'+code
 
 
 def enabled(values,code):
-    """A box is used when the master is on and its own switch is not off."""
-    return values.get(MASTER) is True and values.get(key(code),True) is not False
+    """A box is used when its own switch is not off."""
+    return values.get(key(code),True) is not False
+
+
+def master_value(values):
+    """The hidden master: on while any box is on."""
+    return any(enabled(values,code) for code,_ in BOXES)
+
+
+def sync_master(values):
+    """values with the master set from the boxes, or None when it already matches."""
+    want=master_value(values)
+    return None if values.get(MASTER) is want else dict(values,**{MASTER:want})
 
 
 def add_fields(schema):

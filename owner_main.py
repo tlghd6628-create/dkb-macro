@@ -249,6 +249,9 @@ def install(gui):
     if not getattr(gui,'_owner_quest_schema',False):
         model=gui.load_settings_model()
         if model.mode not in ('main_quest','sub_quest','auto_mode'):model.save('main_quest',model.values)
+        from owner_item_boxes import sync_master
+        synced=sync_master(model.values)
+        if synced is not None:model.save(model.mode,synced);model=gui.load_settings_model()
         schema=copy.deepcopy(model.schema)
         from owner_clan_field_help import add_switch
         add_switch(schema)

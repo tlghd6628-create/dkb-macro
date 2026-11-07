@@ -8,10 +8,14 @@ import owner_equipment_boxes as e
 
 
 class Switches(unittest.TestCase):
-    def test_default_on_master_first(self):
-        self.assertTrue(b.enabled({b.MASTER:True},'weapon'))
+    def test_each_box_by_its_own_switch(self):
+        # User 11-07: the master switch is gone; each box decides, and the hidden master follows them.
+        self.assertTrue(b.enabled({b.MASTER:False},'weapon'))
         self.assertFalse(b.enabled({b.MASTER:True,b.key('weapon'):False},'weapon'))
-        self.assertFalse(b.enabled({b.MASTER:False},'weapon'))
+        self.assertTrue(b.sync_master({b.MASTER:False})[b.MASTER])
+        self.assertIsNone(b.sync_master({b.MASTER:True}))
+        off={b.key(code):False for code,_ in b.BOXES}
+        self.assertFalse(b.sync_master(dict(off,**{b.MASTER:True}))[b.MASTER])
     def test_plan_from_level_30_by_switch(self):
         worn={'무기':False,'팔찌':False,'반지':True}
         self.assertEqual(e.plan(worn,29,None,{b.MASTER:True})[0],[])
