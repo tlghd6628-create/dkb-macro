@@ -319,6 +319,18 @@ def prepare(adapter,context,inputs):
   if getattr(adapter,'_owner_requested_quest_mode',getattr(adapter,'mode',None))=='sub_quest' and fresh.character and fresh.level is not None and fresh.observed>=observed_after and fresh.power is None:
    LOG.warning('전투력 숫자 미확인 · 캐릭터 새 화면 확인 완료 · 현재 단계 적합 표시 임무만 진행 · 성장 재시도 보류')
    break
+  # The death screen over a boss arena reads as boss_combat here; the run waited 180 s on it and stopped (짱군네
+  # 11-07 12:40-12:44, 산군대호). Its own words decide, as in the quest loop.
+  try:
+   from owner_death_real import recover as real_death
+   if real_death(MissionUI(adapter,context,inputs)):
+    from owner_job_timing import after_death
+    after_death(adapter);LOG.info('임무 시작 전 사망 화면 · 나가기 후 다시 준비');context.wait(2);continue
+  except Pending:raise
+  except Exception as exc:
+   from biol_base.session import Cancelled
+   if isinstance(exc,Cancelled):raise
+   LOG.info('임무 시작 전 사망 확인 생략 · %s',str(exc)[:80])
   finish_scene(adapter,context,inputs)
   if time.monotonic()>=deadline:raise Pending('임무 선택 전 캐릭터·전투력 두 화면 확인 필요 · %d초 재확인 실패'%PREPARE_SECONDS)
   attempt+=1
