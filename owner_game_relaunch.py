@@ -129,6 +129,21 @@ def restore_launcher(title='도깨비의세계 런처'):
         LOG.info('런처 창 복원 실패 · %s',str(exc)[:80]);return False
 
 
+def login_shown(title='도깨비의세계 런처'):
+    """The launcher's small Kakao login window (360x560) instead of its main one: the account is logged out (10:27).
+    A person has to sign in; nothing here enters credentials."""
+    try:
+        import win32gui
+        found=[]
+        def each(h,_):
+            if win32gui.IsWindowVisible(h) and win32gui.GetWindowText(h)==title:
+                l,t,r,b=win32gui.GetClientRect(h)
+                if 300<=r<=420 and 480<=b<=640:found.append(h)
+        win32gui.EnumWindows(each,None)
+        return bool(found)
+    except Exception:return False
+
+
 def to_front(hwnd):
     """The launcher's 게임 실행 click is refused while another window covers it (07:55: 입력 지점이 다른 창에 가려져
     있습니다). Windows lets a background process take the foreground after an Alt press."""
@@ -153,6 +168,7 @@ def wait_launcher_ready(gui,context,clock=time.monotonic,rows=None,press=None,fr
     while not window.candidates():
         context.checkpoint()
         if gui.game_window.candidates():return 'game'
+        if login_shown():return 'login'
         if clock()>end:return 'no_launcher'
         restore_launcher()
         context.wait(.5)
@@ -247,6 +263,10 @@ def install(gui):
         from biol_base.session import Context
         s=gui.session
         result=wait_launcher_ready(gui,Context(s.stop_event,s.pause_event))
+        if result=='login':
+            watch.tries=[time.time()]*TRIES   # no more tries this hour; a person signs in
+            LOG.warning('런처 로그인 필요 · 카카오계정 로그인 후 F1 · 자동 재접속 멈춤')
+            raise RuntimeError('런처 로그인 필요')
         if result=='no_launcher':raise RuntimeError('런처 창이 나타나지 않았습니다.')
         return launcher.snapshot()
     launcher.open=open_and_wait

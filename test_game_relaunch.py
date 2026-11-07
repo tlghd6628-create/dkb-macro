@@ -49,6 +49,17 @@ class Launcher(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             gr.wait_launcher_ready(gui,ctx,clock=lambda:clock[0],rows=lambda:[row('50%')],press=lambda r:None,front=None)
 
+class Login(unittest.TestCase):
+    def test_login_window_stops_the_wait(self):
+        class Win:
+            hwnd=0
+            def candidates(self):return []
+        gui=S(official_launcher=S(window=Win()),game_window=S(candidates=lambda:[]))
+        from unittest.mock import patch
+        with patch.object(gr,'login_shown',return_value=True):
+            self.assertEqual(gr.wait_launcher_ready(gui,S(checkpoint=lambda:None,wait=lambda s:None),front=None),'login')
+
+
 class Watching(unittest.TestCase):
     def gui(self,games=(),status='stopped'):
         calls=[]
