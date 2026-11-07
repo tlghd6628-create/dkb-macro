@@ -20,6 +20,17 @@ def title_root(title):
 
 def stage_of(rows):
  """OCR confuses title letters but is only ever used here for the step digit."""
+ found=_stage(rows)
+ if found is None and not _stage_values(rows):
+  one=joined(rows)
+  if one:found=_stage([one])
+ return found
+
+def _stage_values(rows):
+ return {re.findall(r'[0-9]{1,3}',r.get('text',''))[-1] for r in rows if r.get('score',0)>=.95
+         and re.findall(r'[0-9]{1,3}',r.get('text','')) and re.search('[가-힣]',r.get('text',''))}
+
+def _stage(rows):
  values=set()
  for row in rows:
   if row.get('score',0)<.95:continue
@@ -45,7 +56,25 @@ def search_order(target):
  """A hint only chooses the first scroll direction; the card is still proven."""
  return (1,-1) if packaged_knowledge()['cards'].get(target,{}).get('search_first')=='up' else (-1,1)
 
+JOINED_MINIMUM=.93
+
+
+def joined(rows):
+ """The heading's pieces left to right as one row: 짱군네 15:09 read '[외전]', '산길의', '|호환10' (.937) apart."""
+ parts=[r for r in rows if r.get('text')]
+ if len(parts)<2 or min(r.get('score',0) for r in parts)<JOINED_MINIMUM:return None
+ parts=sorted(parts,key=lambda r:r.get('rx',r.get('x',0)))
+ return {'text':''.join(r['text'] for r in parts),'score':.95}
+
+
 def quest_id(rows):
+ found=_quest_id(rows)
+ if found is None and not any(r.get('score',0)>=.95 and re.search('[0-9]',r.get('text','')) for r in rows):
+  one=joined(rows)
+  if one:found=_quest_id([one])
+ return found
+
+def _quest_id(rows):
  candidates=set()
  for row in rows:
   if row.get('score',0)<.95:continue
