@@ -106,6 +106,38 @@ def death_mark(frame):
     return (rows[0]['x'],rows[0]['y'],logical_bounds(rows[0],frame)) if rows else None
 
 
+RAID_ADMIT_TITLE=(560,195,250,56)   # real: 매칭 입장 (682,223)
+RAID_ADMIT_BUTTONS=(500,505,360,48)  # real: 취소 (580,529) and 확인 (778,529)
+
+
+def _raid_admit_rows(frame):
+    """(title, 확인) on the 매칭 입장 popup, or None. 확인 is taken by exactly that word; 취소 on the same row never is."""
+    if getattr(frame,'hi',None) is None:return None
+    from owner_text import clean,read
+    title=read(None,frame,RAID_ADMIT_TITLE,scale=2,minimum=.6)
+    if not title or '매칭입장' not in ''.join(clean(r['text']) for r in title):return None
+    ok=[r for r in read(None,frame,RAID_ADMIT_BUTTONS,scale=2,minimum=.6) if clean(r['text'])=='확인']
+    return (title[0],ok[0]) if len(ok)==1 else None
+
+
+def _mark(row,frame):
+    from owner_text import logical_bounds
+    return (row['x'],row['y'],logical_bounds(row,frame))
+
+
+def raid_admit_title(frame):
+    """체크_레이드_매칭입장 at 1366x768. Its picture scores .81 there, so the native wait never saw the popup and let it
+    run out (pc2 11-07: 확인 not pressed, then 투표 부결 and a stopped run)."""
+    rows=_raid_admit_rows(frame)
+    return _mark(rows[0],frame) if rows else None
+
+
+def raid_admit_confirm(frame):
+    """버튼_레이드_매칭입장확인 at 1366x768 (its picture scores .86): the 확인 under the 매칭 입장 title."""
+    rows=_raid_admit_rows(frame)
+    return _mark(rows[1],frame) if rows else None
+
+
 def coupon_menu(frame):
     """쿠폰등록 on the settings' account tab, by exactly that word. Its picture does not match at 1366x768."""
     from owner_text import clean,logical_bounds,read
