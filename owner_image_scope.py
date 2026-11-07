@@ -397,7 +397,7 @@ def summon_already_shown(detector,name,frame):
     return (850,440,(845,435,855,445))
 
 # At 1366x768 these are found by their words and nothing else: a softer look at their pictures could take a neighbour.
-REAL_WORDS={'버튼_축지술_가운데':'teleport_word','버튼_귀환':'home_word','버튼_보스_축지술':'map_teleport','버튼_지도_축지술':'map_teleport','버튼_지도_물약상인':'map_merchant','버튼_지도_물약상인2':'map_merchant','버튼_전체매뉴_설정_쿠폰등록':'coupon_menu'}
+REAL_WORDS={'체크_사망상태':'death_mark','버튼_축지술_가운데':'teleport_word','버튼_귀환':'home_word','버튼_보스_축지술':'map_teleport','버튼_지도_축지술':'map_teleport','버튼_지도_물약상인':'map_merchant','버튼_지도_물약상인2':'map_merchant','버튼_전체매뉴_설정_쿠폰등록':'coupon_menu'}
 
 def real_word_hit(detector,name,frame,candidate_filter):
     import owner_movement,owner_real_marks

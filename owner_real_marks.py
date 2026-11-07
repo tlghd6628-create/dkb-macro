@@ -88,6 +88,24 @@ def map_teleport(frame):
 ACCOUNT_BUTTONS=(460,490,450,140)  # real pixels: the buttons under the settings' account tab
 
 
+DEATH_RED=(22,58,600,780);DEATH_RED_FLOOR=.05
+
+
+def death_mark(frame):
+    """체크_사망상태 by the death screen's own words. Its picture scores 58-72% at 1366, so the native runner and every
+    native check missed deaths (pc1 11-06 13:51; 짱군네 11-07 15:40, where an overdue 우편 then ran on it). The red title
+    letters (.096-.115 of the title band on death frames, .03 or less elsewhere) gate the word read."""
+    real=getattr(frame,'hi',None)
+    if real is None:return None
+    y0,y1,x0,x1=DEATH_RED;band=np.asarray(real)[y0:y1,x0:x1].astype(int)
+    if float(((band[...,0]>170)&(band[...,1]<110)&(band[...,2]<110)).mean())<DEATH_RED_FLOOR:return None
+    from owner_death_real import dead,TITLE
+    if not dead(frame):return None
+    from owner_text import logical_bounds,read
+    rows=read(None,frame,TITLE,scale=2,minimum=.6)
+    return (rows[0]['x'],rows[0]['y'],logical_bounds(rows[0],frame)) if rows else None
+
+
 def coupon_menu(frame):
     """쿠폰등록 on the settings' account tab, by exactly that word. Its picture does not match at 1366x768."""
     from owner_text import clean,logical_bounds,read
