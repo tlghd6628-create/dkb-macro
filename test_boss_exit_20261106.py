@@ -24,10 +24,25 @@ class Exit(unittest.TestCase):
     def test_waits_pass_through_and_try_only_after_ninety_seconds(self):
         waited=[];tries=[]
         context=NS(wait=lambda s:waited.append(s),stop='x')
-        with patch.object(e,'press_exit',side_effect=lambda s,c:tries.append(1)),patch.object(e.time,'monotonic',side_effect=[0,10,95,100,111]):
+        with patch.object(e,'press_exit',side_effect=lambda s,c:tries.append(1)),patch.object(e,'touch_exit',return_value=False),             patch.object(e.time,'monotonic',side_effect=[0,10,95,100,111]):
             leaving=e.Leaving(context,None)
             leaving.wait(1);leaving.wait(1);leaving.wait(1);leaving.wait(1)
         self.assertEqual(waited,[1,1,1,1]);self.assertEqual(tries,[1,1]);self.assertEqual(leaving.stop,'x')
+
+    def test_the_touch_notice_is_touched(self):
+        clicks=[]
+        service=NS(capture=lambda:NS(hi=1),click_hit=lambda hit:clicks.append(hit[:2]))
+        with patch.object(e,'words',return_value=[dict(word='아무곳이나터치시컨텐츠에서나가집니다',rx=682,ry=496)]):
+            self.assertTrue(e.touch_exit(service,NS(wait=lambda s:None)))
+        self.assertEqual(len(clicks),1)
+        with patch.object(e,'words',return_value=[dict(word='내순위상세보기',rx=501,ry=496)]):
+            self.assertFalse(e.touch_exit(service,NS(wait=lambda s:None)))
+    def test_a_fight_gets_the_touch_only(self):
+        tries=[];touches=[]
+        with patch.object(e,'press_exit',side_effect=lambda s,c:tries.append(1)),patch.object(e,'touch_exit',side_effect=lambda s,c:touches.append(1)),             patch.object(e.time,'monotonic',side_effect=[0,1,200,400]):
+            leaving=e.Leaving(NS(wait=lambda s:None),None,exit_after=None)
+            leaving.wait(1);leaving.wait(1);leaving.wait(1)
+        self.assertEqual(tries,[]);self.assertEqual(len(touches),3)
 
 
 if __name__=='__main__':unittest.main()

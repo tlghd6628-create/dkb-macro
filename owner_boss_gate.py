@@ -27,6 +27,15 @@ def allowed(adapter,context,inputs):
     LOG.info(text,extra={'gui_message':text})
     return False
 
+def leaving(adapter,context,inputs):
+    """The context whose waits touch the result table away; the plain context when no screen service can be made."""
+    try:
+        from owner_boss_exit import Leaving
+        from project_adapter.town_services import TownServices
+        return Leaving(context,TownServices(adapter,context,inputs,[]),exit_after=None)
+    except Exception as exc:
+        LOG.debug('필드 보스 결과 터치 준비 생략 · %s',exc);return context
+
 def install(gui=None):
     from project_adapter._entry import Adapter
     if getattr(Adapter._run_field_boss_entry,'_owner_boss_gate',False):return
@@ -40,5 +49,6 @@ def install(gui=None):
         loosen(adapter,context,inputs)
         # The record stays open: 제자리 comes back on only at the saved hunting spot (owner_hunt), never where the boss
         # was, which may have no monsters (user 11-06).
-        return ordinary(adapter,context,inputs,*args,**kwargs)
+        # The result table is left by a touch as soon as it shows; only the touch, never the exit, during a fight.
+        return ordinary(adapter,leaving(adapter,context,inputs),inputs,*args,**kwargs)
     entry._owner_boss_gate=True;Adapter._run_field_boss_entry=entry

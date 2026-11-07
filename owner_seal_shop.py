@@ -170,6 +170,9 @@ def shop_rows(frame):
         if name not in known:continue
         # The coin left of the price reads as a 0 on some rows (엽전, 19:58); the price stands right of it.
         price=[r for r in rows if 8<r['ry']-head['ry']<34 and r['rx']>100 and re.fullmatch(r'\d{1,4}',r['word'])]
+        # The coin can also read as its own 0 beside the price, or joined to it ('0100', 강타 on pc2 11-07): a lone 0 is
+        # the coin, and of what is left the rightmost is the price.
+        price=sorted([r for r in price if int(r['word'])>0],key=lambda r:r['rx'])[-1:]
         limit=[m for r in rows if 26<r['ry']-head['ry']<56 for m in [LIMIT.search(r['word'])] if m]
         if len(price)==1 and len(limit)==1:
             m=limit[0]
@@ -344,13 +347,32 @@ class Run:
             if coins is None:raise RuntimeError('단각 판독 실패')
             seen=self.find(row['name'])
             if seen is None:LOG.info('단각 교환 · %s 목록에서 못 찾음',row['name']);continue
-            count=self.buy(row,seen,coins)
-            if not count:continue
-            after=self.find(row['name'])
-            if after is None or after['used']!=seen['used']+count:raise RuntimeError('%s 구매 수량 확인 실패'%row['name'])
+            if seen['used']<seen['limit'] and coins<seen['price']:
+                LOG.info('단각 교환 · %s 단각 부족 · 보유 %d · 가격 %d',row['name'],coins,seen['price']);continue
+            # One row that cannot be proved is left for the next day; it no longer ends the whole job (pc2 11-07:
+            # 요혼석 08:27, 가호 주머니 18:56 and 엽전 21:52 each stopped the rows after them).
+            try:
+                count=self.buy(row,seen,coins)
+                if not count:continue
+                after=self.settled(row['name'],seen['used']+count)
+                if after is None:raise RuntimeError('%s 구매 수량 확인 실패'%row['name'])
+            except RuntimeError as exc:
+                LOG.warning('단각 교환 · %s 보류 · %s',row['name'],str(exc)[:80]);self.close_popup();continue
             LOG.info('단각 교환 · %s %d개 · %s %d/%d',row['name'],count,after['period'],after['used'],after['limit'])
             bought.append((row['name'],count))
         return bought
+
+    def settled(self,name,used,tries=3):
+        """The row once its count shows the purchase; the list can redraw a moment after the popup closes."""
+        for attempt in range(tries):
+            after=self.find(name)
+            if after is not None and after['used']==used:return after
+            self.context.wait(.8)
+        return None
+
+    def close_popup(self):
+        row=self.word_at(self.frame(),POPUP_CANCEL,'취소')
+        if row:self.tap(round(row['rx']),round(row['ry']),.8)
 
 
 def run(adapter,context,inputs):

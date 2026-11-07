@@ -43,6 +43,12 @@ class Reading(unittest.TestCase):
         self.assertEqual(found['가호주머니'],dict(ry=676,price=50,period='주간',used=7,limit=10))
         self.assertEqual(found['엽전'],dict(ry=280,price=10,period='일일',used=0,limit=100))
         self.assertNotIn('여명의정수',found)
+    def test_coin_joined_or_beside_the_price(self):
+        rows=[row('강타도술강화요령서',146,308),row('0100',106,329),row('도사일일한정:(9/10)',137,348),
+              row('파멸도술강화요령서',146,602),row('0',101,624),row('100',117,624),row('도사일일한정:(10/10)',137,643)]
+        with patch.object(s,'words',return_value=rows):found=s.shop_rows(None)
+        self.assertEqual(found['강타도술강화요령서'],dict(ry=308,price=100,period='일일',used=9,limit=10))
+        self.assertEqual(found['파멸도술강화요령서']['price'],100)
     def test_balance_is_the_first_number(self):
         with patch.object(s,'words',return_value=[row('1,487',740,28),row('20',623,28)]):self.assertEqual(s.balance(None),20)
     def test_skip_box_tick(self):
@@ -88,6 +94,32 @@ class Wanted(unittest.TestCase):
         self.assertEqual(s.wanted(dict(mode='quantity',quantity=5),self.seen,1000),2)
         self.assertEqual(s.wanted(dict(mode='quantity',quantity=2),self.seen,1000),0)
         self.assertEqual(s.wanted(dict(mode='max',quantity=1),dict(self.seen,used=10),1000),0)
+
+
+class Exchange(unittest.TestCase):
+    """A row that cannot be proved, or cannot be paid for, does not end the rows after it."""
+    def run_rows(self,coins,buy):
+        work=s.Run.__new__(s.Run);work.context=NS(checkpoint=lambda:None,wait=lambda t:None)
+        seen={'요혼석':dict(ry=1,price=10,period='일일',used=0,limit=100),'엽전':dict(ry=2,price=10,period='일일',used=0,limit=100),
+              '강타 도술 강화 요령서':dict(ry=3,price=100,period='일일',used=9,limit=10)}
+        bought={}
+        work.tab=lambda *a:None;work.frame=lambda:None;work.close_popup=lambda:None
+        work.find=lambda name:dict(seen[name],used=seen[name]['used']+bought.get(name,0))
+        def fake_buy(row,sn,c):
+            n=buy(row['name']);bought[row['name']]=n;return n
+        work.buy=fake_buy
+        rows=[{'name':n,'enabled':True,'mode':'max','quantity':1} for n in ('강타 도술 강화 요령서','요혼석','엽전')]
+        with patch.object(s,'balance',return_value=coins):return work.exchange(rows),bought
+    def test_too_few_coins_is_skipped_quietly(self):
+        result,bought=self.run_rows(46,lambda n:4)
+        self.assertNotIn('강타 도술 강화 요령서',bought)
+        self.assertEqual(result,[('요혼석',4),('엽전',4)])
+    def test_a_failed_row_goes_on_to_the_next(self):
+        def buy(name):
+            if name=='요혼석':raise RuntimeError('요혼석 수량 입력창 미확인')
+            return 3
+        result,_=self.run_rows(500,buy)
+        self.assertEqual(result,[('강타 도술 강화 요령서',3),('엽전',3)])
 
 
 class Wiring(unittest.TestCase):

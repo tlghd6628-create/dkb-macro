@@ -10,7 +10,8 @@ LOG=logging.getLogger('project_gui.DKB')
 EXIT_WORD=(5,140,75,40)        # real: 나가기 under the minimap
 QUESTION=(520,350,330,60)      # real: 필드 보스 지역에서 퇴장하시겠습니까?
 CONFIRM=(680,420,150,50)       # real: 확인
-AFTER=90;EVERY=15
+TOUCH=(470,480,430,34)         # real: 아무곳이나 터치시 컨텐츠에서 나가집니다 (682,496), under the result table
+AFTER=90;EVERY=15;TOUCH_EVERY=5
 
 
 def words(frame,box):
@@ -35,19 +36,38 @@ def press_exit(service,context):
     return True
 
 
+def touch_exit(service,context):
+    """The result table says a touch anywhere leaves; the notice itself is touched. pc2 11-07 21:06-21:14: the native
+    handler sat on this table for 9 minutes, rechecking once a minute, until the game's own timer ran out."""
+    import owner_hd as hd
+    frame=service.capture()
+    if getattr(frame,'hi',None) is None:return False
+    rows=[r for r in words(frame,TOUCH) if '터치' in r['word'] and '나가' in r['word']]
+    if len(rows)!=1:return False
+    service.click_hit(hd.real_hit(round(rows[0]['rx']),round(rows[0]['ry'])));context.wait(1.5)
+    LOG.info('필드 보스 결과 · 터치로 나감')
+    return True
+
+
 class Leaving:
     """The ordinary context, whose waits also try the exit after AFTER seconds."""
-    def __init__(self,context,service):
-        self._context,self._service=context,service;self._since=time.monotonic();self._tried=-1e9;self._busy=False
+    def __init__(self,context,service,exit_after=AFTER):
+        self._context,self._service,self._after=context,service,exit_after
+        self._since=time.monotonic();self._tried=-1e9;self._touched=-1e9;self._busy=False
     def __getattr__(self,name):return getattr(self._context,name)
+    def _try(self,step):
+        self._busy=True
+        try:step(self._service,self._context)
+        except Exception as exc:
+            from biol_base.session import Cancelled
+            if isinstance(exc,Cancelled):raise
+            LOG.info('필드 보스 퇴장 시도 보류 · %s',str(exc)[:80])
+        finally:self._busy=False
     def wait(self,seconds):
         now=time.monotonic()
-        if not self._busy and now-self._since>=AFTER and now-self._tried>=EVERY:
-            self._tried=now;self._busy=True
-            try:press_exit(self._service,self._context)
-            except Exception as exc:
-                from biol_base.session import Cancelled
-                if isinstance(exc,Cancelled):raise
-                LOG.info('필드 보스 퇴장 시도 보류 · %s',str(exc)[:80])
-            finally:self._busy=False
+        if not self._busy and now-self._touched>=TOUCH_EVERY:
+            self._touched=now;self._try(touch_exit)
+        # The 나가기 under the minimap also leaves a fight, so it is only for a handler that is already on the result.
+        if not self._busy and self._after is not None and now-self._since>=self._after and now-self._tried>=EVERY:
+            self._tried=now;self._try(press_exit)
         return self._context.wait(seconds)
