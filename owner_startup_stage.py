@@ -280,7 +280,10 @@ def install(gui):
                 first=service.capture();initial=scene(service.detector,first)
                 # A death screen first, whatever the scene reads: at 15:41 the start took it for something else and
                 # ran the overdue mail on it ('우편함 확인 실패'). Its own words decide, as in the quest loop.
-                if initial not in ('field','dungeon'):
+                # The field shows through the dimmed death screen, so the scene can read 'field' (15:44: missed again).
+                # The red title band gates it cheaply on every look.
+                from owner_real_marks import death_mark
+                if death_mark(first) is not None:
                     try:
                         from owner_death_real import recover as real_death
                         from owner_mission_ui import MissionUI
