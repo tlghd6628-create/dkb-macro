@@ -12,9 +12,12 @@ native polls) are left alone. settings/owner-quick-wait.json {"enabled": false} 
 import json,logging,threading,time
 from pathlib import Path
 LOG=logging.getLogger('project_gui.DKB')
-FLOOR=.4;FIRST=.2;STEP=.08;WINDOW=3.;CHANGED=1.5;STILL=.8;REPORT=300
-LOCAL=threading.local()
-STATS=dict(cut=0,saved=0.,waited=0,said=time.monotonic())
+FLOOR=.4;FIRST=.2;STEP=.08;WINDOW=3.;CHANGED=1.5;STILL=.8;REPORT=120
+# One shared note, not per thread: presses run on the input worker's thread and waits on the session's (09:53: 102
+# presses seen, not one wait matched). Only one run drives the game at a time.
+class _Shared:pass
+LOCAL=_Shared()
+STATS=dict(cut=0,saved=0.,waited=0,said=time.monotonic(),presses=0,blind=0,long=0)
 
 
 def diff(a,b):
@@ -47,7 +50,10 @@ class Look:
             from runtime_capture import capture
             a=capture(hwnd,dict(self.target,client_size=[width,height]))
             return a[::8,::8].astype('int16').mean(axis=2)
-        except Exception:return None
+        except Exception as exc:
+            if not getattr(self,'told',False):
+                self.told=True;LOG.info('빠른 대기 화면 보기 실패 · %s · %s',type(exc).__name__,str(exc)[:100])
+            return None
 
 
 def enabled(root):
@@ -58,6 +64,7 @@ def enabled(root):
 def quick(ordinary,look,clock=time.monotonic):
     def wait(self,seconds,*args,**kwargs):
         before=getattr(LOCAL,'before',None);at=getattr(LOCAL,'click_at',None)
+        if seconds>=FLOOR:STATS['long']+=1;report(clock)
         if seconds<FLOOR or before is None or at is None or clock()-at>WINDOW or getattr(LOCAL,'off',False):
             return ordinary(self,seconds,*args,**kwargs)
         LOCAL.before=None   # one quick wait per click
@@ -83,14 +90,16 @@ def quick(ordinary,look,clock=time.monotonic):
 def report(clock=time.monotonic):
     if clock()-STATS['said']<REPORT:return
     STATS['said']=clock()
-    LOG.info('빠른 대기 · %d회 단축 · %.0f초 절약 · 그대로 기다림 %d회',STATS['cut'],STATS['saved'],STATS['waited'])
+    LOG.info('빠른 대기 · %d회 단축 · %.0f초 절약 · 그대로 기다림 %d회 · 누름 %d(화면 못 봄 %d) · 긴 대기 %d',
+             STATS['cut'],STATS['saved'],STATS['waited'],STATS['presses'],STATS['blind'],STATS['long'])
 
 
 def watch_press(down,up,look,clock=time.monotonic):
     """Native code presses through transaction() with down/up, not click() (09:06: no quick wait at all on click()).
     The look is taken at the press and counts from the release."""
     def pressed(self,kind,value):
-        LOCAL.pressing=look()
+        LOCAL.pressing=look();STATS['presses']+=1
+        if LOCAL.pressing is None:STATS['blind']+=1
         return down(self,kind,value)
     def released(self,kind,value):
         try:return up(self,kind,value)
