@@ -201,6 +201,32 @@ def still_bar(idle,frame,now):
  return now-idle.get('bar_at',now)>=BAR_STILL
 
 
+FIGHT_CAP=60  # seconds of fighting with the quest tracker's words unchanged before it counts as a stall
+TRACKER_REAL=(1095,75,215,225)
+
+
+def tracker_ink(frame):
+ """The tracker's white words as a mask; the panel is see-through, so only the bright ink is compared."""
+ import numpy as np
+ real=getattr(frame,'hi',None)
+ if real is None:return None
+ x,y,w,h=TRACKER_REAL
+ return np.asarray(real)[y:y+h,x:x+w].min(axis=2)>190
+
+
+def still_tracker(idle,frame,now):
+ """True when the tracker's words have not changed for FIGHT_CAP seconds. A kill quest moves its count (8/20 → 9/20);
+ a fight the quest does not need leaves it as it was. 짱군네 sub quest 11-07 10:19-10:26: the quest was a talk, a 150K
+ elite was fought, and only the native 3-minute check moved on."""
+ import numpy as np
+ ink=tracker_ink(frame)
+ if ink is None:return False
+ old=idle.get('track')
+ if old is None or old.shape!=ink.shape or int((ink!=old).sum())>=12:
+  idle.update(track=ink,track_at=now);return False
+ return now-idle.get('track_at',now)>=FIGHT_CAP
+
+
 def restart_idle_quest(ui,idle):
  """Auto-move can drop after a boss fight, and the native runner then only clicks empty ground.
  A minimap unchanged for two minutes on the bare field presses the quest's own auto-progress again.
@@ -219,8 +245,12 @@ def restart_idle_quest(ui,idle):
   idle.update(crop=crop,at=now);return False
  if fighting(frame) and not still_bar(idle,frame,now):
   # Killing the quest's monsters keeps the minimap still; that is progress, not a stall (pc1 lv38 02:24-02:40: AUTO
-  # was pressed again every minute in the middle of 해골 8/20).
-  idle.update(crop=crop,at=now);return False
+  # was pressed again every minute in the middle of 해골 8/20). Its count moves the tracker's words.
+  if not still_tracker(idle,frame,now):
+   idle.update(crop=crop,at=now);return False
+  LOG.info('교전 %d초 동안 퀘스트 진행 없음 · 정체로 봄',now-idle.get('track_at',now))
+  # The next look waits another FIGHT_CAP, so a long quest boss is not counted as three stalls in a row.
+  idle.update(track_at=now,at=now-IDLE_SECONDS)
  if now-idle['at']<IDLE_SECONDS or not ui.normal():return False
  if auto_moving(frame):
   idle.update(crop=crop,at=now);return False

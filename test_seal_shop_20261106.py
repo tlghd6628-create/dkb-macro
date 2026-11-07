@@ -122,6 +122,42 @@ class Exchange(unittest.TestCase):
         self.assertEqual(result,[('강타 도술 강화 요령서',3),('엽전',3)])
 
 
+class Buy(unittest.TestCase):
+    """The quantity window must name the row asked for (pc2 11-07: 강타 asked, 연타 bought)."""
+    NAME='강타 도술 강화 요령서'
+    def work(self,body,rows_seen):
+        w=s.Run.__new__(s.Run);w.context=NS(checkpoint=lambda:None,wait=lambda t:None);w.taps=[]
+        w.tap=lambda x,y,wait=1.:w.taps.append((x,y));w.frame=lambda:'f'
+        looks=iter(rows_seen)
+        def reads(frame,box,minimum=.55):
+            if box is s.POPUP_TITLE:return [row('수량입력',680,270)]
+            if box is s.POPUP_BODY:return [row(t,500+60*i,300) for i,t in enumerate(body)]
+            if box is s.POPUP_COUNT:return [row('1',670,398)]
+            if box is s.POPUP_OK:return [row('확인',750,483)]
+            return []
+        self.reads=patch.object(s,'words',side_effect=reads);self.reads.start();self.addCleanup(self.reads.stop)
+        self.rows=patch.object(s,'shop_rows',side_effect=lambda f:{s.compact(self.NAME):dict(ry=next(looks),price=100,period='일일',used=9,limit=10)});self.rows.start();self.addCleanup(self.rows.stop)
+        return w
+    def seen(self):return dict(ry=300,price=100,period='일일',used=9,limit=10)
+    def test_other_item_in_the_window_is_cancelled(self):
+        w=self.work(['연타','도술','강화','요령서'],[300])
+        with self.assertRaisesRegex(RuntimeError,'품목 다름'):w.buy({'name':self.NAME,'mode':'max','quantity':1},self.seen(),1000)
+        self.assertEqual(w.taps[-1],s.Run.centre(s.POPUP_CANCEL))
+        self.assertNotIn((750,483),w.taps)
+    def test_named_item_is_bought(self):
+        w=self.work(['강타','도술','강화','요령서'],[300])
+        self.assertEqual(w.buy({'name':self.NAME,'mode':'max','quantity':1},self.seen(),1000),1)
+        self.assertEqual(w.taps[0],(s.LIST_X,300));self.assertEqual(w.taps[-1],(750,483))
+    def test_gliding_list_waits_for_a_still_row(self):
+        w=self.work(['강타도술강화요령서'],[226,300,300])
+        w.buy({'name':self.NAME,'mode':'max','quantity':1},self.seen(),1000)
+        self.assertEqual(w.taps[0],(s.LIST_X,300))
+    def test_a_list_that_never_stops_buys_nothing(self):
+        w=self.work(['강타도술강화요령서'],[200,250,300])
+        with self.assertRaisesRegex(RuntimeError,'위치 고정'):w.buy({'name':self.NAME,'mode':'max','quantity':1},self.seen(),1000)
+        self.assertEqual(w.taps,[])
+
+
 class Wiring(unittest.TestCase):
     def test_job_at_four(self):
         from owner_timetable import BY_KEY

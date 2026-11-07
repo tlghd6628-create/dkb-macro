@@ -33,6 +33,14 @@ class QuickWait(unittest.TestCase):
     def test_moving_screen_keeps_the_full_wait(self):
         frames=[np.full((10,10),float(v)) for v in range(10,200,10)]
         self.assertAlmostEqual(run(1.,frames),1.,places=3)
+    def test_a_small_moving_part_does_not_keep_the_wait(self):
+        frames=[]
+        for i in range(20):
+            f=B.copy();f[0,0]=(i%2)*200.;frames.append(f)
+        self.assertLess(run(1.,[A]+frames),.6)
+    def test_a_fade_keeps_the_wait(self):
+        frames=[np.full((10,10),float(v)) for v in range(0,200,10)]
+        self.assertAlmostEqual(run(1.,frames),1.,places=3)
     def test_short_polls_and_waits_without_a_click_are_untouched(self):
         self.assertAlmostEqual(run(.1,[A,B,B,B]),.1,places=3)
         self.assertAlmostEqual(run(1.,[A,B,B,B],clicked=False),1.,places=3)

@@ -17,7 +17,7 @@ FLOOR=.4;FIRST=.2;STEP=.08;WINDOW=3.;CHANGED=1.;STILL=1.;REPORT=120
 # presses seen, not one wait matched). Only one run drives the game at a time.
 class _Shared:pass
 LOCAL=_Shared()
-STATS=dict(cut=0,saved=0.,waited=0,said=time.monotonic(),presses=0,blind=0,long=0,released=0,ages=[])
+STATS=dict(loose=0,cut=0,saved=0.,waited=0,said=time.monotonic(),presses=0,blind=0,long=0,released=0,ages=[])
 
 
 def diff(a,b):
@@ -25,11 +25,27 @@ def diff(a,b):
     return float(np.abs(a-b).mean()) if a is not None and b is not None and a.shape==b.shape else 255.
 
 
+# Small moving parts (the idle character, effects, HUD numbers) kept the mean difference above STILL on most field
+# screens: 33 of 60 long waits on 11-07 ran to the end. A screen is also still when only a small share of its cells
+# moved by more than CELL between looks; a transition or a fade moves most of them.
+CELL=8;MOVED=.02;NEW=.03
+
+
+def moved(a,b):
+    """The share of cells that changed by more than CELL; 1 when the frames cannot be compared."""
+    import numpy as np
+    if a is None or b is None or a.shape!=b.shape:return 1.
+    return float((np.abs(a-b)>CELL).mean())
+
+
 def settled(before,frames):
     """True when the last frame differs from the pre-click one and the last two looks match it."""
     if len(frames)<3 or before is None:return False
     a,b,c=frames[-3:]
-    return diff(c,before)>CHANGED and diff(c,b)<STILL and diff(b,a)<STILL
+    if diff(c,before)>CHANGED and diff(c,b)<STILL and diff(b,a)<STILL:return True
+    if moved(c,before)>NEW and max(moved(c,b),moved(b,a),moved(c,a))<MOVED:
+        STATS['loose']+=1;return True
+    return False
 
 
 class Look:
@@ -93,8 +109,8 @@ def quick(ordinary,look,clock=time.monotonic):
 def report(clock=time.monotonic):
     if clock()-STATS['said']<REPORT:return
     STATS['said']=clock()
-    LOG.info('빠른 대기 · %d회 단축 · %.0f초 절약 · 그대로 기다림 %d회 · 누름 %d(화면 못 봄 %d) · 긴 대기 %d',
-             STATS['cut'],STATS['saved'],STATS['waited'],STATS['presses'],STATS['blind'],STATS['long'])
+    LOG.info('빠른 대기 · %d회 단축(작은 움직임 무시 %d) · %.0f초 절약 · 그대로 기다림 %d회 · 누름 %d(화면 못 봄 %d) · 긴 대기 %d',
+             STATS['cut'],STATS['loose'],STATS['saved'],STATS['waited'],STATS['presses'],STATS['blind'],STATS['long'])
     LOG.info('빠른 대기 진단 · 손 뗌 %d · 긴 대기(클릭 뒤 초, 대기 초, 기록) %s',STATS['released'],STATS['ages'])
 
 

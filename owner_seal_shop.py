@@ -34,6 +34,9 @@ BALANCE=(595,14,60,30)
 LIST=(15,112,290,636);LIST_X=160;LIST_DRAG=(660,180)
 POPUP_TITLE=(590,255,190,32);POPUP_COUNT=(630,384,80,28);POPUP_MAX=(777,397);POPUP_PLUS=(747,397)
 POPUP_OK=(690,466,120,34);POPUP_CANCEL=(570,466,120,34)
+# The quantity window's body above its buttons, where the chosen item's name shows. pc2 11-07: 강타 was asked and 연타
+# (the row above) was bought, so the window must name the row before 확인.
+POPUP_BODY=(420,240,530,222)
 MAX_PASSES=12;LIST_PAGES=5
 
 
@@ -180,6 +183,12 @@ def shop_rows(frame):
     return found
 
 
+def names_item(frame,name):
+    """True when the quantity window shows name: its whole name, or every word of it, read in the window's body."""
+    text=compact(''.join(r['word'] for r in sorted(words(frame,POPUP_BODY,.5),key=lambda r:(round(r['ry']/12),r['rx']))))
+    return compact(name) in text or all(compact(part) in text for part in name.split())
+
+
 def skip_ticked(frame):
     """The tick inside the 연출 건너뛰기 box is light grey (56 of 144 inner pixels above 150, pc1 18:59); an empty
     box is dark inside (none above 120, 19:14)."""
@@ -317,12 +326,28 @@ class Run:
             self.drag_list(True)
         return None
 
+    def steady_row(self,name,seen,tries=3):
+        """The row once two looks in a row put it at the same height; the list can still glide after a drag."""
+        for _ in range(tries):
+            self.context.wait(.3)
+            again=shop_rows(self.frame()).get(compact(name))
+            if again is None:return None
+            if abs(again['ry']-seen['ry'])<=4:return again
+            seen=again
+        return None
+
     def buy(self,row,seen,coins):
         want=wanted(row,seen,coins)
         if want<=0:return 0
-        self.tap(LIST_X,seen['ry'],1.)
+        steady=self.steady_row(row['name'],seen)
+        if steady is None:raise RuntimeError(row['name']+' 목록 위치 고정 안 됨')
+        self.tap(LIST_X,steady['ry'],1.)
         frame=self.until(lambda f:any('수량입력' in r['word'] for r in words(f,POPUP_TITLE)),5)
         if frame is None:raise RuntimeError(row['name']+' 수량 입력창 미확인')
+        if not names_item(frame,row['name']):
+            read=' '.join(r['word'] for r in words(frame,POPUP_BODY,.5))[:60]
+            self.tap(*self.centre(POPUP_CANCEL),.8)
+            raise RuntimeError('%s 수량 입력창 품목 다름 · 읽은 글자 %s'%(row['name'],read or '없음'))
         most=min(seen['limit']-seen['used'],coins//seen['price'])
         if want==most:self.tap(*POPUP_MAX,.6)
         else:
