@@ -23,4 +23,12 @@ class StillBar(unittest.TestCase):
         idle={}
         for t,level in ((0,140),(8,120),(16,100),(24,80),(32,60)):self.assertFalse(mc.still_bar(idle,frame(level),float(t)))
 
+class AutoMove(unittest.TestCase):
+    def test_the_move_pill_counts_as_moving(self):
+        from unittest.mock import patch
+        f=S(hi=np.zeros((768,1366,3),dtype=np.uint8))
+        with patch('owner_text.read_area',return_value=[{'text':'”자동 이동중'},{'text':'660m'}]):self.assertTrue(mc.auto_moving(f))
+        with patch('owner_text.read_area',return_value=[]):self.assertFalse(mc.auto_moving(f))
+        self.assertFalse(mc.auto_moving(S(hi=None)))
+
 if __name__=='__main__':unittest.main()

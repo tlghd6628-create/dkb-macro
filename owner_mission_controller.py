@@ -161,6 +161,22 @@ def fighting(frame):
  return float(((p[...,0]>110)&(p[...,0]-p[...,1]>50)&(p[...,0]-p[...,2]>50)).mean())>=.3
 
 BAR_STILL=20   # a target bar that has not changed in this many seconds is not a fight
+MOVE_PILL=(560,515,300,50)   # real: the '자동 이동 중 660m' pill above the hotbar
+
+
+def auto_moving(frame):
+ """The game's own auto-move pill shows: a long walk in town changes the minimap too slowly for the stall check
+ (짱군네 13:56-13:57: two re-presses 30 s apart while '자동 이동 중 660m' showed)."""
+ real=getattr(frame,'hi',None)
+ if real is None:return False
+ import numpy as np
+ from owner_text import read_area,clean
+ x,y,w,h=MOVE_PILL
+ try:rows=read_area(None,np.asarray(real)[y:y+h,x:x+w],scale=1,minimum=.5)
+ except Exception:return False
+ return any('이동중' in clean(r['text']) or '자동이동' in clean(r['text']) for r in rows)
+
+
 
 
 def bar_strip(frame):
@@ -205,6 +221,8 @@ def restart_idle_quest(ui,idle):
   # was pressed again every minute in the middle of 해골 8/20).
   idle.update(crop=crop,at=now);return False
  if now-idle['at']<IDLE_SECONDS or not ui.normal():return False
+ if auto_moving(frame):
+  idle.update(crop=crop,at=now);return False
  LOG.info('임무 자리 정체 %d초 · 자동 진행 다시 누름 · %s',now-idle['at'],ui.adapter.mode)
  quest_range(ui.adapter,ui.context,ui.inputs)
  ui.open(ui.adapter.mode);ui.start_selected();idle.update(crop=None,at=now)
