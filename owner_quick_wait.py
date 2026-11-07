@@ -40,8 +40,12 @@ class Look:
                 from project_adapter import protected_assets
                 profile=self.gui.project.root/'profiles'/self.gui.project.code
                 self.target=json.loads(protected_assets.read_text(profile/'config/authoring-targets.json',encoding='utf-8-sig'))['targets']['game']
+            # The profile's game target says 897x479; at 1366x768 that size check refused every look (09:14: no quick
+            # wait ever). The program's own screen viewer passes the window's real size the same way.
+            import win32gui
+            left,top,width,height=win32gui.GetClientRect(hwnd)
             from runtime_capture import capture
-            a=capture(hwnd,self.target)
+            a=capture(hwnd,dict(self.target,client_size=[width,height]))
             return a[::8,::8].astype('int16').mean(axis=2)
         except Exception:return None
 
