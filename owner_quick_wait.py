@@ -2,8 +2,8 @@
 
 Measured on the night's runs: waiting was 63-85% of each reward function's time (이벤트 76.6 s, 63%; 화첩 17 s, 85%);
 finding buttons and capturing were under 10%. Most of it is a fixed second after a click while the next screen was
-already there. Every native wait goes through Context.wait and every click through InputTransactions.click, so both
-are watched here; neither changes what is pressed.
+already there. Every native wait goes through Context.wait and every press through InputTransactions down/up, so
+both are watched here; neither changes what is pressed.
 
 After a click, a wait of FLOOR seconds or more ends once the screen differs from before the click and has held still
 for two looks in a row (STEP apart). A screen that never changes keeps the whole wait, as before. Shorter waits (the
@@ -82,13 +82,19 @@ def report(clock=time.monotonic):
     LOG.info('빠른 대기 · %d회 단축 · %.0f초 절약 · 그대로 기다림 %d회',STATS['cut'],STATS['saved'],STATS['waited'])
 
 
-def watch_click(ordinary,look,clock=time.monotonic):
-    def click(self,*args,**kwargs):
-        before=look()
-        try:return ordinary(self,*args,**kwargs)
-        finally:LOCAL.before=before;LOCAL.click_at=clock()
-    click._owner_quick=True
-    return click
+def watch_press(down,up,look,clock=time.monotonic):
+    """Native code presses through transaction() with down/up, not click() (09:06: no quick wait at all on click()).
+    The look is taken at the press and counts from the release."""
+    def pressed(self,kind,value):
+        LOCAL.pressing=look()
+        return down(self,kind,value)
+    def released(self,kind,value):
+        try:return up(self,kind,value)
+        finally:
+            before=getattr(LOCAL,'pressing',None);LOCAL.pressing=None
+            if before is not None:LOCAL.before=before;LOCAL.click_at=clock()
+    pressed._owner_quick=released._owner_quick=True
+    return pressed,released
 
 
 def install(gui):
@@ -99,6 +105,7 @@ def install(gui):
         LOG.info('빠른 대기 꺼짐 · settings/owner-quick-wait.json');return
     look=Look(gui)
     if not getattr(Context.wait,'_owner_quick',False):Context.wait=quick(Context.wait,look)
-    if not getattr(InputTransactions.click,'_owner_quick',False):InputTransactions.click=watch_click(InputTransactions.click,look)
+    if not getattr(InputTransactions.down,'_owner_quick',False):
+        InputTransactions.down,InputTransactions.up=watch_press(InputTransactions.down,InputTransactions.up,look)
     gui._owner_quick_wait=True
     LOG.info('빠른 대기 연결 · 클릭 뒤 화면이 바뀌고 멈추면 바로 다음 동작')

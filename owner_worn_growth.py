@@ -289,6 +289,7 @@ class Route:
                     ages=[round(time.monotonic()-at,1) for at in (observer.looked_at or ())]
                     LOG.info('착용 %s 강화 불가 · 재료 부족 또는 버튼 꺼짐 · %s · 판독 %s · 판독 후 %s초',item.slot,panel.get('word'),
                              {k:v for k,v in panel.items() if k!='hit'},ages)
+                    if panel.get('enough') is False:item.short=True
                 elif status not in ('hold_policy',):
                     seen=read_panel(self.root,self.frame())
                     LOG.info('착용 %s 강화 중단 · %s · 판독 %s · 흔들린 값 %s',item.slot,status,{k:v for k,v in (seen or {}).items() if k!='hit'},observer.last_diff)
@@ -450,6 +451,11 @@ class Route:
                 chosen=waiting[0];others=[item.values[ENHANCE] for item in group if item is not chosen]
                 before=chosen.values[ENHANCE]
                 self.visit(chosen,min(others)+LEVEL_STEP if others else None)
+                # Stones are per grade: one part short of them means the whole grade is (짱군네 11-07 09:03: all eleven
+                # parts were visited, 8 s each, every one '재료 부족'). The grade rests until a change wakes it.
+                if getattr(chosen,'short',False):
+                    for item in group:item.done.add(ENHANCE);rest(self.adapter,item.slot,ENHANCE)
+                    LOG.info('착용 %s 등급 강화 재료 부족 · 같은 등급 %d개 쉼',grade,len(group));break
                 # A turn that raised nothing must not come round again: the lowest stayed the lowest, and one item was read every 7 s (pc2, 11-06).
                 if chosen.values[ENHANCE]<=before:
                     chosen.done.add(ENHANCE)
@@ -477,16 +483,16 @@ class Route:
             if time.monotonic()>=self.deadline:return
             if item.values and self.need(item):self.visit(item)
     def from_table(self,item):
-        """A part read within TABLE_SECONDS that has nothing left to do (goals met, or its next step resting after a
-        shortage) is not opened again (user 11-06: read only what changed). Anything else is read as before."""
+        """A part read within TABLE_SECONDS is not opened again (user 11-06: read only what changed)."""
         from owner_growth_current import recent_reading
         try:found=recent_reading(self.root,self.profile,item.slot,TABLE_SECONDS)
         except Exception:return False
         if not found or found[0] not in ('일반','희귀','영웅','전설'):return False
+        # The values only change by a press here (its screen reads the real level before the next press) or a swap
+        # (which drops the reading), so a fresh reading decides without opening the part (짱군네 11-07 09:02: eleven
+        # parts reopened, 70 s, before eleven presses that could not run).
         item.grade,item.values=found
-        if self.need(item) is None:return True
-        item.grade=None;item.values=None
-        return False
+        return True
     def to_field(self):
         self.leave_growth();worn.leave_blessing_screen(self.service,self.context)
         worn.close_bag(self.service,self.context)
@@ -580,7 +586,7 @@ def run(adapter,context,inputs):
 
 
 IDLE_MINUTES=180
-TABLE_SECONDS=1800
+TABLE_SECONDS=6*3600
 AWAKEN_HOURS=24
 # Rests are kept on disk per character and end on a change, not on the clock alone (user 11-06: growth must take far
 # less time). A pass that changed nothing took 5-6 minutes every 20 minutes and after every restart (pc1 17:58,

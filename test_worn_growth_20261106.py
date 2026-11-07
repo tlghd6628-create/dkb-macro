@@ -2,7 +2,7 @@
 from pathlib import Path
 from types import SimpleNamespace as NS
 from unittest.mock import patch
-import sys,tempfile,time,unittest
+import sys,time,tempfile,time,unittest
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 import bootstrap
 import numpy as np
@@ -436,11 +436,33 @@ class Table(unittest.TestCase):
         r=g.Route.__new__(g.Route);r.adapter=NS();r.root='x';r.profile='p'
         r.document={'grades':{'희귀':dict(enabled=True,enhance=50,breakthrough=3,awaken=goal)}}
         return r
-    def test_at_goal_is_skipped_else_read(self):
+    def test_a_fresh_reading_is_used_else_read(self):
         item=g.Item('반지',False)
         with patch('owner_growth_current.recent_reading',return_value=('희귀',{'enhance':50,'breakthrough':3,'awaken':0})),patch.object(g,'breakthrough_allowed',return_value=True):
             self.assertTrue(self.route(0).from_table(item))
+            # 짱군네 11-07: a fresh reading below the goal is used too; the press screen reads the real level.
+            item=g.Item('반지',False);self.assertTrue(self.route(1).from_table(item));self.assertEqual(item.values['awaken'],0)
+        with patch('owner_growth_current.recent_reading',return_value=None):
             item=g.Item('반지',False);self.assertFalse(self.route(1).from_table(item));self.assertIsNone(item.values)
+    def test_one_short_part_rests_its_grade(self):
+        """짱군네 11-07 09:03: eleven parts visited, each '재료 부족'. The first shortage now rests the whole grade."""
+        r=self.route(1);r.adapter=NS();r.check=lambda:None;r.deadline=time.monotonic()+60
+        items=[g.Item(slot,False) for slot in ('반지','팔찌','목걸이')]
+        for i,item in enumerate(items):item.grade='희귀';item.values={'enhance':10+i,'breakthrough':3,'awaken':1}
+        visits=[]
+        def visit(item,cap=None):visits.append(item.slot);item.short=True
+        r.visit=visit
+        with patch.object(g,'breakthrough_allowed',return_value=True),patch.object(g,'SLOTS',('반지','팔찌','목걸이'),create=True):
+            r.document['grades']['희귀']['enhance']=50
+            known=items
+            for grade in {item.grade for item in known}:
+                group=[item for item in known if item.grade==grade]
+                waiting=sorted((item for item in group if r.need(item)==g.ENHANCE),key=lambda item:item.values[g.ENHANCE])
+                chosen=waiting[0];r.visit(chosen)
+                if getattr(chosen,'short',False):
+                    for item in group:item.done.add(g.ENHANCE);g.rest(r.adapter,item.slot,g.ENHANCE)
+        self.assertEqual(visits,['반지'])
+        self.assertTrue(all(g.resting(r.adapter,slot,g.ENHANCE) for slot in ('반지','팔찌','목걸이')))
     def test_a_short_step_rests(self):
         r=self.route(1);item=g.Item('반지',False)
         g.rest(r.adapter,'반지',g.AWAKEN)
