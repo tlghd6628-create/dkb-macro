@@ -155,6 +155,9 @@ def settle_pending(observer,intents,context,*,attempts=1):
     return False
 
 
+ENERGY_SECONDS=60
+
+
 def run_energy(service,context,identity,targets,*,text_reader=read_text,settings_check=None):
     """Process selected tab only; caller owns navigation and cleanup."""
     from project_adapter import achievement_rewards as native
@@ -163,7 +166,9 @@ def run_energy(service,context,identity,targets,*,text_reader=read_text,settings
     if pending and pending.get('phase')=='prepared':intents.abort_prepared('기운 입력 전 기록');pending=None
     result_only=getattr(service.adapter,'_owner_growth_reconcile_only',False) is True
     if result_only and not pending:return False
-    deadline=time.monotonic()+20
+    # At 1366 a tab switch and its reads took most of 20 s, so 몽환 (85 materials, 100%) was never reached after 여명
+    # was short (짱군네 11-07 15:14). The guard's identity holds a reading for 180 s.
+    deadline=time.monotonic()+ENERGY_SECONDS
     for index,name in enumerate(NAMES):
         if time.monotonic()>=deadline:return False
         target=targets.get(name,{})
@@ -261,8 +266,15 @@ def install(module,identity_resolver,*,alias_modules=()):
             context.checkpoint();service.check();start=time.monotonic();first=read_text(Path(adapter.project.root),service.capture())
             context.wait(.12);context.checkpoint();service.check();second=read_text(Path(adapter.project.root),service.capture())
             return first is not None and first==second and time.monotonic()-start<=3
+        def energy_title():
+            # The pot's animation can keep two panel reads apart (15:14: '안전하게 닫지 못했습니다' on the 기운 page);
+            # the page's own title beside the back arrow says the same on two looks.
+            from owner_startup_stage import menu_title
+            context.checkpoint();service.check();first=menu_title(service.capture())
+            context.wait(.12);context.checkpoint();service.check();second=menu_title(service.capture())
+            return '기운' in first and '기운' in second
         def close_energy():
-            if not energy_pair():raise NavigationError('기운 화면을 안전하게 닫지 못했습니다')
+            if not energy_pair() and not energy_title():raise NavigationError('기운 화면을 안전하게 닫지 못했습니다')
             context.checkpoint();service.check();service.click_hit((21,19,(16,14,27,24)));context.wait(.25)
             # 20:05 real run: a failed attempt's effect was still playing and the back
             # press did not take. Wait it out, and press again only on the same page.
