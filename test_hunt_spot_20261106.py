@@ -36,4 +36,20 @@ class Sites(unittest.TestCase):
             self.assertNotIn('restore(',(here/name).read_text(encoding='utf-8'),name)
 
 
+class Narrow(unittest.TestCase):
+    """Range 5m before the trip, the hold left off: only at_spot turns it on."""
+    def run_it(self,saved,panel=True):
+        import owner_boss_range as b
+        applied=[];adapter=NS(project=NS(root=Path('.')),exit_sleep_mode=lambda c,i:None)
+        ui=NS(frame=lambda:'F')
+        with patch.object(b,'pending',return_value=saved),patch.object(b,'_ui',return_value=ui),             patch.object(b,'panel_open',return_value=panel),patch.object(b,'cog',return_value=None),             patch.object(b,'apply',side_effect=lambda u,fixed,slider,**k:applied.append((fixed,slider))),             patch.object(b,'_clear',side_effect=AssertionError('stays recorded')):
+            return b.narrow(adapter,NS(checkpoint=lambda:None),NS()),applied
+    def test_range_only(self):
+        self.assertEqual(self.run_it({'fixed':True,'range':'low'}),(True,[(False,'low')]))
+    def test_nothing_open_sends_nothing(self):
+        self.assertEqual(self.run_it(None),(False,[]))
+    def test_not_on_the_base_screen_waits(self):
+        self.assertEqual(self.run_it({'fixed':True},panel=False),(False,[]))
+
+
 if __name__=='__main__':unittest.main()

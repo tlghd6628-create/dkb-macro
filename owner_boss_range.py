@@ -224,6 +224,22 @@ def loosen(adapter,context,inputs):
     except (RangeError,RuntimeError,ValueError,OSError) as exc:
         LOG.warning('보스 전 자동 전투 설정 실패 · 기존 설정으로 진행 · %s',str(exc)[:120]);return False
 
+def narrow(adapter,context,inputs):
+    """On the way back to the hunting spot: 수행 범위 5m at once, 이동 고정 still off until the spot (at_spot). With the
+    range left at its maximum, AUTO chased monsters for 36 s after the 축지술 and the 5m hold was then set 20 m away
+    (pc2 11-07 18:04 and 18:18). Stays recorded; False when nothing was open or the panel could not be used."""
+    root=adapter.project.root
+    if pending(root) is None:return False
+    try:
+        adapter.exit_sleep_mode(context,inputs);context.checkpoint()
+        ui=_ui(adapter,context,inputs);frame=ui.frame()
+        if not panel_open(frame) and cog(frame) is None:return False
+        apply(ui,False,'low')
+        LOG.info('사냥터 가기 전 수행 범위 5m · 이동 고정은 도착 후')
+        return True
+    except (RangeError,RuntimeError,ValueError,OSError) as exc:
+        LOG.info('사냥터 가기 전 수행 범위 줄이기 보류 · %s',str(exc)[:120]);return False
+
 def restore(adapter,context,inputs):
     """After the boss, or at the next safe moment. Stays recorded until it succeeds."""
     root=adapter.project.root;saved=pending(root)

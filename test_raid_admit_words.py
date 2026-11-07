@@ -76,4 +76,38 @@ class RaidFind(unittest.TestCase):
             self.assertIsNone(self.t.word_find(self.raid,self.raid.ADMIT,S(hi=np.zeros((2,2,3),np.uint8))))
 
 
+class LateAdmit(unittest.TestCase):
+    def flow(self,frames):
+        clicks=[];waits=[]
+        ctx=S(checkpoint=lambda:None,wait=lambda s:waits.append(s))
+        f=S(context=ctx,service=S(capture=lambda:frames.pop(0) if frames else None),click=lambda n,h:clicks.append((n,h)))
+        return f,clicks
+    def test_popup_that_shows_late_is_confirmed_once(self):
+        import project_adapter.boss_raid as raid,owner_raid_tickets as t
+        f,clicks=self.flow(['a','b','c'])
+        with patch.object(t,'word_find',side_effect=[None,None,(511,330,(1,2,3,4))]):
+            self.assertTrue(t.admit_late(f,raid,1))
+        self.assertEqual(clicks,[(raid.CONFIRM,(511,330,(1,2,3,4)))])
+    def test_no_popup_gives_up(self):
+        import project_adapter.boss_raid as raid,owner_raid_tickets as t
+        f,clicks=self.flow([])
+        with patch.object(t,'word_find',return_value=None),patch.object(t,'ADMIT_LATE',0.05):
+            self.assertFalse(t.admit_late(f,raid,1))
+        self.assertEqual(clicks,[])
+
+    def test_native_press_miss_falls_to_the_late_look(self):
+        import project_adapter.boss_raid as raid,owner_raid_tickets as t
+        t.install()
+        f=raid.RaidFlow.__new__(raid.RaidFlow);clicks=[]
+        f.context=S(checkpoint=lambda:None,wait=lambda s:None);f.service=S(capture=lambda:'F')
+        f.detect=lambda *a,**k:None;f.click=lambda n,h:clicks.append(n);f._owner_bulk=True
+        with patch.object(t,'word_find',return_value=(511,330,(1,2,3,4))):
+            self.assertIsNone(raid.RaidFlow.press(f,raid.CONFIRM,3,1,alternatives=(raid.CONFIRM2,)))
+        self.assertEqual(clicks,[raid.CONFIRM])
+        with patch.object(t,'word_find',return_value=None),patch.object(t,'ADMIT_LATE',0.05):
+            with self.assertRaises(raid.RaidPending):raid.RaidFlow.press(f,raid.CONFIRM,3,1)
+        with patch.object(t,'admit_late',side_effect=AssertionError('only confirms')):
+            with self.assertRaises(raid.RaidPending):raid.RaidFlow.press(f,raid.MATCH,3,1)
+
+
 if __name__=='__main__':unittest.main()

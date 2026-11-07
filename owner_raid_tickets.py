@@ -156,6 +156,24 @@ def word_find(raid,name,frame):
         if now-seen.get(name,0)>=30:seen[name]=now;LOG.info('레이드 글자로 찾음 · %s · 위치 %d,%d',name,hit[0],hit[1])
     return hit
 
+ADMIT_LATE=30.
+
+
+def admit_late(flow,raid,post):
+    """The native press looks for 확인 for 3 s; the popup is up for about 60 s and can come later than that (pc2 18:15:47:
+    given up 26 s into the queue, then 투표 부결 with this character among the rejecters). Its words are looked for
+    a while longer, and 확인 is pressed once when they show. True when pressed."""
+    end=time.monotonic()+ADMIT_LATE
+    while time.monotonic()<end:
+        flow.context.checkpoint()
+        hit=word_find(raid,raid.CONFIRM,flow.service.capture())
+        if hit is not None:
+            LOG.info('레이드 입장 확인 · 늦게 뜬 팝업 · 글자로 누름')
+            flow.click(raid.CONFIRM,hit);flow.context.wait(post);return True
+        flow.context.wait(.5)
+    LOG.warning('레이드 입장 확인 %d초 더 봤지만 팝업 글자 없음',ADMIT_LATE)
+    return False
+
 def install():
     import project_adapter.boss_raid as raid
     if getattr(raid.RaidFlow.find,'_owner_raid_tickets',False):return
@@ -192,8 +210,11 @@ def install():
     press_button=raid.RaidFlow.press;click_button=raid.RaidFlow.click
     @wraps(press_button)
     def press(flow,name,seconds=3,post=1,*,alternatives=()):
-        if not getattr(flow,'_owner_bulk',True) and (name in confirms or confirms.intersection(alternatives)):set_count(flow)
-        return press_button(flow,name,seconds,post,alternatives=alternatives)
+        confirm=name in confirms or bool(confirms.intersection(alternatives))
+        if not getattr(flow,'_owner_bulk',True) and confirm:set_count(flow)
+        try:return press_button(flow,name,seconds,post,alternatives=alternatives)
+        except raid.RaidPending:
+            if not confirm or not admit_late(flow,raid,post):raise
     @wraps(click_button)
     def click(flow,name,hit):
         # Every raid click is named: a run on pc2 pressed 15 times in 27 s without one line, then stopped.

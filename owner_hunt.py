@@ -149,6 +149,9 @@ def install(gui):
                 from biol_base.session import Cancelled
                 if isinstance(exc,Cancelled):raise
                 LOG.info('사냥 전 프리셋 A 복귀 보류 · %s',str(exc)[:80])
+        if adapter.mode=='auto_mode' and not getattr(adapter,'_owner_temporary_work',None):
+            from owner_boss_range import narrow
+            narrow(adapter,context,inputs)
         from owner_town_return import MissingFavorite,require_hunting_location
         from owner_hunt_here import already_there
         try:result=True if already_there(adapter,context,inputs) else ordinary(adapter,context,inputs)
