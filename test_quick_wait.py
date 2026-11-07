@@ -42,7 +42,7 @@ class QuickWait(unittest.TestCase):
         calls=[];down=lambda self,k,v:calls.append(('down',k));up=lambda self,k,v:calls.append(('up',k))
         q.LOCAL.before=None
         d,u=q.watch_press(down,up,lambda:A,lambda:5.)
-        d(None,'mouse','left');self.assertIsNone(q.LOCAL.before);u(None,'mouse','left')
+        d(None,'mouse','left');self.assertIs(q.LOCAL.before,A);u(None,'mouse','left')
         self.assertIs(q.LOCAL.before,A);self.assertEqual(q.LOCAL.click_at,5.);self.assertEqual(calls,[('down','mouse'),('up','mouse')])
     def test_the_end_of_a_transaction_finishes_the_press(self):
         from contextlib import contextmanager

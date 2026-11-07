@@ -102,8 +102,11 @@ def watch_press(down,up,look,clock=time.monotonic):
     """Native code presses through transaction() with down/up, not click() (09:06: no quick wait at all on click()).
     The look is taken at the press and counts from the release."""
     def pressed(self,kind,value):
-        LOCAL.pressing=look();STATS['presses']+=1
-        if LOCAL.pressing is None:STATS['blind']+=1
+        # The release was never seen (10:02, 10:06: 0 of 21), so the press itself starts the count.
+        seen=look();STATS['presses']+=1
+        if seen is None:STATS['blind']+=1
+        else:LOCAL.before=seen;LOCAL.click_at=clock()
+        LOCAL.pressing=seen
         return down(self,kind,value)
     def released(self,kind,value):
         try:return up(self,kind,value)
