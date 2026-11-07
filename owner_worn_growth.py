@@ -478,10 +478,17 @@ class Route:
         missed=[item.slot for item in items if not item.values]
         for slot in missed:rest(self.adapter,slot,READ)
         if missed:LOG.info('착용 가호 현재값 못 읽음 · %d분 쉼 · %s',IDLE_MINUTES,', '.join(missed))
+        short=set()
         for item in items:
             self.check()
             if time.monotonic()>=self.deadline:return
+            if item.grade in short:continue
             if item.values and self.need(item):self.visit(item)
+            # Essence is per grade too: 가호2-5 were each opened after 가호2 was short (짱군네 11-07 09:09-09:10).
+            if getattr(item,'short',False) and item.grade:
+                short.add(item.grade);rest_left=[other for other in items if other.grade==item.grade]
+                for other in rest_left:other.done.add(ENHANCE);rest(self.adapter,other.slot,ENHANCE)
+                LOG.info('가호 %s 등급 강화 재료 부족 · 같은 등급 %d개 쉼',item.grade,len(rest_left))
     def from_table(self,item):
         """A part read within TABLE_SECONDS is not opened again (user 11-06: read only what changed)."""
         from owner_growth_current import recent_reading
