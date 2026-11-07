@@ -212,6 +212,8 @@ def finish_local_ui(gui):
     install_boss_purple(gui)
     from owner_clan_absent import install as install_clan_absent
     install_clan_absent(gui)
+    from owner_clan_time import install as install_clan_time
+    install_clan_time(gui)
     from owner_game_relaunch import install as install_game_relaunch
     install_game_relaunch(gui)
     from owner_glow_edge import install as install_glow_edge
