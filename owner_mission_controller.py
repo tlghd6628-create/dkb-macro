@@ -161,6 +161,7 @@ def fighting(frame):
  return float(((p[...,0]>110)&(p[...,0]-p[...,1]>50)&(p[...,0]-p[...,2]>50)).mean())>=.3
 
 BAR_STILL=20   # a target bar that has not changed in this many seconds is not a fight
+STALL_FIRES=3;STALL_WINDOW=120
 MOVE_PILL=(560,515,300,50)   # real: the '자동 이동 중 660m' pill above the hotbar
 
 
@@ -223,6 +224,13 @@ def restart_idle_quest(ui,idle):
  if now-idle['at']<IDLE_SECONDS or not ui.normal():return False
  if auto_moving(frame):
   idle.update(crop=crop,at=now);return False
+ # Pressed again three times in two minutes and still standing: the native 3-minute switch may never come, since
+ # each press moves the character a little (짱군네 14:10-14:13, [첫걸음] 전래동화 every 30 s). Its switch is made now.
+ fires=[t for t in idle.get('fires',[]) if now-t<STALL_WINDOW]+[now];idle['fires']=fires
+ active=getattr(LOCAL,'active',None)
+ if len(fires)>=STALL_FIRES and active:
+  idle['fires']=[];LOCAL.stalled=active[2]
+  LOG.info('임무 자리 정체 %d회 · 다른 임무로 전환',len(fires));return True
  LOG.info('임무 자리 정체 %d초 · 자동 진행 다시 누름 · %s',now-idle['at'],ui.adapter.mode)
  quest_range(ui.adapter,ui.context,ui.inputs)
  ui.open(ui.adapter.mode);ui.start_selected();idle.update(crop=None,at=now)
