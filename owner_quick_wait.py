@@ -17,7 +17,7 @@ FLOOR=.4;FIRST=.2;STEP=.08;WINDOW=3.;CHANGED=1.5;STILL=.8;REPORT=120
 # presses seen, not one wait matched). Only one run drives the game at a time.
 class _Shared:pass
 LOCAL=_Shared()
-STATS=dict(cut=0,saved=0.,waited=0,said=time.monotonic(),presses=0,blind=0,long=0)
+STATS=dict(cut=0,saved=0.,waited=0,said=time.monotonic(),presses=0,blind=0,long=0,released=0,ages=[])
 
 
 def diff(a,b):
@@ -64,7 +64,10 @@ def enabled(root):
 def quick(ordinary,look,clock=time.monotonic):
     def wait(self,seconds,*args,**kwargs):
         before=getattr(LOCAL,'before',None);at=getattr(LOCAL,'click_at',None)
-        if seconds>=FLOOR:STATS['long']+=1;report(clock)
+        if seconds>=FLOOR:
+            STATS['long']+=1
+            if at is not None:STATS['ages'].append((round(clock()-at,1),round(seconds,2),before is not None))
+            STATS['ages']=STATS['ages'][-12:];report(clock)
         if seconds<FLOOR or before is None or at is None or clock()-at>WINDOW or getattr(LOCAL,'off',False):
             return ordinary(self,seconds,*args,**kwargs)
         LOCAL.before=None   # one quick wait per click
@@ -92,6 +95,7 @@ def report(clock=time.monotonic):
     STATS['said']=clock()
     LOG.info('빠른 대기 · %d회 단축 · %.0f초 절약 · 그대로 기다림 %d회 · 누름 %d(화면 못 봄 %d) · 긴 대기 %d',
              STATS['cut'],STATS['saved'],STATS['waited'],STATS['presses'],STATS['blind'],STATS['long'])
+    LOG.info('빠른 대기 진단 · 손 뗌 %d · 긴 대기(클릭 뒤 초, 대기 초, 기록) %s',STATS['released'],STATS['ages'])
 
 
 def watch_press(down,up,look,clock=time.monotonic):
@@ -104,10 +108,26 @@ def watch_press(down,up,look,clock=time.monotonic):
     def released(self,kind,value):
         try:return up(self,kind,value)
         finally:
-            before=getattr(LOCAL,'pressing',None);LOCAL.pressing=None
+            before=getattr(LOCAL,'pressing',None);LOCAL.pressing=None;STATS['released']+=1
             if before is not None:LOCAL.before=before;LOCAL.click_at=clock()
     pressed._owner_quick=released._owner_quick=True
     return pressed,released
+
+
+def watch_transaction(ordinary,clock=time.monotonic):
+    """Most presses are let go by the transaction's own cleanup, not up() (10:02: 22 presses, 0 releases seen). The
+    note is finished when the transaction ends."""
+    from contextlib import contextmanager
+    @contextmanager
+    def transaction(self,*args,**kwargs):
+        try:
+            with ordinary(self,*args,**kwargs) as inner:yield inner
+        finally:
+            before=getattr(LOCAL,'pressing',None)
+            if before is not None:
+                LOCAL.pressing=None;STATS['released']+=1;LOCAL.before=before;LOCAL.click_at=clock()
+    transaction._owner_quick=True
+    return transaction
 
 
 def install(gui):
@@ -120,5 +140,7 @@ def install(gui):
     if not getattr(Context.wait,'_owner_quick',False):Context.wait=quick(Context.wait,look)
     if not getattr(InputTransactions.down,'_owner_quick',False):
         InputTransactions.down,InputTransactions.up=watch_press(InputTransactions.down,InputTransactions.up,look)
+    if not getattr(InputTransactions.transaction,'_owner_quick',False):
+        InputTransactions.transaction=watch_transaction(InputTransactions.transaction)
     gui._owner_quick_wait=True
     LOG.info('빠른 대기 연결 · 클릭 뒤 화면이 바뀌고 멈추면 바로 다음 동작')

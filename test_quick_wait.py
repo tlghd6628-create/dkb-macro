@@ -44,6 +44,13 @@ class QuickWait(unittest.TestCase):
         d,u=q.watch_press(down,up,lambda:A,lambda:5.)
         d(None,'mouse','left');self.assertIsNone(q.LOCAL.before);u(None,'mouse','left')
         self.assertIs(q.LOCAL.before,A);self.assertEqual(q.LOCAL.click_at,5.);self.assertEqual(calls,[('down','mouse'),('up','mouse')])
+    def test_the_end_of_a_transaction_finishes_the_press(self):
+        from contextlib import contextmanager
+        @contextmanager
+        def ordinary(self):yield 'inputs'
+        q.LOCAL.before=None;q.LOCAL.pressing=A
+        with q.watch_transaction(ordinary,lambda:7.)(None) as got:self.assertEqual(got,'inputs')
+        self.assertIs(q.LOCAL.before,A);self.assertEqual(q.LOCAL.click_at,7.);self.assertIsNone(q.LOCAL.pressing)
     def test_capture_failure_keeps_the_full_wait(self):
         self.assertAlmostEqual(run(1.,[None]),1.,places=3)
 
