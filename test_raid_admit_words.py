@@ -43,4 +43,37 @@ class RaidAdmit(unittest.TestCase):
         self.assertEqual(scope.REAL_WORDS['버튼_레이드_매칭입장확인'],'raid_admit_confirm')
 
 
+class Matching(unittest.TestCase):
+    def run_with(self,rows):
+        with patch('owner_text.read',return_value=rows),             patch('owner_text.logical_bounds',return_value=(1,2,3,4)):
+            return m.raid_matching(S(hi=np.zeros((768,1366,3),np.uint8),layout=None))
+    def test_queue_panel_answers(self):
+        rows=[{'text':'산신마루','x':790,'y':57},{'text':'레이드','x':791,'y':77},{'text':'대기시간00:05경과','x':791,'y':115}]
+        self.assertEqual(self.run_with(rows),(791,115,(1,2,3,4)))
+    def test_other_panel_is_not_the_queue(self):
+        self.assertIsNone(self.run_with([{'text':'레이드','x':1,'y':1}]))
+        self.assertIsNone(self.run_with([{'text':'대기시간00:05경과','x':1,'y':1}]))
+
+
+class RaidFind(unittest.TestCase):
+    """The raid's own find falls back to the words only for its queue, popup and 확인."""
+    def setUp(self):
+        import project_adapter.boss_raid as raid
+        import owner_raid_tickets as t
+        self.raid,self.t=raid,t
+    def test_words_after_the_picture_misses(self):
+        f=S(hi=np.zeros((768,1366,3),np.uint8))
+        with patch('owner_real_marks.raid_admit_confirm',return_value=(511,330,(1,2,3,4))):
+            self.assertEqual(self.t.word_find(self.raid,self.raid.CONFIRM,f),(511,330,(1,2,3,4)))
+        with patch('owner_real_marks.raid_matching',return_value=(791,115,(1,2,3,4))):
+            self.assertEqual(self.t.word_find(self.raid,self.raid.MATCHING,f)[:2],(791,115))
+    def test_other_names_and_old_frames_read_nothing(self):
+        with patch('owner_text.read',side_effect=AssertionError('no read')):
+            self.assertIsNone(self.t.word_find(self.raid,self.raid.MATCH,S(hi=np.zeros((2,2,3),np.uint8))))
+            self.assertIsNone(self.t.word_find(self.raid,self.raid.CONFIRM,S()))
+    def test_a_failed_read_is_a_miss(self):
+        with patch('owner_real_marks.raid_admit_title',side_effect=RuntimeError('ocr')):
+            self.assertIsNone(self.t.word_find(self.raid,self.raid.ADMIT,S(hi=np.zeros((2,2,3),np.uint8))))
+
+
 if __name__=='__main__':unittest.main()

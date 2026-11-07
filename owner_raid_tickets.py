@@ -138,13 +138,33 @@ def raid_pending(text):
     import project_adapter.boss_raid as raid
     return raid.RaidPending(text)
 
+def word_find(raid,name,frame):
+    """The queue panel, the admit popup and its 확인 by their words at 1366x768, where their pictures sit under the
+    native threshold (pc2 11-07: .925, .785, .811). Without them the run never saw its own queue or the popup."""
+    if getattr(frame,'hi',None) is None:return None
+    import owner_real_marks as marks
+    reader={raid.MATCHING:marks.raid_matching,raid.ADMIT:marks.raid_admit_title,
+            raid.CONFIRM:marks.raid_admit_confirm,raid.CONFIRM2:marks.raid_admit_confirm}.get(name)
+    if reader is None:return None
+    try:hit=reader(frame)
+    except Exception as exc:
+        LOG.info('레이드 글자 판독 실패 · %s · %s',name,str(exc)[:80]);return None
+    if hit is not None:
+        seen=getattr(word_find,'seen',None)
+        if seen is None:seen=word_find.seen={}
+        now=time.monotonic()
+        if now-seen.get(name,0)>=30:seen[name]=now;LOG.info('레이드 글자로 찾음 · %s · 위치 %d,%d',name,hit[0],hit[1])
+    return hit
+
 def install():
     import project_adapter.boss_raid as raid
     if getattr(raid.RaidFlow.find,'_owner_raid_tickets',False):return
     ordinary=raid.RaidFlow.find
     @wraps(ordinary)
     def find(flow,name,frame,*args,**kwargs):
-        if name!=raid.NO_TICKET:return ordinary(flow,name,frame,*args,**kwargs)
+        if name!=raid.NO_TICKET:
+            hit=ordinary(flow,name,frame,*args,**kwargs)
+            return hit if hit is not None else word_find(raid,name,frame)
         # Only on the raid page, where the count is on screen.
         if ordinary(flow,raid.MATCH,frame) is None:return None
         crop=frame[BOX[1]:BOX[1]+BOX[3],BOX[0]:BOX[0]+BOX[2]].tobytes();known=getattr(flow,'_owner_ticket_read',None)
@@ -176,6 +196,8 @@ def install():
         return press_button(flow,name,seconds,post,alternatives=alternatives)
     @wraps(click_button)
     def click(flow,name,hit):
+        # Every raid click is named: a run on pc2 pressed 15 times in 27 s without one line, then stopped.
+        LOG.info('레이드 누름 · %s · %s',name,tuple(hit[:2]) if hit else hit)
         if not getattr(flow,'_owner_bulk',True) and name in confirms:set_count(flow)
         return click_button(flow,name,hit)
     raid.RaidFlow.press=press;raid.RaidFlow.click=click

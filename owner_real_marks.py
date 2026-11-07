@@ -138,6 +138,21 @@ def raid_admit_confirm(frame):
     return _mark(rows[1],frame) if rows else None
 
 
+RAID_MATCHING_PANEL=(1090,70,270,140)  # real: 레이드 (1204,124), 대기시간00:05경과 (1204,184)
+
+
+def raid_matching(frame):
+    """체크_레이드_매칭중 at 1366x768: the top-right panel's 레이드 and 대기시간 … 경과. The raid never logged its matching
+    wait on pc2 (5 tries 11-07), so it kept looking for the raid page while the queue ran."""
+    if getattr(frame,'hi',None) is None:return None
+    from owner_text import clean,read
+    rows=read(None,frame,RAID_MATCHING_PANEL,scale=2,minimum=.6)
+    words=[clean(r['text']) for r in rows]
+    if not any('레이드' in w for w in words):return None
+    wait=[r for r,w in zip(rows,words) if '대기시간' in w and '경과' in w]
+    return _mark(wait[0],frame) if wait else None
+
+
 def coupon_menu(frame):
     """쿠폰등록 on the settings' account tab, by exactly that word. Its picture does not match at 1366x768."""
     from owner_text import clean,logical_bounds,read
