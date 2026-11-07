@@ -116,6 +116,19 @@ def signals(adapter,context,inputs):
   if isinstance(exc,Cancelled):raise
   __import__('logging').getLogger('project_gui.DKB').info('빨간 점 확인 보류 · %s',str(exc)[:80]);return []
 
+def due_jobs(adapter,context,inputs):
+ """Run a due timetable job from the hunt's own wait. With sleep mode off (user 11-06) the hunt never reaches the
+ spirit-training wait that ran them, so jobs a red dot brought forward stayed pending (pc2 홍짱군 11-07 16:49-17:21:
+ inventory, gear, seal_release and album pending for 30 minutes while 사냥터 이동 repeated every minute)."""
+ if context.input_depth or getattr(inputs,'held',()):return False
+ try:
+  from owner_timetable import idle_once
+  return idle_once(adapter,context,inputs)
+ except Exception as exc:
+  from biol_base.session import Cancelled
+  if isinstance(exc,Cancelled):raise
+  __import__('logging').getLogger('project_gui.DKB').info('사냥 중 시간표 확인 보류 · %s',str(exc)[:80]);return False
+
 @contextmanager
 def active_hunt(adapter,context,inputs):
  old=getattr(LOCAL,'owner',None);LOCAL.owner=(adapter,context,inputs)
@@ -135,6 +148,7 @@ def install(gui):
    apply_fallback(adapter,context,inputs)
    clan_help(adapter,context,inputs)
    signals(adapter,context,inputs)
+   due_jobs(adapter,context,inputs)
    return periodic(*args,**kwargs) if periodic else True
   with active_hunt(adapter,context,inputs):return original(adapter,context,periodic=tick,inputs=inputs)
  reservations.wait_reservations=waiting
