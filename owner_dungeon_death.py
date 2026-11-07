@@ -53,7 +53,7 @@ def held(adapter,now=None):
     if type(base) is int and base>0:
         need=math.ceil(base*RATIO)
         if type(power) is int and power>=need:return None
-        return f'비경 사망 {record["deaths"]}회 · 전투력 {power or 0:,}/{need:,}'
+        return f'비경 사망 {record["deaths"]}회 · 전투력 {f"{power:,}" if power else "모름"}/{need:,}'
     at=record.get('at') or 0
     if (time.time() if now is None else now)-at>=NO_POWER_HOURS*3600:return None
     return f'비경 사망 {record["deaths"]}회 · 사망 때 전투력 모름 · {NO_POWER_HOURS}시간 뒤 다시'
