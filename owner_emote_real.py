@@ -132,5 +132,9 @@ def run(ui,book,key):
     click(ui,(round(cards[0]['rx']),round(cards[0]['ry'])-CARD_ABOVE_WORD),2.)
     after=ui.frame();left=requirement(after,row.get('title'))
     LOG.info('감정 임무 · %s 누름 · %s',target,'요구 사라짐' if not left else '요구 그대로')
+    if not left:
+        # The request is answered: mark it used as the native path does. Left set, the watcher counted 30 s of
+        # '자동 진행 응답 없음' and went home after the 61 s cooldown (짱군네 14:46-14:48 허세의 대가, 15:06 산길의 호환).
+        ui.adapter._owner_emote_request_consumed=key;ui.adapter._owner_emote_requested=None
     if chat_open(after) or panel_open(after):close_all(ui)
     return True

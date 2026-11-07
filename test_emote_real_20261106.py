@@ -65,6 +65,8 @@ class Run(unittest.TestCase):
         self.assertEqual(self.clicks,[hd.real_hit(1168,153)[:2],hd.real_hit(*e.CHAT_PREVIEW)[:2],hd.real_hit(*e.FACE_BUTTON)[:2],
                                       hd.real_hit(449,594-e.CARD_ABOVE_WORD)[:2]])
         self.assertEqual(self.reserved,[('k','웃음')])
+        # 짱군네 14:46: answered, so the watcher must not count it as a request still waiting.
+        self.assertEqual(self.ui.adapter._owner_emote_request_consumed,'k');self.assertIsNone(self.ui.adapter._owner_emote_requested)
     def test_a_card_lower_down_is_scrolled_to(self):
         seen=iter([[row('웃음',449,594)],[row('웃음',449,560)],[row('화남',448,670)]])
         wheels=[];self.ui.wheel=lambda *a,**k:wheels.append(a)
