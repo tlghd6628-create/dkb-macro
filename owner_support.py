@@ -129,6 +129,8 @@ def finish_local_ui(gui):
     install_main(gui)
     from owner_performance import install as install_performance
     install_performance(gui)
+    from owner_quick_wait import install as install_quick_wait
+    install_quick_wait(gui)
     from owner_task_flow import install as install_task_flow
     install_task_flow(gui)
     from owner_inventory import install as install_inventory
