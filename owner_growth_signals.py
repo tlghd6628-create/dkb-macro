@@ -34,6 +34,91 @@ def dots(real):
     return found
 
 
+MENU_DOT_X=1346   # real x of the full menu (≡) icon's dot
+MENU_OPEN=(1333,32);MENU_CLOSE=(1330,32);MENU_AREA=(945,100,421,545)
+# A dot sits at a tile's top right, its label 25-80 px below and up to 75 px left (pc1 11-07 menu frame: 9 of 9).
+TILE_JOBS={'성장':('gear',),'도술':('gear',),'가호':('blessing','blessing_equip'),'단봉인해제':('seal_release',),
+           '기운발현':('growth',),'화첩':('album',),'업적':('achievement',),'임무':('daily_missions',),'도사수행록':('training_log',)}
+
+
+MENU_LABELS=('내정보','성장','도술','가호','단봉인해제','영기수련','내면의길','기운발현','의복','탈것','신수','칭호','문파','친구',
+             '구인구직','세계지도','아이템사전','제작','화첩','유물수집','요귀도감','보물찾기','업적','임무','도사수행록','비경탐험',
+             '보스토벌','승천의탑','플래너','문파전투','낙화의전장','차원쟁탈전','도깨비수련장','순위','만귀비경')
+
+
+def known_label(word):
+    """The menu's own name nearest to an OCR word ('도글' read for 도술 on one pass), or None when unsure."""
+    from difflib import SequenceMatcher
+    if word in MENU_LABELS:return word
+    scored=sorted(((SequenceMatcher(None,word,label).ratio(),label) for label in MENU_LABELS),reverse=True)
+    if scored[0][0]>=.5 and (len(scored)<2 or scored[0][0]>scored[1][0]):return scored[0][1]
+    return None
+
+
+def menu_dot(real):
+    import numpy as np
+    a=np.asarray(real)
+    if a.ndim!=3:return False
+    p=a[DOT_Y-DOT_HALF:DOT_Y+DOT_HALF+1,MENU_DOT_X-DOT_HALF:MENU_DOT_X+DOT_HALF+1].astype(int)
+    return int(((p[...,0]>200)&(p[...,1]<90)&(p[...,2]<90)).sum())>=DOT_PIXELS
+
+
+def dotted_tiles(real,rows):
+    """Cleaned labels of the menu tiles that carry a red dot."""
+    import numpy as np,cv2
+    from owner_text import clean
+    a=np.asarray(real).astype(int);r,g,b=a[...,0],a[...,1],a[...,2]
+    mask=((r>200)&(g<90)&(b<90)).astype(np.uint8)
+    n,_,st,cen=cv2.connectedComponentsWithStats(mask,8);found=set()
+    for i in range(1,n):
+        x,y=cen[i];w,h,area=st[i][2],st[i][3],st[i][4]
+        if not(6<=area<=80 and w<=12 and h<=12 and x>MENU_AREA[0] and y>MENU_AREA[1]):continue
+        near=[row for row in rows if -75<=row['rx']-x<=10 and 25<=row['ry']-y<=80]
+        if near:
+            label=known_label(clean(min(near,key=lambda row:abs(row['ry']-y-49))['text']))
+            if label:found.add(label)
+    return found
+
+
+def bring_jobs(adapter,keys):
+    """Timetable jobs brought to now, as the bag's dot does; only those the user switched on."""
+    from owner_timetable import planner,BY_KEY,EQUIP_JOBS,enabled
+    from owner_timetable import now as kst_now
+    plan=planner(adapter);now=kst_now().isoformat();moved=[]
+    for key in dict.fromkeys(keys):
+        job=BY_KEY.get(key);item=plan.state.get(key)
+        if job is None or item is None or not enabled(job,plan.values):continue
+        extra={'equip_recheck':True} if key in EQUIP_JOBS else ({'growth_recheck':True} if key=='gear' else {})
+        item.update(status='pending',at=now,attempts=0,signal_at=time.time(),**extra);moved.append(job.label)
+    if moved:plan.commit()
+    return moved
+
+
+def menu_dots(adapter,context,inputs,real):
+    """The ≡ icon's dot: open the full menu once, bring forward what its dotted tiles name, and close it (user 11-07:
+    every red dot at once)."""
+    now=time.monotonic();muted=getattr(adapter,'_owner_signal_muted',None)
+    if muted is None:muted=adapter._owner_signal_muted={}
+    if now<muted.get('menu',0) or not menu_dot(real):return []
+    muted['menu']=now+MUTE
+    import numpy as np,owner_hd as hd
+    from owner_mission_ui import MissionUI
+    from owner_text import read_area
+    from owner_settle import settle
+    service=MissionUI(adapter,context,inputs).service
+    service.click_hit(hd.real_hit(*MENU_OPEN));settle(service,context,1.5)
+    frame=getattr(service.capture(),'hi',None)
+    if frame is None:return []
+    a=np.asarray(frame);x,y,w,h=MENU_AREA
+    rows=read_area(None,a[y:y+h,x:x+w],left=x,top=y,minimum=.5)
+    tiles=dotted_tiles(a,rows)
+    if any(row for row in rows):service.click_hit(hd.real_hit(*MENU_CLOSE));settle(service,context,1.)
+    keys=[key for tile in tiles for key in TILE_JOBS.get(tile,())]
+    moved=bring_jobs(adapter,keys) if keys else []
+    LOG.info('빨간 점 · 전체메뉴 · 점 있는 칸 %s · %s',' · '.join(sorted(tiles)) or '없음',(' · '.join(moved)+' 앞당김') if moved else '앞당길 작업 없음')
+    return moved
+
+
 def bring_bag(adapter):
     from datetime import datetime
     from owner_timetable import planner,BY_KEY,EQUIP_JOBS,enabled

@@ -103,7 +103,9 @@ def signals(adapter,context,inputs):
  try:
   from project_adapter.town_services import TownServices
   from owner_growth_signals import look
-  moved=look(adapter,TownServices(adapter,context,inputs,[]).capture())
+  frame=TownServices(adapter,context,inputs,[]).capture();moved=look(adapter,frame)
+  from owner_growth_signals import menu_dots
+  if getattr(frame,'hi',None) is not None:moved=list(moved)+menu_dots(adapter,context,inputs,frame.hi)
   # The bag's green arrows mean a better spare: pc1 lv14 hunted with five of them for half an hour (00:20), the check
   # having run only at a quest's end. While hunting it looks every few minutes too.
   from owner_job_timing import arrow_check
