@@ -214,6 +214,8 @@ def finish_local_ui(gui):
     install_clan_absent(gui)
     from owner_game_relaunch import install as install_game_relaunch
     install_game_relaunch(gui)
+    from owner_glow_edge import install as install_glow_edge
+    install_glow_edge(gui)
     from owner_hunt_settings_candidate import install as install_hunt_settings
     install_hunt_settings(gui)
     from owner_program_runtime import install as install_program_runtime
