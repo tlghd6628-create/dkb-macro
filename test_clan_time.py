@@ -11,6 +11,12 @@ class Parse(unittest.TestCase):
     def test_one_time_after_the_deadline(self):
         self.assertEqual(t.parse('진행시간토요일20:28전투시작'),('토',20,28))
         self.assertEqual(t.parse('진행 시간 토요일 20:28 전투 시작'),('토',20,28))
+    def test_logged_only_when_it_changes(self):
+        t._said[0]=None
+        with self.assertLogs('project_gui.DKB',level='INFO') as seen:
+            for _ in range(5):t.parse('진행 시간 토요일 20:28 전투 시작')
+            t.parse('진행 시간 토요일 20:30 전투 시작')
+        self.assertEqual(len(seen.output),2)
     def test_native_answer_is_kept(self):
         self.assertEqual(t.parse('토요일20:00-20:30전투시작',lambda s:('토',20,0)),('토',20,0))
     def test_nonsense_is_none(self):

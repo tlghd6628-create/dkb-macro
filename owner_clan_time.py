@@ -8,6 +8,7 @@ answer is kept whenever it has one.
 import logging,re
 
 LOG=logging.getLogger('project_gui.DKB')
+_said=[None]  # the last start logged; the native read runs twice a second (pc2 11-07: 4079 lines in 80 min)
 ONE=re.compile(r'([월화수목금토일])요일(\d{1,2}):(\d{2})전투시작')
 
 
@@ -19,8 +20,10 @@ def parse(text,native=None):
     if not m:return None
     hour,minute=int(m.group(2)),int(m.group(3))
     if hour>23 or minute>59:return None
-    LOG.info('문파 전투 시작 시각 · %s %02d:%02d',m.group(1),hour,minute)
-    return (m.group(1),hour,minute)
+    found=(m.group(1),hour,minute)
+    if found!=_said[0]:
+        _said[0]=found;LOG.info('문파 전투 시작 시각 · %s %02d:%02d',*found)
+    return found
 
 
 def install(gui=None):
