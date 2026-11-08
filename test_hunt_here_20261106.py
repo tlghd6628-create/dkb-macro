@@ -59,6 +59,22 @@ class Here(unittest.TestCase):
         # pc2 11-07 08:58: 10m off is moved back by 축지술, not walked.
         self.assertFalse(self.run_it(10));self.assertFalse(self.run_it(15))
         self.assertFalse(self.run_it(40));self.assertFalse(self.run_it(None));self.assertFalse(self.run_it(0,auto=False))
+    def test_a_genuine_in_range_read_marks_the_spot(self):
+        import time
+        adapter=NS(values={'common.potion_and_favorite.slot':'2번','common.potion_and_favorite.source':'저장위치'})
+        service=NS(capture=lambda:NS(hi=1),actions=None)
+        with patch('project_adapter.town_services.TownServices',lambda *a:service),patch('owner_town_return.town_pair',return_value=False),\
+             patch.object(h,'still_hunting',return_value=False),patch.object(h,'distance',return_value=0),\
+             patch.object(h,'auto_lit',return_value=True):
+            before=time.monotonic();h.already_there(adapter,NS(wait=lambda s:None),NS())
+        self.assertGreaterEqual(adapter._owner_at_spot,before)
+    def test_a_still_hunting_skip_does_not_mark_the_spot(self):
+        adapter=NS(values={'common.potion_and_favorite.slot':'2번','common.potion_and_favorite.source':'저장위치'})
+        service=NS(capture=lambda:NS(hi=1),actions=None)
+        with patch('project_adapter.town_services.TownServices',lambda *a:service),patch('owner_town_return.town_pair',return_value=False),\
+             patch.object(h,'still_hunting',return_value=True):
+            self.assertTrue(h.already_there(adapter,NS(wait=lambda s:None),NS()))
+        self.assertFalse(hasattr(adapter,'_owner_at_spot'))
 
 
 

@@ -159,15 +159,22 @@ def install(gui):
             narrow(adapter,context,inputs)
         from owner_town_return import MissingFavorite,require_hunting_location
         from owner_hunt_here import already_there
-        try:result=True if already_there(adapter,context,inputs) else ordinary(adapter,context,inputs)
+        here=False
+        try:
+            here=already_there(adapter,context,inputs)
+            result=True if here else ordinary(adapter,context,inputs)
         except MissingFavorite:
             LOG.info('지정 사냥터 미등록 · 둘러보기 추천 후보를 전투력 기준으로 확인합니다.')
-            result=run(adapter,context,inputs)
+            result=run(adapter,context,inputs);here=False
         if result is True:require_hunting_location(adapter,context,inputs)
         if result is True or result in ('HUNTING_RESUMED','HUNTING_STARTED'):
             at_spot(adapter,context,inputs)
-            from owner_hunt_here import seen_at_spot
-            seen_at_spot(adapter)
+            # Only a genuine move, or a distance read that already marked the spot inside already_there, refreshes
+            # the at-spot time. A still_hunting skip (here is True, map not read) must not, or the 10-minute map
+            # re-check renews itself forever (pc2 홍짱군 11-08: no map read 05:34-10:31, found 10m off).
+            if not here:
+                from owner_hunt_here import seen_at_spot
+                seen_at_spot(adapter)
         if not getattr(adapter,'_owner_temporary_work',None) and (result is True or result in ('HUNTING_RESUMED','HUNTING_STARTED')):
             context.checkpoint();progress.begin_work('auto_mode')
             # Native preparation calls favorite hunt for side effects, so
