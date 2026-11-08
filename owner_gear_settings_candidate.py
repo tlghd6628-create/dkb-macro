@@ -361,6 +361,12 @@ class GearSettings:
                 import datetime
                 self.current_hint.set('최근 확인 '+datetime.datetime.fromtimestamp(stamp).strftime('%m/%d %H:%M:%S'))
             self.window.after(1000,refresh_current)
+        try:
+            import owner_mem as _mem
+            from owner_worn_growth import _mem_hook as _hook
+            _mem.watch(lambda slot,v,_r=root,_c=character:_hook(_r,_c,slot,v))
+        except Exception:
+            pass
         refresh_current()
 
     def feature_switch(self,parent,section,**layout):

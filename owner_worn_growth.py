@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 import owner_text as text
 import owner_worn_stats as worn
+import owner_mem as mem
 from owner_gear_decision_candidate import Observation
 from owner_gear_intent_store_candidate import IntentStore
 from owner_gear_settings_candidate import Store
@@ -86,9 +87,10 @@ def font_pair(left,right):
     return found[0] if len(found)==1 else None
 
 
-def read_panel(root,frame):
+def read_panel(root,frame,slot=None):
     """The selected item's level and next step on the 강화 tab, from one real frame, or None."""
     if not title_words(root,frame):return None
+    want=mem.level(slot) if slot else None
     pair=clean_pair(frame,root)
     if pair is None:
         # Only when the cleaned digits did not read: two OCR calls fewer on every look (user 11-06: 강화 too slow).
@@ -100,7 +102,8 @@ def read_panel(root,frame):
     if pair is None:pair=lone_one_pair(frame,text.read(root,frame,BLESSING_NEXT,scale=3))
     if pair is None:pair=next_pair(text.read(root,frame,BLESSING_LEVEL,scale=3),text.read(root,frame,BLESSING_NEXT,scale=3))
     if pair is None:pair=left_pair(frame,root)
-    if pair is None:return None
+    if pair is None and want is None:return None
+    if want is not None:pair=(want,want+1)
     pill=text.read(root,frame,BLESSING_PILL,scale=3);word=only_word(pill,('강화','개방'))
     have=have_enough(root,frame)
     opening=bool(word) and text.clean(word['text'])=='개방'
@@ -141,7 +144,7 @@ class EnhanceObserver:
         looks=[];stamps=[]
         for _ in range(2):
             self.context.checkpoint();self.service.check();frame=self.service.capture()
-            panel=read_panel(self.root,frame)
+            panel=read_panel(self.root,frame,self.item.slot)
             if panel is None:
                 self.last_diff='판독 없음';return {'screen_proof':False}
             looks.append(panel);stamps.append(self.clock());self.context.wait(.12)
@@ -158,6 +161,28 @@ class EnhanceObserver:
                 'button_name':looks[1]['word'],'opening':looks[1]['opening'],'item_icon':None}
 
 
+def _mem_grade(root,character,slot):
+    try:
+        known=mem.grade(slot)
+        if known:return known
+    except Exception:pass
+    from owner_growth_current import equipped_rows
+    try:
+        for row in equipped_rows(root,character):
+            if row[0]==slot and row[1] in ('일반','희귀','영웅'):
+                return row[1]
+    except Exception:
+        pass
+    return '일반'
+
+def _mem_hook(root,character,slot,values):
+    """Keep the settings table on the memory values, not on a screen that is not open."""
+    from owner_growth_current import observe
+    observe(root,{'character':character,'item_identity':'worn-slot:'+slot,'slot':slot,
+                  'grade':_mem_grade(root,character,slot),
+                  'verified_fields':['enhancement','breakthrough','awakening'],'replace_values':True,
+                  'enhancement':values['enhance'],'breakthrough':values['breakthrough'],'awakening':values['awaken']})
+
 class Route:
     def __init__(self,adapter,context,inputs,service,identity,profile,character,document):
         self.adapter=adapter;self.context=context;self.inputs=inputs;self.service=service;self.identity=identity
@@ -165,6 +190,10 @@ class Route:
         path=Store(self.root,identity).path
         self.intents=IntentStore(path.with_name(path.stem+'-intent.json'))
         self.deadline=time.monotonic()+VISIT_SECONDS
+        try:
+            mem.watch(lambda slot,v,_r=str(self.root),_c=self.character:_mem_hook(_r,_c,slot,v))
+        except Exception:
+            LOG.info('메모리 갱신 시작 실패')
     # ---- moving between the bag and the growth screen
     def check(self):self.context.checkpoint();self.service.check()
     def frame(self):self.check();return self.service.capture()
@@ -231,6 +260,11 @@ class Route:
         # The window just closed fades out, and a click into the fade is lost.
         worn.settle_after_popup(self.service,self.context)
         def decide(values,grade,title):
+            live=mem.values(item.slot)
+            mem.remember_grade(item.slot,grade)
+            if live:
+                values=dict(values or {},enhance=live['enhance'],opening=live['opening'],
+                            breakthrough=live['breakthrough'],awaken=live['awaken'])
             item.values=values;item.grade=grade;item.title=title
             self.settle(item)
             return False
@@ -261,7 +295,7 @@ class Route:
         # A press left without a result: the level on this panel settles it.
         pending=self.intents.pending()
         if pending and pending['before'].slot==item.record:
-            panel=read_panel(self.root,self.frame())
+            panel=read_panel(self.root,self.frame(),item.slot)
             if panel:
                 item.values=dict(item.values or {},enhance=panel['level']);self.settle(item)
         end=time.monotonic()+ITEM_SECONDS;rereads=0;started=time.monotonic();first=(item.values or {}).get(ENHANCE)
@@ -272,7 +306,7 @@ class Route:
                 LOG.info('착용 %s 강화 머문 시간 %.0f초 · %s → %d',item.slot,time.monotonic()-started,first,last)
     def _enhance_loop(self,item,cap,observer,guard,goal,targets,end,rereads):
         def one(latest,mark_sent):
-            frame=self.frame();panel=read_panel(self.root,frame)
+            frame=self.frame();panel=read_panel(self.root,frame,item.slot)
             if not panel or not panel['active'] or panel['level']!=latest['second'].enhancement or panel['word']!=latest['button_name']:raise worn.ReadAgain()
             self.check();mark_sent();self.check();self.service.click_hit(panel['hit'])
         while time.monotonic()<end and time.monotonic()<self.deadline:
@@ -291,7 +325,7 @@ class Route:
                              {k:v for k,v in panel.items() if k!='hit'},ages)
                     if panel.get('enough') is False:item.short=True
                 elif status not in ('hold_policy',):
-                    seen=read_panel(self.root,self.frame())
+                    seen=read_panel(self.root,self.frame(),item.slot)
                     LOG.info('착용 %s 강화 중단 · %s · 판독 %s · 흔들린 값 %s',item.slot,status,{k:v for k,v in (seen or {}).items() if k!='hit'},observer.last_diff)
                 item.done.add(ENHANCE);return
             rereads=0
